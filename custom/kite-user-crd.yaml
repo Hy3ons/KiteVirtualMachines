@@ -1,0 +1,59 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+
+metadata:
+  name: kiteusers.anacnu.com
+
+spec:
+  group: anacnu.com
+
+  versions:
+    - name: v1
+      served: true
+      storage: true
+
+      additionalPrinterColumns:
+        - name: USER
+          type: string
+          jsonPath: .spec.username
+        - name: NAMESPACE
+          type: string
+          jsonPath: .spec.namespace
+        - name: LEVEL
+          type: integer
+          jsonPath: .spec.access_level
+
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                username:
+                  type: string
+                email:
+                  type: string
+                password:
+                  type: string
+                  description: "hashed password value"
+                namespace:
+                  type: string
+                profile_image:
+                  type: string
+                  description: "base64encoded image data"
+                access_level:
+                  type: integer
+                  description: "access level : 0 read-only 1 User 2 Manager 3 Admin"
+
+  names:
+    kind: KiteUser
+    plural: kiteusers
+    singular: kiteuser
+    shortNames:
+      - ku
+    categories:
+      - kite
+      - all
+
+  scope: Cluster

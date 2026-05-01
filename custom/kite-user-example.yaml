@@ -1,0 +1,13 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: KiteUser
+
+metadata:
+  name: kiteusers.anacnu.com
+
+spec:
+  username: test
+  email: test@gmail.com
+  password: password
+  namespace: test
+  profile_image: base64encodedimage
+  access_level: 3

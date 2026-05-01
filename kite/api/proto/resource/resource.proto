@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package kite.resource.v1;
+
+option go_package = "kite/api/proto/resource;resourcepb";
+
+// KiteResourceService is used by the kite controller gRPC server to create the
+// two custom resources defined in custom/kite-user-crd.yaml and
+// custom/kite-machine-crd.yaml.
+service KiteResourceService {
+  rpc CreateKiteUser(CreateKiteUserRequest) returns (CreateResourceResponse);
+  rpc CreateKiteVirtualMachine(CreateKiteVirtualMachineRequest) returns (CreateResourceResponse);
+}
+
+message CreateKiteUserRequest {
+  // name is metadata.name for the cluster-scoped KiteUser resource.
+  string name = 1;
+
+  // username is spec.username in the KiteUser CRD.
+  string username = 2;
+
+  // email is spec.email in the KiteUser CRD.
+  string email = 3;
+
+  // password is spec.password in the KiteUser CRD and should already be hashed.
+  string password = 4;
+
+  // namespace is spec.namespace in the KiteUser CRD and stores the user's namespace name.
+  string namespace = 5;
+
+  // profile_image is spec.profile_image in the KiteUser CRD and stores base64 image data.
+  string profile_image = 6;
+
+  // access_level is spec.access_level in the KiteUser CRD.
+  int32 access_level = 7;
+}
+
+message CreateKiteVirtualMachineRequest {
+  // name is metadata.name for the namespaced KiteVirtualMachine resource.
+  string name = 1;
+
+  // namespace is metadata.namespace for the KiteVirtualMachine resource.
+  string namespace = 2;
+
+  // cpu is spec.cpu in the KiteVirtualMachine CRD.
+  int32 cpu = 3;
+
+  // memory is spec.memory in the KiteVirtualMachine CRD, for example "4Gi".
+  string memory = 4;
+
+  // image is spec.image in the KiteVirtualMachine CRD.
+  string image = 5;
+
+  // disk is spec.disk in the KiteVirtualMachine CRD, for example "4Gi".
+  string disk = 6;
+}
+
+message CreateResourceResponse {
+  // api_version is the Kubernetes apiVersion of the created custom resource.
+  string api_version = 1;
+
+  // kind is the Kubernetes kind of the created custom resource.
+  string kind = 2;
+
+  // name is metadata.name of the created custom resource.
+  string name = 3;
+
+  // namespace is metadata.namespace when the created custom resource is namespaced.
+  string namespace = 4;
+}

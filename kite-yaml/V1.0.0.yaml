@@ -1,0 +1,99 @@
+apiVersion: v1
+kind: Namespace
+
+metadata:
+  name: kite
+  labels:
+    name: kite
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kite-account
+  namespace: kite
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kite-limited-manager-role
+rules:
+  # KubeVirt 핵심 리소스 관리
+  - apiGroups: ["kubevirt.io"]
+    resources:
+      [
+        "virtualmachines",
+        "virtualmachineinstances",
+        "virtualmachineinstancemigrations",
+      ]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # CDI (디스크 복제/관리) 리소스 관리
+  - apiGroups: ["cdi.kubevirt.io"]
+    resources: ["datavolumes"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # K8s 기본 리소스 (디스크 및 설정 관련)
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims", "services", "secrets", "configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # 부팅 및 상태 확인을 위해 필요한 추가 권한
+  - apiGroups: ["subresources.kubevirt.io"]
+    resources:
+      [
+        "virtualmachines/start",
+        "virtualmachines/stop",
+        "virtualmachines/restart",
+      ]
+    verbs: ["update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kite-vm-cluster-manager-binding
+subjects:
+  - kind: ServiceAccount
+    name: kite-account
+    namespace: kite
+roleRef:
+  kind: ClusterRole
+  name: kite-limited-manager-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# 역할 생성, pvc리소스에 대해서, get, list, watch를 할 수 있음.
+# 역할 : cdi.kubevirt.io Group에 대해서, datavolumes/source에 대해, create 가능
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cdi-cloner-source-pvc-reader
+  namespace: kite
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["cdi.kubevirt.io"]
+    resources: ["datavolumes/source"]
+    verbs: ["create"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+
+metadata:
+  name: cdi-cloner-binding
+  namespace: kite
+
+subjects:
+  - kind: ServiceAccount
+    name: cdi-sa
+    namespace: cdi
+
+roleRef:
+  kind: Role
+  name: cdi-cloner-source-pvc-reader
+  apiGroup: rbac.authorization.k8s.io
+
+---
