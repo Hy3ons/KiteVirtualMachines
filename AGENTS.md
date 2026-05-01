@@ -117,6 +117,49 @@ When implementing the gRPC server later:
 - map Kubernetes API failures to `codes.Internal`,
 - return created resource metadata in the response.
 
+## Commit Rules
+
+When creating a git commit, follow this commit message convention.
+
+Write the first line as `type : summary`.
+
+Examples of valid first lines:
+
+- `feat : gRPC 서버 기본 포트 추가`
+- `fix : KiteVirtualMachine disk 필드 매핑 수정`
+- `docs : 커밋 메시지 규칙 추가`
+
+After the first line, add a detailed commit body in an outline format. Use
+short section labels and bullet points instead of a single long paragraph.
+
+The body should explain:
+
+- what problem the change solves,
+- which files or flows were changed,
+- how the change was implemented,
+- how the change follows the project coding style or existing structure,
+- which tests were run, or why tests were not run.
+
+Example:
+
+```text
+feat : gRPC 서버 기본 포트 추가
+
+Problem
+- 컨트롤러가 API 서버의 gRPC 요청을 받을 기본 진입점이 없었다.
+
+Changes
+- 50051 포트를 기본값으로 사용하는 gRPC 서버 실행 함수를 추가했다.
+- context가 종료되면 GracefulStop으로 서버를 종료하도록 구성했다.
+
+Implementation
+- 아직 protobuf generated service가 없으므로 서비스 등록은 추가하지 않았다.
+- 기존 apps 패키지 구조에 맞춰 서버 골격만 작성했다.
+
+Tests
+- 테스트는 요청 범위에 포함되지 않아 실행하지 않았다.
+```
+
 ## Editing Rules
 
 Keep changes scoped to the user request.
