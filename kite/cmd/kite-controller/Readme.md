@@ -2,7 +2,7 @@
 
 Kite Controller는 Kite CRD를 감시하고 실제 Kubernetes/KubeVirt 리소스를 원하는 상태로 맞추는 프로세스입니다.
 
-컨트롤러의 핵심 책임은 API 서버가 만든 요청을 실제 클러스터 상태로 바꾸고, 그 결과를 다시 Kite CRD status에 기록하는 것입니다. 사용자가 직접 KubeVirt 리소스를 알 필요 없이 KiteUser와 KiteVirtualMachine만 다루면 되게 만드는 것이 목표입니다.
+컨트롤러의 핵심 책임은 Kubernetes API server에 기록된 Kite CRD를 보고 실제 클러스터 상태를 맞추고, 그 결과를 다시 Kite CRD status에 기록하는 것입니다. 사용자가 직접 KubeVirt 리소스를 알 필요 없이 KiteUser와 KiteVirtualMachine만 다루면 되게 만드는 것이 목표입니다.
 
 ## 컨트롤러의 역할
 
@@ -12,14 +12,29 @@ Kite Controller는 Kite CRD를 감시하고 실제 Kubernetes/KubeVirt 리소스
 - VM에 필요한 KubeVirt, 스토리지, 네트워크 리소스를 생성합니다.
 - 실제 VM 상태를 읽고 KiteVirtualMachine status를 업데이트합니다.
 - 삭제된 Kite CRD에 맞춰 연결 리소스를 정리합니다.
-- API 서버가 사용할 gRPC 서버를 제공합니다.
+- API 서버의 직접 명령을 처리하지 않고, CRD 변경을 기준으로 reconcile합니다.
 
 ## 현재 상태
 
 - Kubernetes 클러스터 연결 코드가 있습니다.
 - `kitevirtualmachines.anacnu.com/v1` 리소스를 감시하는 informer 초안이 있습니다.
-- gRPC 서버를 띄우기 위한 기본 서버 코드가 있습니다.
+- gRPC 서버 초안이 있지만 현재 핵심 흐름에서는 사용하지 않습니다.
 - 실제 reconcile 로직은 아직 대부분 구현해야 합니다.
+
+## 기본 동작 방향
+
+Kite Controller는 Kubernetes controller답게 동작해야 합니다. API 서버가 컨트롤러에 “VM을 만들어라”라고 직접 명령하지 않습니다. API 서버는 KiteVirtualMachine CRD를 만들고, 컨트롤러는 그 desired state를 보고 실제 리소스를 맞춥니다.
+
+기본 흐름:
+
+1. kite-api가 KiteUser 또는 KiteVirtualMachine CRD를 생성/수정/삭제한다.
+2. kite-controller가 informer로 CRD 변경을 감지한다.
+3. kite-controller가 현재 클러스터 상태를 조회한다.
+4. 원하는 상태와 실제 상태의 차이를 계산한다.
+5. 필요한 Kubernetes/KubeVirt 리소스를 생성, 수정, 삭제한다.
+6. 처리 결과를 Kite CRD status에 기록한다.
+
+이 흐름은 컨트롤러가 재시작되거나 이벤트를 놓쳐도 다시 list/watch를 통해 상태를 복구할 수 있게 해줍니다.
 
 ## 구현해야 할 reconcile 흐름
 
@@ -43,21 +58,17 @@ Kite Controller는 Kite CRD를 감시하고 실제 Kubernetes/KubeVirt 리소스
 - [ ] 실패 원인을 `status.conditions`에 남긴다.
 - [ ] KiteVirtualMachine이 삭제되면 관련 리소스를 정리한다.
 
-## gRPC 서버
+## gRPC 서버 보류
 
-컨트롤러 gRPC 서버는 API 서버가 CRD 생성 요청을 보낼 수 있는 내부 인터페이스입니다.
+컨트롤러 gRPC 서버는 현재 핵심 구현 대상에서 제외합니다. Kite의 기본 흐름은 `HTTP API -> Kite CRD -> controller reconcile`입니다.
 
-구현해야 할 것:
+따라서 지금은 아래 작업을 하지 않습니다.
 
-- [ ] protobuf Go 코드가 생성된 뒤 서비스 구현체를 추가한다.
-- [ ] `CreateKiteUser` 요청을 검증한다.
-- [ ] `CreateKiteVirtualMachine` 요청을 검증한다.
-- [ ] KiteUser는 cluster-scoped 리소스로 생성한다.
-- [ ] KiteVirtualMachine은 요청 namespace 안에 생성한다.
-- [ ] 이미 존재하는 리소스는 AlreadyExists로 응답한다.
-- [ ] 잘못된 요청은 InvalidArgument로 응답한다.
-- [ ] Kubernetes API 오류는 Internal로 응답한다.
-- [ ] 생성된 리소스의 apiVersion, kind, name, namespace를 응답한다.
+- [ ] API 서버에서 컨트롤러 gRPC 서버로 CRD 생성 요청을 보내지 않는다.
+- [ ] 컨트롤러를 명령형 RPC 서버처럼 사용하지 않는다.
+- [ ] protobuf Go 코드 생성은 필요해질 때까지 보류한다.
+
+나중에 CRD spec/status로 표현하기 어려운 내부 명령이 생기면 gRPC 사용을 다시 검토합니다.
 
 ## 렌더러 사용 계획
 
@@ -77,6 +88,9 @@ Kite Controller는 Kite CRD를 감시하고 실제 Kubernetes/KubeVirt 리소스
 - [ ] informer 이벤트 처리 코드를 reconcile 함수 중심으로 정리한다.
 - [ ] Add, Update, Delete 이벤트에서 같은 reconcile 경로를 타도록 만든다.
 - [ ] 이미 존재하는 리소스는 업데이트하거나 그대로 둔다.
+- [ ] KiteUser와 KiteVirtualMachine informer를 모두 구성한다.
+- [ ] reconcile 입력은 HTTP 요청이 아니라 CRD의 namespace/name으로 받는다.
+- [ ] API 서버가 만든 Kite CRD를 기준으로만 실제 리소스를 생성한다.
 - [ ] owner reference 또는 label 전략을 정해 관련 리소스를 찾기 쉽게 만든다.
 - [ ] status update와 spec 처리 로직을 분리한다.
 - [ ] 삭제 처리용 finalizer가 필요한지 결정한다.
