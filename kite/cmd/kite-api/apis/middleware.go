@@ -11,6 +11,10 @@ import (
 
 const claimsContextKey = "authClaims"
 
+// RequireAccessLevel creates a gin.HandlerFunc middleware that checks user authorization.
+// deps is used to access the token verification service.
+// minimumAccessLevel specifies the lowest access level allowed (e.g., auth.AccessLevelManager).
+// This function is used to protect API routes that require specific privileges.
 func RequireAccessLevel(deps Dependencies, minimumAccessLevel int) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token := bearerToken(c)
