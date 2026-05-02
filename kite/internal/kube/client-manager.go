@@ -1,8 +1,7 @@
-package main
+package kube
 
 import (
 	"fmt"
-	"kite/internal/kube"
 	"log"
 	"path/filepath"
 
@@ -13,7 +12,10 @@ import (
 	"k8s.io/client-go/util/homedir"
 )
 
-func getDynamicClient () (*kube.ClientManager, error) {
+// GetClientManager creates Kubernetes typed and dynamic clients from cluster configuration.
+// It first tries in-cluster configuration, then falls back to the local kubeconfig for development.
+// The returned ClientManager is used by controller startup and integration tests that need real Kubernetes clients.
+func GetClientManager() (*ClientManager, error) {
 	config, err := rest.InClusterConfig()
 
 	if err != nil { // 일단은 로컬로 재시도.
@@ -37,8 +39,8 @@ func getDynamicClient () (*kube.ClientManager, error) {
 		return nil, fmt.Errorf("Kube Client 생성 실패 : %v\n", err.Error())
 	}
 
-	return &kube.ClientManager{
+	return &ClientManager{
 		DynamicClient: dynClient,
-		KubeClient: kubeClient,
+		KubeClient:    kubeClient,
 	}, nil
 }
