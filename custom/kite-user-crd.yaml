@@ -22,6 +22,15 @@ spec:
         - name: LEVEL
           type: integer
           jsonPath: .spec.access_level
+        - name: PHASE
+          type: string
+          jsonPath: .status.phase
+        - name: READY
+          type: string
+          jsonPath: .status.conditions[?(@.type=="NamespaceReady")].status
+        - name: MESSAGE
+          type: string
+          jsonPath: .status.message
 
       schema:
         openAPIV3Schema:
@@ -45,6 +54,56 @@ spec:
                 access_level:
                   type: integer
                   description: "access level : 0 read-only 1 User 2 Manager 3 Admin"
+
+            status:
+              type: object
+              description: "controller-managed status for user namespace reconciliation"
+              properties:
+                phase:
+                  type: string
+                  description: "current KiteUser reconcile phase, such as Ready or Failed"
+                observedGeneration:
+                  type: integer
+                  format: int64
+                  description: "metadata.generation last processed by the controller"
+                message:
+                  type: string
+                  description: "human-readable summary of the latest reconcile result"
+                conditions:
+                  type: array
+                  description: "latest controller conditions shown by kubectl describe"
+                  x-kubernetes-list-type: map
+                  x-kubernetes-list-map-keys:
+                    - type
+                  items:
+                    type: object
+                    required:
+                      - type
+                      - status
+                    properties:
+                      type:
+                        type: string
+                        description: "condition name, for example NamespaceReady"
+                      status:
+                        type: string
+                        description: "condition status: True, False, or Unknown"
+                      reason:
+                        type: string
+                        description: "machine-readable reason for the latest transition"
+                      message:
+                        type: string
+                        description: "human-readable detail for kubectl describe"
+                      observedGeneration:
+                        type: integer
+                        format: int64
+                        description: "metadata.generation observed for this condition"
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                        description: "time when the condition status last changed"
+
+      subresources:
+        status: {}
 
   names:
     kind: KiteUser

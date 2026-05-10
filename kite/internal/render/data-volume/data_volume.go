@@ -1,17 +1,22 @@
 package datavolume
 
 import (
+	_ "embed"
+
 	"kite/internal/render"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-//VmName should be ubuntu-22.04
+//go:embed data-volume.yaml
+var dataVolumeTemplate string
+
+// VmName should be ubuntu-22.04.
 
 type VmName string
 
 const (
-	Ubuntu2204 VmName = "ubuntu-22.04" 
+	Ubuntu2204 VmName = "ubuntu-22.04"
 )
 
 type DataVolumeData struct {
@@ -21,7 +26,11 @@ type DataVolumeData struct {
 	Storage   string
 }
 
+// Render creates a KubeVirt DataVolume object from DataVolumeData.
+// The receiver provides VM name, namespace, image source, and storage size template values.
+// The returned object is applied by the KiteVirtualMachine reconcile flow.
+// This method uses an embedded template so the controller does not depend on source-tree files at runtime.
 func (s *DataVolumeData) Render() (*unstructured.Unstructured, error) {
-	renderer := render.NewRenderer("kite/internal/render/data-volume/data-volume.yaml")
+	renderer := render.NewRendererFromTemplate("data-volume.yaml", dataVolumeTemplate)
 	return renderer.Render(s)
 }

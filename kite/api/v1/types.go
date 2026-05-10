@@ -11,7 +11,8 @@ type KiteUser struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec KiteUserSpec `json:"spec,omitempty"`
+	Spec   KiteUserSpec   `json:"spec,omitempty"`
+	Status KiteUserStatus `json:"status,omitempty"`
 }
 
 // KiteUserSpec contains the spec fields defined by custom/kite-user-crd.yaml.
@@ -22,6 +23,18 @@ type KiteUserSpec struct {
 	Namespace    string `json:"namespace,omitempty"`
 	ProfileImage string `json:"profile_image,omitempty"`
 	AccessLevel  int    `json:"access_level,omitempty"`
+}
+
+// KiteUserStatus contains controller-managed status fields for KiteUser.
+// Phase summarizes whether the user's namespace resources are ready or failed.
+// ObservedGeneration records the metadata generation processed by the controller.
+// Message gives a short human-readable result for kubectl describe.
+// Conditions stores detailed reconcile state such as NamespaceReady.
+type KiteUserStatus struct {
+	Phase              string             `json:"phase,omitempty"`
+	ObservedGeneration int64              `json:"observedGeneration,omitempty"`
+	Message            string             `json:"message,omitempty"`
+	Conditions         []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // KiteUserList represents a Kubernetes list response for KiteUser resources.

@@ -4,3 +4,4 @@ metadata:
   name: {{ .Namespace }}
   labels:
     name: {{ .Namespace }}
+    kite.anacnu.com/managed-by: kite-controller
