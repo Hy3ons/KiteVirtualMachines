@@ -5,8 +5,8 @@
 This repository contains the Kite Kubernetes control plane prototype.
 
 - `kite/cmd/kite-api`: HTTP API server based on Gin.
-- `kite/cmd/kite-controller`: Kubernetes controller code and future gRPC server code.
-- `kite/api/proto`: protobuf definitions for controller-facing APIs.
+- `kite/cmd/kite-controller`: Kubernetes controller code that reconciles Kite CRDs.
+- `kite/api/proto`: retired protobuf draft from the old API-to-controller gRPC plan.
 - `kite/api/v1`: Go structs for Kite custom resources.
 - `kite/internal/kube`: Kubernetes client helpers.
 - `kite/internal/render`: YAML template renderers that return `unstructured.Unstructured`.
@@ -40,18 +40,23 @@ func NewClientManager(kubeClient kubernetes.Interface, dynamicClient dynamic.Int
 ```
 
 Use the same level of explanation for important unexported functions, especially
-handlers, validators, renderers, controller reconcilers, and gRPC methods.
+handlers, validators, renderers, controller reconcilers, and status helpers.
 
 Avoid comments that only repeat the code. Comments should explain intent,
 parameters, project usage, or non-obvious behavior.
 
-## Protobuf Rules
+## Retired gRPC and Protobuf Rules
 
-Keep protobuf files focused on API contracts.
+The previous API-to-controller gRPC direction has been retired.
 
-For `kite/api/proto/resource/resource.proto`, define only the information needed
-to create the Kite custom resources in `custom/` unless a task explicitly asks
-for more.
+Do not add new protobuf definitions, generated protobuf files, gRPC service
+implementations, or API-to-controller RPC calls unless the user explicitly
+reopens the gRPC design.
+
+The API server should write `KiteUser` and `KiteVirtualMachine` CRDs through the
+Kubernetes API server. The controller should watch those CRDs and reconcile real
+Kubernetes/KubeVirt resources from CRD `spec`, then write observed state back to
+CRD `status`.
 
 Current custom resources:
 
@@ -66,16 +71,22 @@ Current custom resources:
   - resource: `kitevirtualmachines`
   - group/version: `anacnu.com/v1`
 
-Add English field comments in proto files when the field maps to Kubernetes
-metadata or a CRD `spec` field.
-
-Do not run `protoc` or commit generated protobuf files unless the user
-explicitly asks for code generation.
+Do not run `protoc` or commit generated protobuf files.
 
 ## Kubernetes Rules
 
 Use `dynamic.Interface` and `unstructured.Unstructured` for Kite custom
 resources unless the task explicitly asks for typed clients.
+
+Deploy Kite's own runtime resources in the `kite` namespace. This includes
+`kite-api`, `kite-controller`, `kite-frontend`, Services, and the ServiceAccount
+used by API/controller pods.
+
+Keep cluster-wide resources namespace-free. `CustomResourceDefinition` objects
+do not have a namespace, and `KiteUser` custom resources are cluster-scoped.
+
+When API/controller code runs in a Pod, use Kubernetes in-cluster config through
+the mounted service account. Local kubeconfig fallback is only for development.
 
 When creating Kite custom resources, use these GVR values:
 
@@ -100,22 +111,22 @@ Do not call `.Namespace(...)` for `KiteUser` because it is cluster-scoped.
 Call `.Namespace(req.Namespace)` for `KiteVirtualMachine` because it is
 namespaced.
 
-## Controller gRPC Rules
+## Controller Reconcile Rules
 
-The controller gRPC server belongs under:
+Do not implement controller commands through gRPC. The controller should be a
+Kubernetes-style reconciler:
 
-- `kite/cmd/kite-controller/apps/gRPC-server.go`
+- watch `KiteUser` and `KiteVirtualMachine` CRDs,
+- treat CRD `spec` as the desired state,
+- create or update Kubernetes/KubeVirt resources with idempotent apply logic,
+- watch real KubeVirt/DataVolume state when needed,
+- write observed state and failure reasons to CRD `status`,
+- avoid changing CRD `spec` from KubeVirt state watchers.
 
-Do not add generated-code imports until protobuf Go files actually exist.
-
-When implementing the gRPC server later:
-
-- inject `*kube.ClientManager` or `dynamic.Interface` into the server struct,
-- validate request fields before creating Kubernetes objects,
-- map invalid requests to `codes.InvalidArgument`,
-- map existing resources to `codes.AlreadyExists`,
-- map Kubernetes API failures to `codes.Internal`,
-- return created resource metadata in the response.
+For `KiteVirtualMachine`, user power intent belongs in
+`spec.powerState`. The controller should translate it to KubeVirt VM state, and
+if the actual KubeVirt state drifts from the desired power state, reconcile it
+back.
 
 ## Commit Rules
 
@@ -125,7 +136,7 @@ Write the first line as `type : summary`.
 
 Examples of valid first lines:
 
-- `feat : gRPC 서버 기본 포트 추가`
+- `feat : KiteVirtualMachine reconcile 골격 추가`
 - `fix : KiteVirtualMachine disk 필드 매핑 수정`
 - `docs : 커밋 메시지 규칙 추가`
 
@@ -143,18 +154,18 @@ The body should explain:
 Example:
 
 ```text
-feat : gRPC 서버 기본 포트 추가
+feat : KiteVirtualMachine reconcile 골격 추가
 
 Problem
-- 컨트롤러가 API 서버의 gRPC 요청을 받을 기본 진입점이 없었다.
+- KiteVirtualMachine CRD 변경을 실제 KubeVirt 리소스로 조정하는 흐름이 없었다.
 
 Changes
-- 50051 포트를 기본값으로 사용하는 gRPC 서버 실행 함수를 추가했다.
-- context가 종료되면 GracefulStop으로 서버를 종료하도록 구성했다.
+- KiteVirtualMachine informer 이벤트에서 reconcile 함수를 호출하도록 정리했다.
+- VM 관련 리소스를 idempotent하게 적용하기 위한 GVR 매핑을 추가했다.
 
 Implementation
-- 아직 protobuf generated service가 없으므로 서비스 등록은 추가하지 않았다.
-- 기존 apps 패키지 구조에 맞춰 서버 골격만 작성했다.
+- API 서버는 CRD만 기록하고, 컨트롤러가 CRD spec을 기준으로 실제 상태를 맞춘다.
+- gRPC 명령형 흐름은 사용하지 않았다.
 
 Tests
 - 테스트는 요청 범위에 포함되지 않아 실행하지 않았다.
