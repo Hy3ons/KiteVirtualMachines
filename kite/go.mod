@@ -4,6 +4,7 @@ go 1.25.5
 
 require (
 	google.golang.org/grpc v1.80.0
+	github.com/google/uuid v1.6.0
 	k8s.io/apimachinery v0.35.4
 	k8s.io/client-go v0.35.4
 )
@@ -50,7 +51,6 @@ require (
 	github.com/go-openapi/swag v0.23.0 // indirect
 	github.com/google/gnostic-models v0.7.0 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect

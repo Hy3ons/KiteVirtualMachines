@@ -4,12 +4,17 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/fake"
 
 	"kite/internal/auth"
@@ -70,39 +75,209 @@ func TestUserListReturnsKiteUsers(t *testing.T) {
 	}
 }
 
+func TestSignUpCreatesFirstUserAsAdmin(t *testing.T) {
+	dynamicClient := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
+		userTestGVR: "KiteUserList",
+	})
+	r := newUserTestRouterWithClient(t, newTestTokenService(t), dynamicClient)
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/signup",
+		strings.NewReader(`{"username":"first","email":"first@example.com","password":"secret"}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusCreated, rec.Code, rec.Body.String())
+	}
+
+	var res struct {
+		User kiteUserResponse `json:"user"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if res.User.AccessLevel != auth.AccessLevelAdmin {
+		t.Fatalf("expected first user to be admin, got %d", res.User.AccessLevel)
+	}
+	if !strings.HasPrefix(res.User.Name, "ku-") {
+		t.Fatalf("expected generated KiteUser name, got %+v", res.User)
+	}
+	if res.User.Namespace != "kite-user-"+res.User.Name {
+		t.Fatalf("expected namespace derived from generated name, got %+v", res.User)
+	}
+	if res.User.ProfileImage != "base64encodedimage" {
+		t.Fatalf("expected default profile image, got %+v", res.User)
+	}
+
+	created, err := dynamicClient.Resource(userTestGVR).Get(req.Context(), res.User.Name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("failed to read created user: %v", err)
+	}
+	password, _, err := unstructured.NestedString(created.Object, "spec", "password")
+	if err != nil {
+		t.Fatalf("failed to read stored password: %v", err)
+	}
+	if password == "secret" || password == "" {
+		t.Fatalf("expected password to be stored as a non-empty one-way hash, got %q", password)
+	}
+}
+
+func TestSignUpCreatesLaterUserAsReadOnly(t *testing.T) {
+	r := newUserTestRouter(t, newTestTokenService(t))
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/user",
+		strings.NewReader(`{"username":"later","email":"later@example.com","password":"secret","namespace":"later-ns"}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusCreated, rec.Code, rec.Body.String())
+	}
+
+	var res struct {
+		User kiteUserResponse `json:"user"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if res.User.AccessLevel != auth.AccessLevelReadOnly {
+		t.Fatalf("expected later user to be read-only, got %d", res.User.AccessLevel)
+	}
+	if !strings.HasPrefix(res.User.Name, "ku-") {
+		t.Fatalf("expected generated KiteUser name, got %+v", res.User)
+	}
+	if res.User.Namespace != "kite-user-"+res.User.Name {
+		t.Fatalf("expected generated namespace, got %q", res.User.Namespace)
+	}
+}
+
+func TestAdminDeleteUserDeletesChildVirtualMachines(t *testing.T) {
+	tokenService := newTestTokenService(t)
+	adminToken, _, err := tokenService.IssueAccessToken("admin", auth.AccessLevelAdmin)
+	if err != nil {
+		t.Fatalf("failed to issue token: %v", err)
+	}
+
+	dynamicClient := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
+		userTestGVR:               "KiteUserList",
+		userTestVirtualMachineGVR: "KiteVirtualMachineList",
+	}, newUserTestObject("target", "target", "target-ns", auth.AccessLevelUser), newVirtualMachineTestObject("target-vm", "target-ns"))
+	r := newUserTestRouterWithClient(t, tokenService, dynamicClient)
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/users/target", nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	_, err = dynamicClient.Resource(userTestVirtualMachineGVR).Namespace("target-ns").Get(req.Context(), "target-vm", metav1.GetOptions{})
+	if !apierrors.IsNotFound(err) {
+		t.Fatalf("expected child VM CRD to be deleted, got %v", err)
+	}
+}
+
 func newUserTestRouter(t *testing.T, tokenService *auth.TokenService) http.Handler {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
-	kiteUser := &unstructured.Unstructured{
-		Object: map[string]any{
-			"apiVersion": "anacnu.com/v1",
-			"kind":       "KiteUser",
-			"metadata": map[string]any{
-				"name": "test",
-			},
-			"spec": map[string]any{
-				"username":      "test",
-				"email":         "test@gmail.com",
-				"password":      "hashed-password",
-				"namespace":     "test",
-				"profile_image": "base64encodedimage",
-				"access_level":  int64(3),
-			},
-		},
-	}
+	kiteUser := newUserTestObject("test", "test", "test", auth.AccessLevelAdmin)
+	dynamicClient := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
+		userTestGVR: "KiteUserList",
+	}, kiteUser)
+
+	return newUserTestRouterWithClient(t, tokenService, dynamicClient)
+}
+
+func newUserTestRouterWithClient(t *testing.T, tokenService *auth.TokenService, dynamicClient dynamic.Interface) http.Handler {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
 
 	r := gin.Default()
 	api := r.Group("/api")
 	Register(api, Dependencies{
 		Config: config.Config{
+			PasswordSalt:   "test-salt",
 			AccessTokenTTL: time.Hour,
 		},
 		TokenService:  tokenService,
-		DynamicClient: fake.NewSimpleDynamicClient(runtime.NewScheme(), kiteUser),
+		DynamicClient: dynamicClient,
 	})
 
 	return r
+}
+
+func newEmptyUserTestRouter(t *testing.T) http.Handler {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+
+	r := gin.Default()
+	api := r.Group("/api")
+	Register(api, Dependencies{
+		Config: config.Config{
+			PasswordSalt:   "test-salt",
+			AccessTokenTTL: time.Hour,
+		},
+		TokenService: newTestTokenService(t),
+		DynamicClient: fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
+			userTestGVR: "KiteUserList",
+		}),
+	})
+
+	return r
+}
+
+func newUserTestObject(name string, username string, namespace string, accessLevel int) *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]any{
+			"apiVersion": "anacnu.com/v1",
+			"kind":       "KiteUser",
+			"metadata": map[string]any{
+				"name": name,
+			},
+			"spec": map[string]any{
+				"username":      username,
+				"email":         username + "@gmail.com",
+				"password":      "hashed-password",
+				"namespace":     namespace,
+				"profile_image": "base64encodedimage",
+				"access_level":  int64(accessLevel),
+			},
+		},
+	}
+}
+
+func newVirtualMachineTestObject(name string, namespace string) *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]any{
+			"apiVersion": "anacnu.com/v1",
+			"kind":       "KiteVirtualMachine",
+			"metadata": map[string]any{
+				"name":      name,
+				"namespace": namespace,
+			},
+			"spec": map[string]any{
+				"cpu":        int64(1),
+				"memory":     "1Gi",
+				"image":      "ubuntu-22.04",
+				"disk":       "5Gi",
+				"powerState": "Off",
+			},
+		},
+	}
 }
 
 func newTestTokenService(t *testing.T) *auth.TokenService {
@@ -114,4 +289,10 @@ func newTestTokenService(t *testing.T) *auth.TokenService {
 	}
 
 	return tokenService
+}
+
+var userTestVirtualMachineGVR = schema.GroupVersionResource{
+	Group:    "anacnu.com",
+	Version:  "v1",
+	Resource: "kitevirtualmachines",
 }

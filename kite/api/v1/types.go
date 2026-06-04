@@ -28,11 +28,13 @@ type KiteUserSpec struct {
 // KiteUserStatus contains controller-managed status fields for KiteUser.
 // Phase summarizes whether the user's namespace resources are ready or failed.
 // ObservedGeneration records the metadata generation processed by the controller.
+// ObservedNamespace records the spec.namespace last reconciled by the controller.
 // Message gives a short human-readable result for kubectl describe.
 // Conditions stores detailed reconcile state such as NamespaceReady.
 type KiteUserStatus struct {
 	Phase              string             `json:"phase,omitempty"`
 	ObservedGeneration int64              `json:"observedGeneration,omitempty"`
+	ObservedNamespace  string             `json:"observedNamespace,omitempty"`
 	Message            string             `json:"message,omitempty"`
 	Conditions         []metav1.Condition `json:"conditions,omitempty"`
 }
@@ -59,16 +61,28 @@ type KiteVirtualMachine struct {
 // KiteVirtualMachineSpec contains the user-provided spec fields defined by
 // custom/kite-machine-crd.yaml.
 type KiteVirtualMachineSpec struct {
-	CPU    int    `json:"cpu,omitempty"`
-	Memory string `json:"memory"`
-	Image  string `json:"image,omitempty"`
-	Disk   string `json:"disk,omitempty"`
+	CPU          int    `json:"cpu,omitempty"`
+	Memory       string `json:"memory"`
+	Image        string `json:"image,omitempty"`
+	Disk         string `json:"disk,omitempty"`
+	PowerState   string `json:"powerState,omitempty"`
+	DomainPrefix string `json:"domainPrefix,omitempty"`
+	SSHID        string `json:"sshId,omitempty"`
+	SSHPassword  string `json:"sshPassword,omitempty"`
+	Delete       bool   `json:"delete,omitempty"`
 }
 
 // KiteVirtualMachineStatus contains the controller-managed status fields
 // defined by custom/kite-machine-crd.yaml.
 type KiteVirtualMachineStatus struct {
-	Phase string `json:"phase,omitempty"`
+	Phase              string             `json:"phase,omitempty"`
+	CurrentPowerState  string             `json:"currentPowerState,omitempty"`
+	ObservedGeneration int64              `json:"observedGeneration,omitempty"`
+	Domain             string             `json:"domain,omitempty"`
+	DataVolumePhase    string             `json:"dataVolumePhase,omitempty"`
+	DataVolumeProgress string             `json:"dataVolumeProgress,omitempty"`
+	DataVolumeMessage  string             `json:"dataVolumeMessage,omitempty"`
+	Conditions         []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // KiteVirtualMachineList represents a Kubernetes list response for

@@ -9,6 +9,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic/fake"
 
 	"kite/internal/auth"
 	"kite/internal/config"
@@ -20,7 +24,7 @@ func TestLoginIssuesAccessToken(t *testing.T) {
 	req := httptest.NewRequest(
 		http.MethodPost,
 		"/api/login",
-		strings.NewReader(`{"username":"admin","password":"admin"}`),
+		strings.NewReader(`{"email":"admin@example.com","password":"admin"}`),
 	)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -73,7 +77,7 @@ func TestLoginRejectsInvalidCredentials(t *testing.T) {
 	req := httptest.NewRequest(
 		http.MethodPost,
 		"/api/login",
-		strings.NewReader(`{"username":"admin","password":"wrong"}`),
+		strings.NewReader(`{"email":"admin@example.com","password":"wrong"}`),
 	)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -91,11 +95,8 @@ func newTestRouter(t *testing.T) http.Handler {
 	gin.SetMode(gin.TestMode)
 
 	cfg := config.Config{
-		HTTPAddr:       ":8080",
 		JWTSecret:      "test-secret",
-		AdminUsername:  "admin",
-		AdminPassword:  "admin",
-		AdminAccess:    auth.AccessLevelAdmin,
+		PasswordSalt:   "test-salt",
 		AccessTokenTTL: time.Hour,
 	}
 
@@ -109,7 +110,36 @@ func newTestRouter(t *testing.T) http.Handler {
 	Register(api, Dependencies{
 		Config:       cfg,
 		TokenService: tokenService,
+		DynamicClient: fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
+			userTestGVR: "KiteUserList",
+		}, newLoginTestUser("admin", auth.HashPassword("admin", cfg.PasswordSalt), auth.AccessLevelAdmin)),
 	})
 
 	return r
+}
+
+var userTestGVR = schema.GroupVersionResource{
+	Group:    "anacnu.com",
+	Version:  "v1",
+	Resource: "kiteusers",
+}
+
+func newLoginTestUser(username string, passwordHash string, accessLevel int) *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]any{
+			"apiVersion": "anacnu.com/v1",
+			"kind":       "KiteUser",
+			"metadata": map[string]any{
+				"name": username,
+			},
+			"spec": map[string]any{
+				"username":      username,
+				"email":         username + "@example.com",
+				"password":      passwordHash,
+				"namespace":     username,
+				"profile_image": "",
+				"access_level":  int64(accessLevel),
+			},
+		},
+	}
 }

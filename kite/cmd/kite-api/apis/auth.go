@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"k8s.io/client-go/dynamic"
 
+	"kite/internal/account"
 	"kite/internal/auth"
 	"kite/internal/config"
 )
@@ -18,7 +19,7 @@ type Dependencies struct {
 }
 
 type loginRequest struct {
-	Username string `json:"username" binding:"required"`
+	Email    string `json:"email" binding:"required"`
 	Password string `json:"password" binding:"required"`
 }
 
@@ -27,31 +28,77 @@ type loginResponse struct {
 	TokenType   string `json:"tokenType"`
 	ExpiresIn   int64  `json:"expiresIn"`
 	ExpiresAt   string `json:"expiresAt"`
+	User        any    `json:"user,omitempty"`
 }
 
 func Register(api *gin.RouterGroup, deps Dependencies) {
 	api.POST("/login", loginHandler(deps))
 	RegisterUsers(api, deps)
+
+	v1 := api.Group("/v1")
+	RegisterV1(v1, deps)
 }
 
+// RegisterV1 attaches the frontend-facing versioned API routes.
+// api is the /api/v1 router group created during kite-api startup.
+// deps provides shared Kubernetes, config, and auth dependencies.
+// This function is used by Register while legacy /api routes remain available.
+func RegisterV1(api *gin.RouterGroup, deps Dependencies) {
+	api.GET("/config", configGetHandler(deps))
+	api.GET("/me", RequireAccessLevel(deps, auth.AccessLevelReadOnly), currentUserHandler(deps))
+
+	authGroup := api.Group("/auth")
+	authGroup.POST("/login", loginHandler(deps))
+	authGroup.POST("/signup", userSignUpHandler(deps))
+
+	RegisterVirtualMachines(api, deps)
+	RegisterAdmin(api, deps)
+}
+
+// loginHandler authenticates a KiteUser and issues an API access token.
+// deps provides the dynamic Kubernetes client, password salt, and token service from API startup.
+// The request email is matched against KiteUser spec.email and the password is verified against spec.password.
+// This handler is used by the frontend login page and stores the access token in both JSON and an HTTP-only cookie.
 func loginHandler(deps Dependencies) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if deps.DynamicClient == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"message": "kubernetes client is not configured",
+			})
+			return
+		}
+
+		if deps.Config.PasswordSalt == "" {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": "password salt is not configured",
+			})
+			return
+		}
+
 		var req loginRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
-				"message": "username and password are required",
+				"message": "email and password are required",
 			})
 			return
 		}
 
-		if !auth.ValidateCredentials(req.Username, req.Password, deps.Config.AdminUsername, deps.Config.AdminPassword) {
+		accountService := account.NewService(deps.DynamicClient, deps.Config.PasswordSalt)
+		user, ok, err := accountService.Authenticate(c.Request.Context(), req.Email, req.Password)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": "failed to read kite users",
+			})
+			return
+		}
+		if !ok {
 			c.JSON(http.StatusUnauthorized, gin.H{
-				"message": "invalid username or password",
+				"message": "invalid email or password",
 			})
 			return
 		}
 
-		accessToken, expiresAt, err := deps.TokenService.IssueAccessToken(req.Username, deps.Config.AdminAccess)
+		accessToken, expiresAt, err := deps.TokenService.IssueAccessToken(user.Username, int(user.AccessLevel))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"message": "failed to issue access token",
@@ -66,10 +113,15 @@ func loginHandler(deps Dependencies) gin.HandlerFunc {
 			TokenType:   "Bearer",
 			ExpiresIn:   int64(deps.Config.AccessTokenTTL.Seconds()),
 			ExpiresAt:   expiresAt.Format("2006-01-02T15:04:05Z07:00"),
+			User:        user,
 		})
 	}
 }
 
+// accessTokenCookie builds the HTTP-only access token cookie value.
+// accessToken is the signed Bearer token issued by TokenService.
+// maxAge is the cookie lifetime in seconds.
+// The returned string is added to Set-Cookie by loginHandler.
 func accessTokenCookie(accessToken string, maxAge int) string {
-	return "accessToken=\"Bearer " + accessToken + "\"; Path=/; Max-Age=" + strconv.Itoa(maxAge) + "; HttpOnly; SameSite=Lax"
+	return "accessToken=\"Bearer " + accessToken + "\"; Path=/; Max-Age=" + strconv.Itoa(maxAge) + "; HttpOnly; Secure; SameSite=Lax"
 }

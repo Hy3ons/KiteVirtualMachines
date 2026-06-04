@@ -20,3 +20,12 @@ func HashPassword(password string, salt string) string {
 
 	return hex.EncodeToString(sum[:])
 }
+
+// VerifyPassword checks a plain text password against a stored KiteUser password hash.
+// password is the plain text password received from a login request.
+// salt is the server-side value loaded from API configuration.
+// expectedHash is the hex-encoded value stored in KiteUser spec.password.
+// The returned value is true only when the computed hash matches in constant time.
+func VerifyPassword(password string, salt string, expectedHash string) bool {
+	return constantTimeEqual(HashPassword(password, salt), expectedHash)
+}
