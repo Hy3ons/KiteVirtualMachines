@@ -1,0 +1,11 @@
+.git
+.gitignore
+.DS_Store
+node_modules
+dist
+coverage
+.vite
+*.log
+/kite-frontend/node_modules
+/kite-frontend/dist
+/kite-frontend/.vite

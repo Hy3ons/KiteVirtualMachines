@@ -1,2 +1,7 @@
 .env
 .DS_STORE
+.gocache/
+.gomodcache/
+.gotmp/
+
+.cache

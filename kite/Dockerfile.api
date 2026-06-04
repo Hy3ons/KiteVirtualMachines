@@ -1,0 +1,18 @@
+FROM golang:1.25-alpine AS build
+
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/kite-api ./cmd/kite-api
+
+FROM alpine:3.22
+
+RUN addgroup -S kite && adduser -S kite -G kite
+USER kite
+
+COPY --from=build /out/kite-api /kite-api
+EXPOSE 8080
+
+ENTRYPOINT ["/kite-api"]
