@@ -3,6 +3,10 @@ kind: Ingress
 metadata:
   name: {{ .VmName }}
   namespace: {{ .Namespace }}
+  labels:
+    kite.anacnu.com/managed-by: kite-controller
+    kite.anacnu.com/kite-vm-name: {{ .VmName }}
+    kite.anacnu.com/kite-vm-namespace: {{ .Namespace }}
 
   annotations:
     kubernetes.io/ingress.class: traefik

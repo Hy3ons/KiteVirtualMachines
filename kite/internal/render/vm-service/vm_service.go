@@ -14,14 +14,22 @@ var vmServiceTemplate string
 type ServiceData struct {
 	VmName    string
 	Namespace string
-	NodePort  string
 }
 
 // Render creates a Kubernetes Service object from ServiceData.
-// The receiver provides VM name, namespace, and node port template values.
+// The receiver provides VM name and namespace template values.
 // The returned object is applied by the KiteVirtualMachine reconcile flow.
 // This method uses an embedded template so the controller does not depend on source-tree files at runtime.
 func (s *ServiceData) Render() (*unstructured.Unstructured, error) {
 	renderer := render.NewRendererFromTemplate("vm-service.yaml", vmServiceTemplate)
 	return renderer.Render(s)
+}
+
+// RenderAll creates every Kubernetes Service object from ServiceData.
+// The receiver provides VM name and namespace template values.
+// The returned objects are applied by the KiteVirtualMachine reconcile flow.
+// This method is used because vm-service.yaml contains SSH and web Service documents.
+func (s *ServiceData) RenderAll() ([]*unstructured.Unstructured, error) {
+	renderer := render.NewRendererFromTemplate("vm-service.yaml", vmServiceTemplate)
+	return renderer.RenderAll(s)
 }

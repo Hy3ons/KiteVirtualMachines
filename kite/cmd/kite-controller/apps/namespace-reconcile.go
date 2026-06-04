@@ -57,6 +57,11 @@ func RegisterKiteNamespaceReconciler(informer cache.SharedIndexInformer, clientM
 				log.Printf("failed to reconcile namespace update event: %v", err)
 			}
 		},
+		DeleteFunc: func(obj interface{}) {
+			if err := RestoreKiteNamespace(context.Background(), clientManager.DynamicClient, obj); err != nil {
+				log.Printf("failed to restore Kite namespace after delete event: %v", err)
+			}
+		},
 	})
 }
 
@@ -97,25 +102,52 @@ func ReconcileKiteNamespace(ctx context.Context, dynamicClient dynamic.Interface
 	return nil
 }
 
+// RestoreKiteNamespace recreates a deleted Kite-managed namespace when a KiteUser still references it.
+// ctx controls Kubernetes API calls made while listing KiteUsers and applying namespace resources.
+// dynamicClient lists KiteUsers and applies the matching user's rendered base resources.
+// eventObj is the deleted Namespace informer event object.
+// This function is used by the Namespace delete handler to keep KiteUser desired state authoritative.
+func RestoreKiteNamespace(ctx context.Context, dynamicClient dynamic.Interface, eventObj interface{}) error {
+	if dynamicClient == nil {
+		return fmt.Errorf("dynamic client is nil")
+	}
+
+	namespace, err := namespaceFromEventObject(eventObj)
+	if err != nil {
+		return err
+	}
+	if !kiteManagedNamespace(namespace) {
+		return nil
+	}
+
+	users, err := kiteUsersForNamespace(ctx, dynamicClient, namespace.GetName())
+	if err != nil {
+		return err
+	}
+	for i := range users {
+		if err := ReconcileKiteUser(ctx, dynamicClient, &users[i]); err != nil {
+			return fmt.Errorf("failed to restore Kite namespace %s for KiteUser %s: %w", namespace.GetName(), users[i].GetName(), err)
+		}
+	}
+
+	if len(users) > 0 {
+		log.Printf("restored deleted Kite namespace %s from KiteUser desired state", namespace.GetName())
+	}
+	return nil
+}
+
 // namespaceReferencedByKiteUser checks whether any KiteUser points at one namespace.
 // ctx controls the Kubernetes API request lifetime.
 // dynamicClient lists cluster-scoped KiteUser custom resources.
 // namespace is the Namespace metadata.name to compare with spec.namespace.
 // The returned value is true when at least one KiteUser still references the namespace.
 func namespaceReferencedByKiteUser(ctx context.Context, dynamicClient dynamic.Interface, namespace string) (bool, error) {
-	users, err := dynamicClient.Resource(kiteUserGVR).List(ctx, metav1.ListOptions{})
+	users, err := kiteUsersForNamespace(ctx, dynamicClient, namespace)
 	if err != nil {
-		return false, fmt.Errorf("failed to list KiteUsers for namespace %s cleanup: %w", namespace, err)
+		return false, err
 	}
 
-	for _, user := range users.Items {
-		userNamespace, _, _ := unstructured.NestedString(user.Object, "spec", "namespace")
-		if userNamespace == namespace {
-			return true, nil
-		}
-	}
-
-	return false, nil
+	return len(users) > 0, nil
 }
 
 // namespaceFromEventObject converts an informer event object into a Namespace resource.

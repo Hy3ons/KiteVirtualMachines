@@ -12,10 +12,11 @@ import (
 var kubevirtMachineTemplate string
 
 type KubevirtMachineData struct {
-	VmName    string
-	Namespace string
-	Memory    string
-	CPU       string
+	VmName      string
+	Namespace   string
+	Memory      string
+	CPU         string
+	RunStrategy string
 }
 
 // Render creates a KubeVirt VirtualMachine object from KubevirtMachineData.

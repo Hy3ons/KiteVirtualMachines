@@ -17,8 +17,13 @@ func main() {
 	stopCh := make(chan struct{})
 
 	go apps.RunKiteUserReconciler(clientManager, stopCh)
+	go apps.RunKiteUserBaseResourceReconciler(clientManager, stopCh)
 	go apps.RunKiteNamespaceReconciler(clientManager, stopCh)
 	go apps.RunKiteVirtualMachineReconciler(clientManager, stopCh)
+	go apps.RunKubeVirtVirtualMachineStatusReconciler(clientManager, stopCh)
+	go apps.RunKiteVirtualMachineServiceReconciler(clientManager, stopCh)
+	go apps.RunKiteVirtualMachineDataVolumeReconciler(clientManager, stopCh)
+	go apps.RunKitePlatformIngressReconciler(clientManager, stopCh)
 
 	select {}
 }

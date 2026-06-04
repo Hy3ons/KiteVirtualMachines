@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kite-platform
+  namespace: {{ .Namespace }}
+  labels:
+    kite.anacnu.com/managed-by: kite-controller
+    kite.anacnu.com/platform-ingress: "true"
+
+spec:
+  rules:
+    - {{ if .Host }}host: {{ .Host }}
+      {{ end }}http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: kite-api
+                port:
+                  number: 8080
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kite-frontend
+                port:
+                  number: 80

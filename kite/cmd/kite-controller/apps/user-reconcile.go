@@ -142,6 +142,10 @@ func ReconcileKiteUser(ctx context.Context, dynamicClient dynamic.Interface, eve
 		return fmt.Errorf("KiteUser %s has empty spec.namespace", user.GetName())
 	}
 
+	if err := reconcileKiteUserNamespaceChange(ctx, dynamicClient, user); err != nil {
+		return err
+	}
+
 	if err := validateUserNamespace(ctx, dynamicClient, user); err != nil {
 		return err
 	}
@@ -193,7 +197,7 @@ func updateKiteUserStatus(ctx context.Context, dynamicClient dynamic.Interface, 
 		return fmt.Errorf("failed to read KiteUser %s for status update: %w", user.GetName(), err)
 	}
 
-	if kiteUserStatusMatches(current, user.GetGeneration(), phase, conditionStatus, reason, message) {
+	if kiteUserStatusMatches(current, user.GetGeneration(), user.Spec.Namespace, phase, conditionStatus, reason, message) {
 		return nil
 	}
 
@@ -204,6 +208,9 @@ func updateKiteUserStatus(ctx context.Context, dynamicClient dynamic.Interface, 
 		return err
 	}
 	if err := unstructured.SetNestedField(current.Object, user.GetGeneration(), "status", "observedGeneration"); err != nil {
+		return err
+	}
+	if err := unstructured.SetNestedField(current.Object, user.Spec.Namespace, "status", "observedNamespace"); err != nil {
 		return err
 	}
 	if err := unstructured.SetNestedField(current.Object, message, "status", "message"); err != nil {
@@ -225,20 +232,83 @@ func updateKiteUserStatus(ctx context.Context, dynamicClient dynamic.Interface, 
 // kiteUserStatusMatches checks whether the stored KiteUser status already has the desired value.
 // current is the latest KiteUser object read from the Kubernetes API.
 // observedGeneration is the metadata generation processed by this reconcile.
+// namespace is the spec.namespace value that should be recorded as observedNamespace.
 // phase, conditionStatus, reason, and message are the desired status values.
 // The returned value prevents status-only update loops from informer events.
-func kiteUserStatusMatches(current *unstructured.Unstructured, observedGeneration int64, phase string, conditionStatus metav1.ConditionStatus, reason string, message string) bool {
+func kiteUserStatusMatches(current *unstructured.Unstructured, observedGeneration int64, namespace string, phase string, conditionStatus metav1.ConditionStatus, reason string, message string) bool {
 	currentPhase, _, _ := unstructured.NestedString(current.Object, "status", "phase")
 	currentObservedGeneration, _, _ := unstructured.NestedInt64(current.Object, "status", "observedGeneration")
+	currentObservedNamespace, _, _ := unstructured.NestedString(current.Object, "status", "observedNamespace")
 	currentMessage, _, _ := unstructured.NestedString(current.Object, "status", "message")
 	condition := findKiteUserCondition(current)
 
 	return currentPhase == phase &&
 		currentObservedGeneration == observedGeneration &&
+		currentObservedNamespace == namespace &&
 		currentMessage == message &&
 		stringValue(condition, "status") == string(conditionStatus) &&
 		stringValue(condition, "reason") == reason &&
 		stringValue(condition, "message") == message
+}
+
+// reconcileKiteUserNamespaceChange deletes the previously reconciled namespace after spec.namespace changes.
+// ctx controls Kubernetes API calls.
+// dynamicClient reads KiteUser status and deletes the old Namespace resource.
+// user provides the desired spec.namespace and KiteUser name.
+// A nil error means no previous namespace exists or the stale namespace cleanup was requested.
+func reconcileKiteUserNamespaceChange(ctx context.Context, dynamicClient dynamic.Interface, user *kitev1.KiteUser) error {
+	current, err := dynamicClient.Resource(kiteUserGVR).Get(ctx, user.GetName(), metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to read KiteUser %s before namespace change cleanup: %w", user.GetName(), err)
+	}
+
+	previousNamespace, _, _ := unstructured.NestedString(current.Object, "status", "observedNamespace")
+	if previousNamespace == "" || previousNamespace == user.Spec.Namespace {
+		return nil
+	}
+
+	return deleteKiteUserNamespaceIfUnreferenced(ctx, dynamicClient, user.GetName(), previousNamespace)
+}
+
+// deleteKiteUserNamespaceIfUnreferenced deletes a stale Kite-managed namespace when no KiteUser references it.
+// ctx controls Kubernetes API calls.
+// dynamicClient reads KiteUsers and deletes core/v1 Namespace resources.
+// userName is used only for controller logs.
+// namespace is the previously reconciled namespace to remove.
+func deleteKiteUserNamespaceIfUnreferenced(ctx context.Context, dynamicClient dynamic.Interface, userName string, namespace string) error {
+	referenced, err := namespaceReferencedByKiteUser(ctx, dynamicClient, namespace)
+	if err != nil {
+		return err
+	}
+	if referenced {
+		log.Printf("kept previous KiteUser %s namespace %s because another KiteUser still references it", userName, namespace)
+		return nil
+	}
+
+	current, err := dynamicClient.Resource(namespaceGVR).Get(ctx, namespace, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to read previous KiteUser namespace %s: %w", namespace, err)
+	}
+	if !kiteManagedNamespace(current) {
+		return fmt.Errorf("previous namespace %s is not managed by Kite", namespace)
+	}
+
+	err = dynamicClient.Resource(namespaceGVR).Delete(ctx, namespace, metav1.DeleteOptions{})
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to delete previous KiteUser namespace %s: %w", namespace, err)
+	}
+
+	log.Printf("deleted previous KiteUser %s namespace %s after spec.namespace changed", userName, namespace)
+	return nil
 }
 
 // kiteUserStatusCondition builds the NamespaceReady condition stored in KiteUser status.
@@ -427,7 +497,6 @@ func userBaseResources(user *kitev1.KiteUser) ([]*unstructured.Unstructured, err
 	}
 
 	quotaPolicyObjects, err := (&quotapolicy.QuotaPolicyData{
-		VmName:    userQuotaPolicyName,
 		Namespace: user.Spec.Namespace,
 	}).RenderAll()
 	if err != nil {
@@ -459,20 +528,38 @@ func applyUserResource(ctx context.Context, dynamicClient dynamic.Interface, obj
 	}
 
 	if namespaced {
-		if _, err := dynamicClient.Resource(gvr).Namespace(obj.GetNamespace()).Patch(ctx, obj.GetName(), types.ApplyPatchType, data, metav1.PatchOptions{
+		resource := dynamicClient.Resource(gvr).Namespace(obj.GetNamespace())
+		if _, err := resource.Patch(ctx, obj.GetName(), types.ApplyPatchType, data, metav1.PatchOptions{
 			FieldManager: "kite-controller-user-reconciler",
 			Force:        ptr.To(true),
 		}); err != nil {
+			if apierrors.IsNotFound(err) {
+				if _, createErr := resource.Create(ctx, obj, metav1.CreateOptions{}); createErr != nil {
+					return fmt.Errorf("failed to create %s %s/%s after apply NotFound: %w", obj.GetKind(), obj.GetNamespace(), obj.GetName(), createErr)
+				} else {
+					return nil
+				}
+			}
+
 			return fmt.Errorf("failed to apply %s %s/%s: %w", obj.GetKind(), obj.GetNamespace(), obj.GetName(), err)
 		}
 
 		return nil
 	}
 
-	if _, err := dynamicClient.Resource(gvr).Patch(ctx, obj.GetName(), types.ApplyPatchType, data, metav1.PatchOptions{
+	resource := dynamicClient.Resource(gvr)
+	if _, err := resource.Patch(ctx, obj.GetName(), types.ApplyPatchType, data, metav1.PatchOptions{
 		FieldManager: "kite-controller-user-reconciler",
 		Force:        ptr.To(true),
 	}); err != nil {
+		if apierrors.IsNotFound(err) {
+			if _, createErr := resource.Create(ctx, obj, metav1.CreateOptions{}); createErr != nil {
+				return fmt.Errorf("failed to create %s %s/%s after apply NotFound: %w", obj.GetKind(), obj.GetNamespace(), obj.GetName(), createErr)
+			} else {
+				return nil
+			}
+		}
+
 		return fmt.Errorf("failed to apply %s %s/%s: %w", obj.GetKind(), obj.GetNamespace(), obj.GetName(), err)
 	}
 

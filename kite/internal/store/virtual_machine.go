@@ -11,11 +11,15 @@ import (
 // KiteVirtualMachineSpec contains the spec fields stored in the KiteVirtualMachine CRD.
 // These values come from API VM requests and describe the desired VM state.
 type KiteVirtualMachineSpec struct {
-	CPU        int
-	Memory     string
-	Image      string
-	Disk       string
-	PowerState string
+	CPU          int
+	Memory       string
+	Image        string
+	Disk         string
+	PowerState   string
+	DomainPrefix string
+	SSHID        string
+	SSHPassword  string
+	Delete       bool
 }
 
 // KiteVirtualMachineRecord contains metadata and spec values for a namespaced KiteVirtualMachine CRD.
@@ -69,6 +73,13 @@ func (s *VirtualMachineStore) List(ctx context.Context, namespace string) (*unst
 	return s.dynamicClient.Resource(kiteVirtualMachineGVR).Namespace(namespace).List(ctx, metav1.ListOptions{})
 }
 
+// ListAll reads KiteVirtualMachine custom resources across every namespace.
+// ctx controls the Kubernetes API request lifetime.
+// The returned list is used by admin API handlers that need cluster-wide VM visibility.
+func (s *VirtualMachineStore) ListAll(ctx context.Context) (*unstructured.UnstructuredList, error) {
+	return s.dynamicClient.Resource(kiteVirtualMachineGVR).List(ctx, metav1.ListOptions{})
+}
+
 // Update replaces the spec of an existing namespaced KiteVirtualMachine custom resource.
 // ctx controls the Kubernetes API request lifetime.
 // record provides metadata.name, metadata.namespace, and desired spec values.
@@ -79,8 +90,8 @@ func (s *VirtualMachineStore) Update(ctx context.Context, record KiteVirtualMach
 		return nil, err
 	}
 
-	next := newKiteVirtualMachineObject(record)
-	next.SetResourceVersion(current.GetResourceVersion())
+	next := current.DeepCopy()
+	next.Object["spec"] = kiteVirtualMachineSpecMap(record.Spec)
 
 	return s.dynamicClient.Resource(kiteVirtualMachineGVR).Namespace(record.Namespace).Update(ctx, next, metav1.UpdateOptions{})
 }
@@ -106,13 +117,24 @@ func newKiteVirtualMachineObject(record KiteVirtualMachineRecord) *unstructured.
 				"name":      record.Name,
 				"namespace": record.Namespace,
 			},
-			"spec": map[string]any{
-				"cpu":        int64(record.Spec.CPU),
-				"memory":     record.Spec.Memory,
-				"image":      record.Spec.Image,
-				"disk":       record.Spec.Disk,
-				"powerState": record.Spec.PowerState,
-			},
+			"spec": kiteVirtualMachineSpecMap(record.Spec),
 		},
+	}
+}
+
+// kiteVirtualMachineSpecMap converts a store VM spec into an unstructured CRD spec map.
+// spec contains user desired state values accepted by the API.
+// The returned map is used for create and spec-only updates.
+func kiteVirtualMachineSpecMap(spec KiteVirtualMachineSpec) map[string]any {
+	return map[string]any{
+		"cpu":          int64(spec.CPU),
+		"memory":       spec.Memory,
+		"image":        spec.Image,
+		"disk":         spec.Disk,
+		"powerState":   spec.PowerState,
+		"domainPrefix": spec.DomainPrefix,
+		"sshId":        spec.SSHID,
+		"sshPassword":  spec.SSHPassword,
+		"delete":       spec.Delete,
 	}
 }

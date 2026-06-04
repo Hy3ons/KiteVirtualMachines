@@ -11,18 +11,18 @@ import (
 //go:embed data-volume.yaml
 var dataVolumeTemplate string
 
-// VmName should be ubuntu-22.04.
+// VmImage should be ubuntu-22.04.
 
-type VmName string
+type VmImage string
 
 const (
-	Ubuntu2204 VmName = "ubuntu-22.04"
+	Ubuntu2204 VmImage = "ubuntu-22.04"
 )
 
 type DataVolumeData struct {
-	VmName    VmName
+	VmName    string
 	Namespace string
-	VmImage   string
+	VmImage   VmImage
 	Storage   string
 }
 

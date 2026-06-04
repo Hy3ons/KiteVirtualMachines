@@ -6,12 +6,17 @@ metadata:
 
 spec:
   podSelector: {} # 이 네임스페이스의 모든 파드에 적용
+  policyTypes:
+    - Ingress
   ingress:
     - from:
         - podSelector: {} # 자기 네임스페이스 내부 통신만 허용
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: cloud-admin #CDI 복제를 위한 네임스페이스 허용 및 감사 허용
+              kubernetes.io/metadata.name: kite # kite-controller, platform 서비스 접근 허용
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cdi # CDI clone/import helper Pod 접근 허용
 
     - from:
         - ipBlock:
@@ -40,6 +45,19 @@ spec:
   egress:
     - to:
         - podSelector: {}
+
+    # CDI는 사용자 namespace의 DataVolume을 만들면서 kite namespace의 golden PVC와
+    # cdi namespace의 controller/helper Pod 또는 Service를 경유할 수 있다.
+    # 사용자 namespace 전체 egress 정책이 있으므로 이 경로를 명시적으로 열어둔다.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kite
+
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cdi
 
     - to:
         - namespaceSelector:

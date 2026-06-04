@@ -5,10 +5,19 @@ kind: VirtualMachine
 metadata:
   name: {{ .VmName }}
   namespace: {{ .Namespace }}
+  labels:
+    kite.anacnu.com/managed-by: kite-controller
+    kite.anacnu.com/kite-vm-name: {{ .VmName }}
+    kite.anacnu.com/kite-vm-namespace: {{ .Namespace }}
 
 spec:
-  running: true
+  runStrategy: {{ .RunStrategy }}
   template:
+    metadata:
+      labels:
+        kite.anacnu.com/managed-by: kite-controller
+        kite.anacnu.com/kite-vm-name: {{ .VmName }}
+        kite.anacnu.com/kite-vm-namespace: {{ .Namespace }}
     spec:
       domain:
         resources:
@@ -25,4 +34,4 @@ spec:
         - name: cloudinitdisk
           cloudInitNoCloud:
             secretRef:
-              name : {{ .VmName }}-cloud-init-userdata
+              name: {{ .VmName }}-cloud-init-userdata
