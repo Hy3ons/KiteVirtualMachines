@@ -14,8 +14,8 @@ spec:
     accessModes: ["ReadWriteOnce"]
 
     # 추후, kite CRD에 storageClassName을 넣거나 사용자가 적도록 변경 가능한 ui를 제공해야합니다.
-    storageClassName: local-path
+    #storageClassName: local-path
 
     resources:
       requests:
-        storage: 30Gi
+        storage: 4Gi

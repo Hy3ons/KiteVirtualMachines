@@ -66,6 +66,9 @@ spec:
                   type: integer
                   format: int64
                   description: "metadata.generation last processed by the controller"
+                observedNamespace:
+                  type: string
+                  description: "spec.namespace last reconciled by the controller"
                 message:
                   type: string
                   description: "human-readable summary of the latest reconcile result"

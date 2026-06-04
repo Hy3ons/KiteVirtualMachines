@@ -1,0 +1,446 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: kiteusers.anacnu.com
+spec:
+  group: anacnu.com
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      additionalPrinterColumns:
+        - name: USER
+          type: string
+          jsonPath: .spec.username
+        - name: NAMESPACE
+          type: string
+          jsonPath: .spec.namespace
+        - name: LEVEL
+          type: integer
+          jsonPath: .spec.access_level
+        - name: PHASE
+          type: string
+          jsonPath: .status.phase
+        - name: READY
+          type: string
+          jsonPath: .status.conditions[?(@.type=="NamespaceReady")].status
+        - name: MESSAGE
+          type: string
+          jsonPath: .status.message
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                username:
+                  type: string
+                email:
+                  type: string
+                password:
+                  type: string
+                  description: "hashed password value"
+                namespace:
+                  type: string
+                profile_image:
+                  type: string
+                  description: "base64encoded image data"
+                access_level:
+                  type: integer
+                  description: "access level : 0 read-only 1 User 2 Manager 3 Admin"
+            status:
+              type: object
+              description: "controller-managed status for user namespace reconciliation"
+              properties:
+                phase:
+                  type: string
+                  description: "current KiteUser reconcile phase, such as Ready or Failed"
+                observedGeneration:
+                  type: integer
+                  format: int64
+                  description: "metadata.generation last processed by the controller"
+                observedNamespace:
+                  type: string
+                  description: "spec.namespace last reconciled by the controller"
+                message:
+                  type: string
+                  description: "human-readable summary of the latest reconcile result"
+                conditions:
+                  type: array
+                  description: "latest controller conditions shown by kubectl describe"
+                  x-kubernetes-list-type: map
+                  x-kubernetes-list-map-keys:
+                    - type
+                  items:
+                    type: object
+                    required:
+                      - type
+                      - status
+                    properties:
+                      type:
+                        type: string
+                        description: "condition name, for example NamespaceReady"
+                      status:
+                        type: string
+                        description: "condition status: True, False, or Unknown"
+                      reason:
+                        type: string
+                        description: "machine-readable reason for the latest transition"
+                      message:
+                        type: string
+                        description: "human-readable detail for kubectl describe"
+                      observedGeneration:
+                        type: integer
+                        format: int64
+                        description: "metadata.generation observed for this condition"
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                        description: "time when the condition status last changed"
+      subresources:
+        status: {}
+  names:
+    kind: KiteUser
+    plural: kiteusers
+    singular: kiteuser
+    shortNames:
+      - ku
+    categories:
+      - kite
+      - all
+  scope: Cluster
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: kitevirtualmachines.anacnu.com
+spec:
+  group: anacnu.com
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Status
+          type: string
+          jsonPath: .status.phase
+        - name: CPU
+          type: integer
+          jsonPath: .spec.cpu
+        - name: MEM
+          type: string
+          jsonPath: .spec.memory
+        - name: IMAGE
+          type: string
+          jsonPath: .spec.image
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                cpu:
+                  type: integer
+                memory:
+                  type: string
+                image:
+                  type: string
+                disk:
+                  type: string
+                powerState:
+                  type: string
+                  enum: ["On", "Off"]
+                domainPrefix:
+                  type: string
+                sshId:
+                  type: string
+                sshPassword:
+                  type: string
+                delete:
+                  type: boolean
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                currentPowerState:
+                  type: string
+                observedGeneration:
+                  type: integer
+                  format: int64
+                domain:
+                  type: string
+                dataVolumePhase:
+                  type: string
+                dataVolumeProgress:
+                  type: string
+                dataVolumeMessage:
+                  type: string
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type: { type: string }
+                      status: { type: string }
+                      lastTransitionTime: { type: string, format: date-time }
+                      reason: { type: string }
+                      message: { type: string }
+                      observedGeneration: { type: integer, format: int64 }
+  names:
+    kind: KiteVirtualMachine
+    plural: kitevirtualmachines
+    singular: kitevirtualmachine
+    shortNames:
+      - ktvm
+    categories:
+      - kite
+      - all
+  scope: Namespaced
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kite
+  labels:
+    app.kubernetes.io/name: kite
+    kite.anacnu.com/managed-by: kite-install
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kite-account
+  namespace: kite
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kite-runtime-config
+  namespace: kite
+data:
+  baseDomain: ""
+  accessTokenTTLMinutes: "60"
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kite-control-plane-role
+rules:
+  - apiGroups: ["anacnu.com"]
+    resources: ["kiteusers", "kiteusers/status", "kitevirtualmachines", "kitevirtualmachines/status"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["namespaces", "persistentvolumeclaims", "services", "secrets", "configmaps", "resourcequotas", "limitranges"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies", "ingresses"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["kubevirt.io"]
+    resources: ["virtualmachines", "virtualmachineinstances", "virtualmachineinstancemigrations"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["cdi.kubevirt.io"]
+    resources: ["datavolumes", "datavolumes/source"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["subresources.kubevirt.io"]
+    resources: ["virtualmachines/start", "virtualmachines/stop", "virtualmachines/restart"]
+    verbs: ["update"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kite-control-plane-binding
+subjects:
+  - kind: ServiceAccount
+    name: kite-account
+    namespace: kite
+roleRef:
+  kind: ClusterRole
+  name: kite-control-plane-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cdi-cloner-source-pvc-reader
+  namespace: kite
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["cdi.kubevirt.io"]
+    resources: ["datavolumes/source"]
+    verbs: ["create"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cdi-cloner-binding
+  namespace: kite
+subjects:
+  - kind: ServiceAccount
+    name: cdi-sa
+    namespace: cdi
+  - kind: ServiceAccount
+    name: kite-account
+    namespace: kite
+roleRef:
+  kind: Role
+  name: cdi-cloner-source-pvc-reader
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kite-frontend
+  namespace: kite
+  labels:
+    app: kite-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kite-frontend
+  template:
+    metadata:
+      labels:
+        app: kite-frontend
+    spec:
+      containers:
+        - name: kite-frontend
+          image: anacnu.com/kite-frontend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kite-frontend
+  namespace: kite
+spec:
+  type: ClusterIP
+  selector:
+    app: kite-frontend
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 80
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kite-api
+  namespace: kite
+  labels:
+    app: kite-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kite-api
+  template:
+    metadata:
+      labels:
+        app: kite-api
+    spec:
+      serviceAccountName: kite-account
+      containers:
+        - name: kite-api
+          image: anacnu.com/kite-api:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kite-api
+  namespace: kite
+spec:
+  type: ClusterIP
+  selector:
+    app: kite-api
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kite-controller
+  namespace: kite
+  labels:
+    app: kite-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kite-controller
+  template:
+    metadata:
+      labels:
+        app: kite-controller
+    spec:
+      serviceAccountName: kite-account
+      containers:
+        - name: kite-controller
+          image: anacnu.com/kite-controller:latest
+          imagePullPolicy: IfNotPresent
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kite-account
+  namespace: kite
+  labels:
+    app: kite-account
+spec:
+  selector:
+    matchLabels:
+      app: kite-account
+  template:
+    metadata:
+      labels:
+        app: kite-account
+    spec:
+      serviceAccountName: kite-account
+      hostPID: true
+      containers:
+        - name: kite-account
+          image: anacnu.com/kite-account:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+            runAsUser: 0
+          env:
+            - name: KITE_ACCOUNT_HOST_ROOT
+              value: /host
+          volumeMounts:
+            - name: host-var-lib-kite
+              mountPath: /host/var/lib/kite
+      volumes:
+        - name: host-var-lib-kite
+          hostPath:
+            path: /var/lib/kite
+            type: DirectoryOrCreate

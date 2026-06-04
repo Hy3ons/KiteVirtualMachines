@@ -52,6 +52,14 @@ spec:
                 powerState: # On / Off
                   type: string
                   enum: ["On", "Off"]
+                domainPrefix:
+                  type: string
+                sshId:
+                  type: string
+                sshPassword:
+                  type: string
+                delete:
+                  type: boolean
 
             status:
               type: object
@@ -60,6 +68,17 @@ spec:
                   type: string
 
                 currentPowerState:
+                  type: string
+                observedGeneration:
+                  type: integer
+                  format: int64
+                domain:
+                  type: string
+                dataVolumePhase:
+                  type: string
+                dataVolumeProgress:
+                  type: string
+                dataVolumeMessage:
                   type: string
 
                 conditions:
@@ -73,6 +92,7 @@ spec:
                       lastTransitionTime: { type: string, format: date-time }
                       reason: { type: string }
                       message: { type: string }
+                      observedGeneration: { type: integer, format: int64 }
 
   names:
     kind: KiteVirtualMachine
