@@ -28,9 +28,10 @@ MINIKUBE_MEMORY="${MINIKUBE_MEMORY:-8192}"
 MINIKUBE_START="${MINIKUBE_START:-true}"
 MINIKUBE_BUILD_STRATEGY="${MINIKUBE_BUILD_STRATEGY:-auto}"
 
-# k3s image import command. Override when sudo is not needed:
-#   K3S_CTR_CMD="k3s ctr" KITE_CLUSTER=k3s ./dev.sh
-K3S_CTR_CMD="${K3S_CTR_CMD:-sudo k3s ctr}"
+# k3s image import command. Kubernetes reads images from the k8s.io containerd namespace.
+# Override when sudo is not needed:
+#   K3S_CTR_CMD="k3s ctr -n k8s.io" KITE_CLUSTER=k3s ./dev.sh
+K3S_CTR_CMD="${K3S_CTR_CMD:-sudo k3s ctr -n k8s.io}"
 K3S_IMPORT_IMAGES="${K3S_IMPORT_IMAGES:-true}"
 
 cleanup() {
@@ -72,7 +73,11 @@ detect_cluster() {
       echo "k3s"
       ;;
     *)
-      echo "current"
+      if command -v k3s >/dev/null 2>&1; then
+        echo "k3s"
+      else
+        echo "current"
+      fi
       ;;
   esac
 }
@@ -233,6 +238,12 @@ load_image_into_k3s() {
 }
 
 render_manifest() {
+  local pull_policy="IfNotPresent"
+
+  if [[ "${1}" == "minikube" || "${1}" == "k3s" ]]; then
+    pull_policy="Never"
+  fi
+
   log "rendering manifest with image tag ${IMAGE_TAG}"
 
   sed \
@@ -240,6 +251,7 @@ render_manifest() {
     -e "s#anacnu.com/kite-controller:latest#$(image_name kite-controller)#g" \
     -e "s#anacnu.com/kite-host-agent:latest#$(image_name kite-host-agent)#g" \
     -e "s#anacnu.com/kite-frontend:latest#$(image_name kite-frontend)#g" \
+    -e "s#imagePullPolicy: IfNotPresent#imagePullPolicy: ${pull_policy}#g" \
     "${MANIFEST_TEMPLATE}" > "${RENDERED_MANIFEST}"
 }
 
@@ -344,7 +356,7 @@ main() {
   fi
 
   build_images_for_cluster "${cluster}"
-  render_manifest
+  render_manifest "${cluster}"
   apply_manifest
 
   wait_for_deployment kite-api
