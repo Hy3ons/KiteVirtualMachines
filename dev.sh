@@ -1,27 +1,42 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# dev.sh builds the current Kite source into Minikube-visible images and deploys it.
-# It is intended to work on normal developer laptops as long as minikube, kubectl, and Docker are installed.
-# QEMU-based Minikube drivers often cannot read host paths such as /Users from inside the VM, so this
-# script avoids `minikube image build` for those drivers and sends the Docker build context through
-# Minikube's Docker daemon instead.
+# dev.sh builds Kite images from the local source tree and deploys them to a Kubernetes cluster.
+# Supported targets:
+#   KITE_CLUSTER=minikube ./dev.sh
+#   KITE_CLUSTER=k3s ./dev.sh
+#   KITE_CLUSTER=current ./dev.sh
+#
+# minikube mode can start the profile and load images into the Minikube runtime.
+# k3s mode builds images with local Docker and imports them into k3s containerd.
+# current mode only builds local Docker images and applies Kubernetes manifests; use it when the
+# current cluster can already pull the configured image names from a registry.
 
-# Resolve the repository root from this script location so it can be run from any cwd.
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+KITE_NAMESPACE="${KITE_NAMESPACE:-kite}"
+KITE_CLUSTER="${KITE_CLUSTER:-auto}"
+IMAGE_REGISTRY="${IMAGE_REGISTRY:-anacnu.com}"
+IMAGE_TAG="${IMAGE_TAG:-dev-$(date +%Y%m%d%H%M%S)}"
+MANIFEST_TEMPLATE="${ROOT_DIR}/kite-yaml/install.yaml"
+RENDERED_MANIFEST="$(mktemp "${TMPDIR:-/tmp}/kite-install.XXXXXX.yaml")"
 
-# Local development knobs. Override these from the shell when needed:
-#   MINIKUBE_PROFILE=kite-dev MINIKUBE_DRIVER=docker MINIKUBE_CPUS=6 MINIKUBE_MEMORY=12288 ./dev.sh
-#   BUILD_STRATEGY=docker-env ./dev.sh
+# Minikube knobs. They are used only when KITE_CLUSTER=minikube or auto detects minikube.
 MINIKUBE_PROFILE="${MINIKUBE_PROFILE:-minikube}"
 MINIKUBE_DRIVER="${MINIKUBE_DRIVER:-}"
 MINIKUBE_CPUS="${MINIKUBE_CPUS:-4}"
 MINIKUBE_MEMORY="${MINIKUBE_MEMORY:-8192}"
-BUILD_STRATEGY="${BUILD_STRATEGY:-auto}"
+MINIKUBE_START="${MINIKUBE_START:-true}"
+MINIKUBE_BUILD_STRATEGY="${MINIKUBE_BUILD_STRATEGY:-auto}"
 
-# Kite's own runtime resources are deployed in the kite namespace.
-# install.yaml is intentionally written for this namespace, so keep this value as kite unless the manifest is changed too.
-KITE_NAMESPACE="kite"
+# k3s image import command. Override when sudo is not needed:
+#   K3S_CTR_CMD="k3s ctr" KITE_CLUSTER=k3s ./dev.sh
+K3S_CTR_CMD="${K3S_CTR_CMD:-sudo k3s ctr}"
+K3S_IMPORT_IMAGES="${K3S_IMPORT_IMAGES:-true}"
+
+cleanup() {
+  rm -f "${RENDERED_MANIFEST}"
+}
+trap cleanup EXIT
 
 log() {
   echo "[kite] $*"
@@ -35,17 +50,42 @@ require_command() {
   fi
 }
 
+image_name() {
+  local component="$1"
+  echo "${IMAGE_REGISTRY}/${component}:${IMAGE_TAG}"
+}
+
+detect_cluster() {
+  local context
+
+  if [[ "${KITE_CLUSTER}" != "auto" ]]; then
+    echo "${KITE_CLUSTER}"
+    return
+  fi
+
+  context="$(kubectl config current-context 2>/dev/null || true)"
+  case "${context}" in
+    minikube|*minikube*)
+      echo "minikube"
+      ;;
+    *k3s*|*k3d*)
+      echo "k3s"
+      ;;
+    *)
+      echo "current"
+      ;;
+  esac
+}
+
 minikube_driver() {
   local driver
 
-  # First try the configured driver. This is available when the profile was started with --driver.
   driver="$(minikube -p "${MINIKUBE_PROFILE}" config get driver 2>/dev/null || true)"
   if [[ -n "${driver}" ]]; then
     echo "${driver}"
     return
   fi
 
-  # Fall back to profile metadata. Minikube versions format this JSON differently, so keep the parser loose.
   minikube -p "${MINIKUBE_PROFILE}" profile list -o json 2>/dev/null \
     | tr '\n' ' ' \
     | sed -n 's/.*"Driver"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
@@ -63,19 +103,32 @@ start_minikube() {
     --memory="${MINIKUBE_MEMORY}"
   )
 
-  # Allow a developer to pin a driver, while keeping Minikube's default driver selection otherwise.
+  if [[ "${MINIKUBE_START}" != "true" ]]; then
+    log "skipping minikube start because MINIKUBE_START=${MINIKUBE_START}"
+    minikube -p "${MINIKUBE_PROFILE}" update-context
+    return
+  fi
+
   if [[ -n "${MINIKUBE_DRIVER}" ]]; then
     args+=(--driver="${MINIKUBE_DRIVER}")
   fi
 
   log "starting minikube profile=${MINIKUBE_PROFILE}"
   minikube "${args[@]}"
-
-  # Make plain kubectl commands talk to the selected profile.
   minikube -p "${MINIKUBE_PROFILE}" update-context
 }
 
-build_image_with_minikube() {
+build_local_image() {
+  local image="$1"
+  local dockerfile="$2"
+  local context="$3"
+
+  require_command docker
+  log "building ${image}"
+  DOCKER_BUILDKIT=1 docker build --progress=plain -t "${image}" -f "${dockerfile}" "${context}"
+}
+
+build_minikube_image_with_minikube() {
   local image="$1"
   local dockerfile="$2"
   local context="$3"
@@ -83,16 +136,13 @@ build_image_with_minikube() {
   minikube -p "${MINIKUBE_PROFILE}" image build -t "${image}" -f "${dockerfile}" "${context}"
 }
 
-build_image_with_docker_env() {
+build_minikube_image_with_docker_env() {
   local image="$1"
   local dockerfile="$2"
   local context="$3"
   local status
 
   require_command docker
-
-  # docker-env points the local docker CLI at Minikube's Docker daemon. The build context is streamed
-  # from the host, so macOS paths such as /Users do not need to exist inside the Minikube VM.
   eval "$(minikube -p "${MINIKUBE_PROFILE}" docker-env)"
   if DOCKER_BUILDKIT=1 docker build --progress=plain -t "${image}" -f "${dockerfile}" "${context}"; then
     status=0
@@ -103,141 +153,206 @@ build_image_with_docker_env() {
   return "${status}"
 }
 
-build_image_with_local_load() {
+build_minikube_image_with_local_load() {
   local image="$1"
   local dockerfile="$2"
   local context="$3"
 
-  require_command docker
-
-  # Last-resort path for drivers/runtimes where docker-env is not available. Build on the host Docker
-  # daemon, then ask Minikube to load the image into the cluster runtime.
-  DOCKER_BUILDKIT=1 docker build --progress=plain -t "${image}" -f "${dockerfile}" "${context}"
+  build_local_image "${image}" "${dockerfile}" "${context}"
   minikube -p "${MINIKUBE_PROFILE}" image load "${image}"
 }
 
-build_image() {
+build_minikube_image() {
   local image="$1"
   local dockerfile="$2"
   local context="$3"
   local driver
   local os_name
 
-  log "building ${image}"
   driver="$(minikube_driver || true)"
   os_name="$(host_os)"
-  log "build strategy=${BUILD_STRATEGY}, minikube driver=${driver:-unknown}, host=${os_name}"
+  log "build strategy=${MINIKUBE_BUILD_STRATEGY}, minikube driver=${driver:-unknown}, host=${os_name}"
 
-  case "${BUILD_STRATEGY}" in
+  case "${MINIKUBE_BUILD_STRATEGY}" in
     minikube)
-      build_image_with_minikube "${image}" "${dockerfile}" "${context}"
+      build_minikube_image_with_minikube "${image}" "${dockerfile}" "${context}"
       return
       ;;
     docker-env)
-      build_image_with_docker_env "${image}" "${dockerfile}" "${context}"
+      build_minikube_image_with_docker_env "${image}" "${dockerfile}" "${context}"
       return
       ;;
     local-load)
-      build_image_with_local_load "${image}" "${dockerfile}" "${context}"
+      build_minikube_image_with_local_load "${image}" "${dockerfile}" "${context}"
       return
       ;;
     auto)
       ;;
     *)
-      echo "[kite] unknown BUILD_STRATEGY=${BUILD_STRATEGY}; use auto, minikube, docker-env, or local-load" >&2
+      echo "[kite] unknown MINIKUBE_BUILD_STRATEGY=${MINIKUBE_BUILD_STRATEGY}; use auto, minikube, docker-env, or local-load" >&2
       exit 1
       ;;
   esac
 
-  # QEMU and qemu2 commonly fail with:
-  #   lstat /Users: no such file or directory
-  # because `minikube image build` may resolve the host project path inside the VM.
-  # On macOS, prefer docker-env even if driver detection fails, because host paths under /Users are common.
+  # qemu/qemu2 and macOS commonly fail when minikube image build tries to resolve /Users inside the VM.
   if [[ "${driver}" == "qemu" || "${driver}" == "qemu2" || "${os_name}" == "Darwin" ]]; then
     log "using docker-env build to avoid Minikube VM host path issues"
-    if build_image_with_docker_env "${image}" "${dockerfile}" "${context}"; then
+    if build_minikube_image_with_docker_env "${image}" "${dockerfile}" "${context}"; then
       return
     fi
 
-    log "docker-env build failed for ${image}; retrying with local docker build plus minikube image load"
-    build_image_with_local_load "${image}" "${dockerfile}" "${context}"
+    log "docker-env build failed for ${image}; retrying local build plus minikube image load"
+    build_minikube_image_with_local_load "${image}" "${dockerfile}" "${context}"
     return
   fi
 
-  # For docker/podman drivers, `minikube image build` is usually the fastest path.
-  if build_image_with_minikube "${image}" "${dockerfile}" "${context}"; then
+  if build_minikube_image_with_minikube "${image}" "${dockerfile}" "${context}"; then
     return
   fi
 
-  log "minikube image build failed for ${image}; retrying with docker-env fallback"
-  if build_image_with_docker_env "${image}" "${dockerfile}" "${context}"; then
+  log "minikube image build failed for ${image}; retrying docker-env"
+  if build_minikube_image_with_docker_env "${image}" "${dockerfile}" "${context}"; then
     return
   fi
 
-  log "docker-env build failed for ${image}; retrying with local docker build plus minikube image load"
-  build_image_with_local_load "${image}" "${dockerfile}" "${context}"
+  log "docker-env build failed for ${image}; retrying local build plus minikube image load"
+  build_minikube_image_with_local_load "${image}" "${dockerfile}" "${context}"
 }
 
-ensure_namespace() {
-  log "creating namespace"
+load_image_into_k3s() {
+  local image="$1"
 
-  # The namespace also exists in install.yaml. Applying it here first keeps repeated local runs idempotent.
-  kubectl apply -f - <<EOF
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: ${KITE_NAMESPACE}
-EOF
+  if [[ "${K3S_IMPORT_IMAGES}" != "true" ]]; then
+    log "skipping k3s image import for ${image}"
+    return
+  fi
+
+  require_command docker
+  log "importing ${image} into k3s containerd"
+  docker save "${image}" | ${K3S_CTR_CMD} images import -
+}
+
+render_manifest() {
+  log "rendering manifest with image tag ${IMAGE_TAG}"
+
+  sed \
+    -e "s#anacnu.com/kite-api:latest#$(image_name kite-api)#g" \
+    -e "s#anacnu.com/kite-controller:latest#$(image_name kite-controller)#g" \
+    -e "s#anacnu.com/kite-host-agent:latest#$(image_name kite-host-agent)#g" \
+    -e "s#anacnu.com/kite-frontend:latest#$(image_name kite-frontend)#g" \
+    "${MANIFEST_TEMPLATE}" > "${RENDERED_MANIFEST}"
 }
 
 apply_manifest() {
-  log "applying install.yaml"
-  kubectl apply -f "${ROOT_DIR}/kite-yaml/install.yaml"
+  log "applying ${RENDERED_MANIFEST}"
+  kubectl apply -f "${RENDERED_MANIFEST}"
 }
 
 show_debug() {
-  log "deployment did not become ready; printing debug information"
+  log "rollout did not become ready; printing debug information"
   kubectl -n "${KITE_NAMESPACE}" get pods -o wide || true
-  kubectl -n "${KITE_NAMESPACE}" get events --sort-by=.lastTimestamp | tail -40 || true
+  kubectl -n "${KITE_NAMESPACE}" get events --sort-by=.lastTimestamp | tail -60 || true
 }
 
-wait_for_rollout() {
+wait_for_deployment() {
   local deployment="$1"
-  log "waiting for deployment/${deployment}"
 
+  log "waiting for deployment/${deployment}"
   if ! kubectl -n "${KITE_NAMESPACE}" rollout status "deployment/${deployment}" --timeout=180s; then
     show_debug
     exit 1
   fi
 }
 
-main() {
-  require_command minikube
-  require_command kubectl
+wait_for_daemonset() {
+  local daemonset="$1"
 
-  start_minikube
-
-  build_image "anacnu.com/kite-api:latest" "${ROOT_DIR}/kite/Dockerfile.api" "${ROOT_DIR}/kite"
-  build_image "anacnu.com/kite-controller:latest" "${ROOT_DIR}/kite/Dockerfile.controller" "${ROOT_DIR}/kite"
-  build_image "anacnu.com/kite-host-agent:latest" "${ROOT_DIR}/kite/Dockerfile.host-agent" "${ROOT_DIR}/kite"
-  build_image "anacnu.com/kite-frontend:latest" "${ROOT_DIR}/kite-frontend/Dockerfile" "${ROOT_DIR}/kite-frontend"
-
-  ensure_namespace
-  apply_manifest
-
-  log "waiting for deployments"
-  wait_for_rollout kite-api
-  wait_for_rollout kite-controller
-  kubectl -n "${KITE_NAMESPACE}" rollout status daemonset/kite-host-agent --timeout=180s || {
+  log "waiting for daemonset/${daemonset}"
+  if ! kubectl -n "${KITE_NAMESPACE}" rollout status "daemonset/${daemonset}" --timeout=180s; then
     show_debug
     exit 1
-  }
-  wait_for_rollout kite-frontend
+  fi
+}
 
+build_images_for_cluster() {
+  local cluster="$1"
+  local api_image
+  local controller_image
+  local host_agent_image
+  local frontend_image
+
+  api_image="$(image_name kite-api)"
+  controller_image="$(image_name kite-controller)"
+  host_agent_image="$(image_name kite-host-agent)"
+  frontend_image="$(image_name kite-frontend)"
+
+  case "${cluster}" in
+    minikube)
+      build_minikube_image "${api_image}" "${ROOT_DIR}/kite/Dockerfile.api" "${ROOT_DIR}/kite"
+      build_minikube_image "${controller_image}" "${ROOT_DIR}/kite/Dockerfile.controller" "${ROOT_DIR}/kite"
+      build_minikube_image "${host_agent_image}" "${ROOT_DIR}/kite/Dockerfile.host-agent" "${ROOT_DIR}/kite"
+      build_minikube_image "${frontend_image}" "${ROOT_DIR}/kite-frontend/Dockerfile" "${ROOT_DIR}/kite-frontend"
+      ;;
+    k3s)
+      build_local_image "${api_image}" "${ROOT_DIR}/kite/Dockerfile.api" "${ROOT_DIR}/kite"
+      build_local_image "${controller_image}" "${ROOT_DIR}/kite/Dockerfile.controller" "${ROOT_DIR}/kite"
+      build_local_image "${host_agent_image}" "${ROOT_DIR}/kite/Dockerfile.host-agent" "${ROOT_DIR}/kite"
+      build_local_image "${frontend_image}" "${ROOT_DIR}/kite-frontend/Dockerfile" "${ROOT_DIR}/kite-frontend"
+      load_image_into_k3s "${api_image}"
+      load_image_into_k3s "${controller_image}"
+      load_image_into_k3s "${host_agent_image}"
+      load_image_into_k3s "${frontend_image}"
+      ;;
+    current)
+      build_local_image "${api_image}" "${ROOT_DIR}/kite/Dockerfile.api" "${ROOT_DIR}/kite"
+      build_local_image "${controller_image}" "${ROOT_DIR}/kite/Dockerfile.controller" "${ROOT_DIR}/kite"
+      build_local_image "${host_agent_image}" "${ROOT_DIR}/kite/Dockerfile.host-agent" "${ROOT_DIR}/kite"
+      build_local_image "${frontend_image}" "${ROOT_DIR}/kite-frontend/Dockerfile" "${ROOT_DIR}/kite-frontend"
+      ;;
+    *)
+      echo "[kite] unknown KITE_CLUSTER=${cluster}; use auto, minikube, k3s, or current" >&2
+      exit 1
+      ;;
+  esac
+}
+
+print_summary() {
   log "deployment complete"
-  log "try API health:"
-  echo "  kubectl -n ${KITE_NAMESPACE} port-forward svc/kite-api 8080:8080"
-  echo "  curl http://127.0.0.1:8080/health"
+  echo "  cluster: ${1}"
+  echo "  namespace: ${KITE_NAMESPACE}"
+  echo "  image tag: ${IMAGE_TAG}"
+  echo
+  echo "  API health:"
+  echo "    kubectl -n ${KITE_NAMESPACE} port-forward svc/kite-api 8080:8080"
+  echo "    curl http://127.0.0.1:8080/health"
+  echo
+  echo "  Frontend:"
+  echo "    kubectl -n ${KITE_NAMESPACE} port-forward svc/kite-frontend 8081:80"
+  echo "    open http://127.0.0.1:8081"
+}
+
+main() {
+  local cluster
+
+  require_command kubectl
+  cluster="$(detect_cluster)"
+  log "target cluster=${cluster}"
+
+  if [[ "${cluster}" == "minikube" ]]; then
+    require_command minikube
+    start_minikube
+  fi
+
+  build_images_for_cluster "${cluster}"
+  render_manifest
+  apply_manifest
+
+  wait_for_deployment kite-api
+  wait_for_deployment kite-controller
+  wait_for_daemonset kite-host-agent
+  wait_for_deployment kite-frontend
+
+  print_summary "${cluster}"
 }
 
 main "$@"
