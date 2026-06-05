@@ -135,7 +135,8 @@ func ReconcileKubeVirtVirtualMachineStatus(ctx context.Context, dynamicClient dy
 	}
 
 	phase, powerState, conditionStatus, message := kiteStatusFromKubeVirtVirtualMachine(kubeVirtVM)
-	if err := updateKiteVirtualMachineStatus(ctx, dynamicClient, kiteVM, phase, powerState, domain, conditionStatus, kiteVMReasonReconciled, message); err != nil {
+	nodeName := kiteNodeNameFromKubeVirtVirtualMachine(kubeVirtVM)
+	if err := updateKiteVirtualMachineStatus(ctx, dynamicClient, kiteVM, phase, powerState, domain, nodeName, conditionStatus, kiteVMReasonReconciled, message); err != nil {
 		return err
 	}
 
@@ -144,6 +145,14 @@ func ReconcileKubeVirtVirtualMachineStatus(ctx context.Context, dynamicClient dy
 	}
 
 	return nil
+}
+
+// kiteNodeNameFromKubeVirtVirtualMachine reads the node currently reported by KubeVirt.
+// kubeVirtVM is the kubevirt.io/v1 VirtualMachine object from the status informer.
+// The returned value may be empty when KubeVirt has not surfaced node placement yet.
+func kiteNodeNameFromKubeVirtVirtualMachine(kubeVirtVM *unstructured.Unstructured) string {
+	nodeName, _, _ := unstructured.NestedString(kubeVirtVM.Object, "status", "nodeName")
+	return strings.TrimSpace(nodeName)
 }
 
 // kubeVirtVirtualMachineFromEventObject extracts a KubeVirt VM unstructured object from an informer event.

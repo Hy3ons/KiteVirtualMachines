@@ -175,6 +175,16 @@ spec:
                   format: int64
                 domain:
                   type: string
+                nodeName:
+                  type: string
+                sshKeySecretName:
+                  type: string
+                cloudInitSecretName:
+                  type: string
+                serviceName:
+                  type: string
+                dataVolumeName:
+                  type: string
                 dataVolumePhase:
                   type: string
                 dataVolumeProgress:
@@ -216,7 +226,7 @@ metadata:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: kite-account
+  name: kite-control-plane
   namespace: kite
 
 ---
@@ -261,7 +271,7 @@ metadata:
   name: kite-control-plane-binding
 subjects:
   - kind: ServiceAccount
-    name: kite-account
+    name: kite-control-plane
     namespace: kite
 roleRef:
   kind: ClusterRole
@@ -293,7 +303,7 @@ subjects:
     name: cdi-sa
     namespace: cdi
   - kind: ServiceAccount
-    name: kite-account
+    name: kite-control-plane
     namespace: kite
 roleRef:
   kind: Role
@@ -359,7 +369,7 @@ spec:
       labels:
         app: kite-api
     spec:
-      serviceAccountName: kite-account
+      serviceAccountName: kite-control-plane
       containers:
         - name: kite-api
           image: anacnu.com/kite-api:latest
@@ -401,7 +411,7 @@ spec:
       labels:
         app: kite-controller
     spec:
-      serviceAccountName: kite-account
+      serviceAccountName: kite-control-plane
       containers:
         - name: kite-controller
           image: anacnu.com/kite-controller:latest
@@ -411,36 +421,47 @@ spec:
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: kite-account
+  name: kite-host-agent
   namespace: kite
   labels:
-    app: kite-account
+    app: kite-host-agent
 spec:
   selector:
     matchLabels:
-      app: kite-account
+      app: kite-host-agent
   template:
     metadata:
       labels:
-        app: kite-account
+        app: kite-host-agent
     spec:
-      serviceAccountName: kite-account
+      serviceAccountName: kite-control-plane
       hostPID: true
       containers:
-        - name: kite-account
-          image: anacnu.com/kite-account:latest
+        - name: kite-host-agent
+          image: anacnu.com/kite-host-agent:latest
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
             runAsUser: 0
           env:
-            - name: KITE_ACCOUNT_HOST_ROOT
+            - name: KITE_HOST_AGENT_HOST_ROOT
               value: /host
+            - name: KITE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
           volumeMounts:
             - name: host-var-lib-kite
               mountPath: /host/var/lib/kite
+            - name: host-home
+              mountPath: /host/home
       volumes:
         - name: host-var-lib-kite
           hostPath:
             path: /var/lib/kite
             type: DirectoryOrCreate
+        - name: host-home
+          hostPath:
+            path: /home
+            type: Directory
+            type: Directory

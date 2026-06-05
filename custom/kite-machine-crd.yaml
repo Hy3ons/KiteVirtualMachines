@@ -74,6 +74,16 @@ spec:
                   format: int64
                 domain:
                   type: string
+                nodeName:
+                  type: string
+                sshKeySecretName:
+                  type: string
+                cloudInitSecretName:
+                  type: string
+                serviceName:
+                  type: string
+                dataVolumeName:
+                  type: string
                 dataVolumePhase:
                   type: string
                 dataVolumeProgress:

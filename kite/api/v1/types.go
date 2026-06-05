@@ -75,14 +75,19 @@ type KiteVirtualMachineSpec struct {
 // KiteVirtualMachineStatus contains the controller-managed status fields
 // defined by custom/kite-machine-crd.yaml.
 type KiteVirtualMachineStatus struct {
-	Phase              string             `json:"phase,omitempty"`
-	CurrentPowerState  string             `json:"currentPowerState,omitempty"`
-	ObservedGeneration int64              `json:"observedGeneration,omitempty"`
-	Domain             string             `json:"domain,omitempty"`
-	DataVolumePhase    string             `json:"dataVolumePhase,omitempty"`
-	DataVolumeProgress string             `json:"dataVolumeProgress,omitempty"`
-	DataVolumeMessage  string             `json:"dataVolumeMessage,omitempty"`
-	Conditions         []metav1.Condition `json:"conditions,omitempty"`
+	Phase               string             `json:"phase,omitempty"`
+	CurrentPowerState   string             `json:"currentPowerState,omitempty"`
+	ObservedGeneration  int64              `json:"observedGeneration,omitempty"`
+	Domain              string             `json:"domain,omitempty"`
+	NodeName            string             `json:"nodeName,omitempty"`
+	SSHKeySecretName    string             `json:"sshKeySecretName,omitempty"`
+	CloudInitSecretName string             `json:"cloudInitSecretName,omitempty"`
+	ServiceName         string             `json:"serviceName,omitempty"`
+	DataVolumeName      string             `json:"dataVolumeName,omitempty"`
+	DataVolumePhase     string             `json:"dataVolumePhase,omitempty"`
+	DataVolumeProgress  string             `json:"dataVolumeProgress,omitempty"`
+	DataVolumeMessage   string             `json:"dataVolumeMessage,omitempty"`
+	Conditions          []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // KiteVirtualMachineList represents a Kubernetes list response for

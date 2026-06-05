@@ -22,11 +22,66 @@ stringData:
     disable_root: false
     ssh_deletekeys: false
     ssh_pwauth: true
+    ssh_authorized_keys:
+      - {{ .SSHPublicKey }}
+    users:
+      - default
+      - name: {{ .Id }}
+        groups: [adm, sudo]
+        shell: /bin/bash
+        lock_passwd: false
+        sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+        ssh_authorized_keys:
+          - {{ .SSHPublicKey }}
     password: {{ .Password }}
     chpasswd: 
       list: |
         root: {{ .Password }}
+        {{ .Id }}: {{ .Password }}
       expire: False
+
+    # VM 재시작 후에도 NIC가 내려가 있으면 다시 올리고 DHCP를 갱신한다.
+    write_files:
+      - path: /usr/local/sbin/kite-network-restore.sh
+        permissions: '0755'
+        owner: root:root
+        content: |
+          #!/bin/bash
+          set -euo pipefail
+
+          iface="$(ip -o link show | awk -F': ' '$2 != "lo" { print $2; exit }')"
+          if [ -z "$iface" ]; then
+            exit 0
+          fi
+
+          ip link set "$iface" up || true
+
+          if command -v dhclient >/dev/null 2>&1; then
+            dhclient "$iface" -nw || true
+            exit 0
+          fi
+
+          if command -v netplan >/dev/null 2>&1; then
+            netplan apply || true
+          fi
+
+          systemctl restart systemd-networkd 2>/dev/null || true
+      - path: /etc/systemd/system/kite-network-restore.service
+        permissions: '0644'
+        owner: root:root
+        content: |
+          [Unit]
+          Description=Restore Kite VM network after boot
+          After=network-pre.target
+          Wants=network-pre.target
+
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/local/sbin/kite-network-restore.sh
+          RemainAfterExit=yes
+
+          [Install]
+          WantedBy=multi-user.target
 
     # 2. 시스템 부팅 시 실행할 명령어 (런타임 설정)
     runcmd:
@@ -44,13 +99,13 @@ stringData:
       
       # SSH 서비스 재시작 (변경사항 적용)
       - systemctl restart ssh
+
+      # VM 재시작마다 NIC UP/DHCP 복구가 실행되도록 systemd에 등록
+      - systemctl enable kite-network-restore.service
+      - systemctl start kite-network-restore.service
       
       # 터미널 프롬프트 설정 (요청하신 초록색 호스트네임)
       - echo 'export PS1="\[\e[32m\]\u@\h\[\e[m\]:\[\e[34m\]\w\[\e[m\]\$ "' >> /root/.bashrc
-
-      # 인터페이스 강제 활성화 (L1 / L2 UP)
-      - ip link set enp1s0 up
-      - dhclient enp1s0 -nw
 
       # (옵션) 환영 메시지 추가
       - apt-get update

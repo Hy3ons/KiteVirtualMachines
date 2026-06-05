@@ -17,26 +17,32 @@ import (
 
 const (
 	hostRootDefault = "/host"
-	HostShellRoot   = "/var/lib/kite/bashs"
 	HostAccountRoot = "/var/lib/kite/accounts"
 )
 
 var usernamePattern = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
 
 type DesiredAccount struct {
-	Username    string
-	Password    string
-	VMNamespace string
-	VMName      string
-	ClusterIP   string
-	Port        int64
+	Username         string
+	Password         string
+	VMNamespace      string
+	VMName           string
+	NodeName         string
+	SSHKeySecretName string
+	PrivateKey       string
+	ServiceName      string
+	ServiceNamespace string
+	VMUser           string
 }
 
 type OwnerMetadata struct {
-	Username    string `json:"username"`
-	VMNamespace string `json:"vmNamespace"`
-	VMName      string `json:"vmName"`
-	ShellPath   string `json:"shellPath"`
+	Username         string `json:"username"`
+	VMNamespace      string `json:"vmNamespace"`
+	VMName           string `json:"vmName"`
+	NodeName         string `json:"nodeName"`
+	SSHKeySecretName string `json:"sshKeySecretName"`
+	ShellPath        string `json:"shellPath"`
+	PrivateKeyPath   string `json:"privateKeyPath"`
 }
 
 type Manager struct {
@@ -45,7 +51,7 @@ type Manager struct {
 
 // NewManager creates a host account manager.
 // hostRoot is the container path where the host filesystem is mounted, usually /host.
-// The returned manager is used by cmd/kite-account to reconcile Linux users and proxy shells.
+// The returned manager is used by cmd/kite-host-agent to reconcile Linux users and proxy shells.
 func NewManager(hostRoot string) *Manager {
 	hostRoot = strings.TrimSpace(hostRoot)
 	if hostRoot == "" {
@@ -57,28 +63,35 @@ func NewManager(hostRoot string) *Manager {
 
 // Ensure makes one host Linux account match the desired KiteVirtualMachine access state.
 // ctx controls nsenter command execution.
-// desired contains the VM sshId, sshPassword, and ClusterIP Service target.
-// A nil error means the host user, password, shell script, and login shell were reconciled.
+// desired contains the VM sshId, sshPassword, private key, and fixed ClusterIP Service DNS target.
+// A nil error means the host user, password, private key, shell script, and login shell were reconciled.
 func (m *Manager) Ensure(ctx context.Context, desired DesiredAccount) error {
 	if err := validateDesiredAccount(desired); err != nil {
 		return err
 	}
 
-	shellPath := ShellPath(desired.VMNamespace, desired.VMName)
+	shellPath := ShellPath(desired.Username)
+	privateKeyPath := PrivateKeyPath(desired.Username)
 	owner := OwnerMetadata{
-		Username:    desired.Username,
-		VMNamespace: desired.VMNamespace,
-		VMName:      desired.VMName,
-		ShellPath:   shellPath,
+		Username:         desired.Username,
+		VMNamespace:      desired.VMNamespace,
+		VMName:           desired.VMName,
+		NodeName:         desired.NodeName,
+		SSHKeySecretName: desired.SSHKeySecretName,
+		ShellPath:        shellPath,
+		PrivateKeyPath:   privateKeyPath,
 	}
 
 	if err := m.ensureOwnership(ctx, owner); err != nil {
 		return err
 	}
-	if err := m.writeProxyShell(desired, shellPath); err != nil {
+	if err := m.ensureUser(ctx, desired.Username, shellPath); err != nil {
 		return err
 	}
-	if err := m.ensureUser(ctx, desired.Username, shellPath); err != nil {
+	if err := m.writePrivateKey(ctx, desired.Username, desired.PrivateKey); err != nil {
+		return err
+	}
+	if err := m.writeProxyShell(ctx, desired, shellPath); err != nil {
 		return err
 	}
 	if err := m.setPassword(ctx, desired.Username, desired.Password); err != nil {
@@ -125,11 +138,18 @@ func (m *Manager) Delete(ctx context.Context, username string, vmNamespace strin
 	return nil
 }
 
-// ShellPath returns the host-visible proxy shell path for one VM.
-// vmNamespace and vmName identify the KiteVirtualMachine.
+// ShellPath returns the host-visible proxy shell path for one Kite SSH user.
+// username is spec.sshId and maps to /home/<username>/custom-shell.sh.
 // The returned path is used as the user's login shell on the host.
-func ShellPath(vmNamespace string, vmName string) string {
-	return filepath.Join(HostShellRoot, safePathPart(vmNamespace)+"-"+safePathPart(vmName)+".sh")
+func ShellPath(username string) string {
+	return filepath.Join("/home", username, "custom-shell.sh")
+}
+
+// PrivateKeyPath returns the host-visible private key path for one Kite SSH user.
+// username is spec.sshId and maps to /home/<username>/.ssh/id_rsa.
+// This path is referenced by the user's custom login shell.
+func PrivateKeyPath(username string) string {
+	return filepath.Join("/home", username, ".ssh", "id_rsa")
 }
 
 func validateDesiredAccount(desired DesiredAccount) error {
@@ -142,11 +162,14 @@ func validateDesiredAccount(desired DesiredAccount) error {
 	if strings.TrimSpace(desired.VMNamespace) == "" || strings.TrimSpace(desired.VMName) == "" {
 		return errors.New("VM namespace and name are required")
 	}
-	if strings.TrimSpace(desired.ClusterIP) == "" || strings.TrimSpace(desired.ClusterIP) == "None" {
-		return errors.New("SSH Service ClusterIP is required")
+	if strings.TrimSpace(desired.SSHKeySecretName) == "" {
+		return errors.New("SSH key Secret name is required")
 	}
-	if desired.Port <= 0 {
-		return errors.New("SSH Service port is required")
+	if strings.TrimSpace(desired.PrivateKey) == "" {
+		return errors.New("SSH private key is required")
+	}
+	if strings.TrimSpace(desired.ServiceName) == "" || strings.TrimSpace(desired.ServiceNamespace) == "" {
+		return errors.New("SSH Service name and namespace are required")
 	}
 	return nil
 }
@@ -183,6 +206,10 @@ func (m *Manager) ensureUser(ctx context.Context, username string, shellPath str
 }
 
 func (m *Manager) setPassword(ctx context.Context, username string, password string) error {
+	if strings.HasPrefix(strings.TrimSpace(password), "$") {
+		return m.runHostWithInput(ctx, username+":"+password+"\n", "chpasswd", "-e")
+	}
+
 	return m.runHostWithInput(ctx, username+":"+password+"\n", "chpasswd")
 }
 
@@ -190,10 +217,37 @@ func (m *Manager) setShell(ctx context.Context, username string, shellPath strin
 	return m.runHost(ctx, "usermod", "-s", shellPath, username)
 }
 
-func (m *Manager) writeProxyShell(desired DesiredAccount, shellPath string) error {
+func (m *Manager) writePrivateKey(ctx context.Context, username string, privateKey string) error {
+	sshDir := filepath.Join("/home", username, ".ssh")
+	if err := os.MkdirAll(m.hostPath(sshDir), 0o700); err != nil {
+		return err
+	}
+	if err := os.WriteFile(m.hostPath(PrivateKeyPath(username)), []byte(privateKey), 0o600); err != nil {
+		return err
+	}
+	return m.fixSSHFileOwnership(ctx, username)
+}
+
+func (m *Manager) fixSSHFileOwnership(ctx context.Context, username string) error {
+	if err := os.Chmod(m.hostPath(filepath.Join("/home", username, ".ssh")), 0o700); err != nil {
+		return err
+	}
+	if err := os.Chmod(m.hostPath(PrivateKeyPath(username)), 0o600); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return m.runHost(ctx, "chown", "-R", username+":"+username, filepath.Join("/home", username, ".ssh"))
+}
+
+func (m *Manager) writeProxyShell(ctx context.Context, desired DesiredAccount, shellPath string) error {
+	vmUser := strings.TrimSpace(desired.VMUser)
+	if vmUser == "" {
+		vmUser = desired.Username
+	}
+
 	rendered, err := hostproxyshell.Render(hostproxyshell.ShellData{
-		ClusterIP: desired.ClusterIP,
-		Port:      desired.Port,
+		Username:   desired.Username,
+		ServiceDNS: serviceDNS(desired.ServiceName, desired.ServiceNamespace),
+		VMUser:     vmUser,
 	})
 	if err != nil {
 		return err
@@ -206,7 +260,10 @@ func (m *Manager) writeProxyShell(desired DesiredAccount, shellPath string) erro
 	if err := os.WriteFile(containerPath, []byte(rendered), 0o755); err != nil {
 		return err
 	}
-	return os.Chmod(containerPath, 0o755)
+	if err := os.Chmod(containerPath, 0o755); err != nil {
+		return err
+	}
+	return m.runHost(ctx, "chown", desired.Username+":"+desired.Username, shellPath)
 }
 
 func (m *Manager) writeOwner(owner OwnerMetadata) error {
@@ -236,6 +293,38 @@ func (m *Manager) readOwner(username string) (OwnerMetadata, bool, error) {
 		return OwnerMetadata{}, false, err
 	}
 	return owner, true, nil
+}
+
+// ListOwners reads Kite-managed host account metadata files from the host filesystem.
+// The returned slice is used by kite-host-agent GC to compare local accounts with cluster state.
+func (m *Manager) ListOwners() ([]OwnerMetadata, error) {
+	entries, err := os.ReadDir(m.hostPath(HostAccountRoot))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	owners := make([]OwnerMetadata, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+
+		data, err := os.ReadFile(filepath.Join(m.hostPath(HostAccountRoot), entry.Name()))
+		if err != nil {
+			return nil, err
+		}
+
+		var owner OwnerMetadata
+		if err := json.Unmarshal(data, &owner); err != nil {
+			return nil, err
+		}
+		owners = append(owners, owner)
+	}
+
+	return owners, nil
 }
 
 func (m *Manager) ownerPath(username string) string {
@@ -294,4 +383,8 @@ func safePathPart(value string) string {
 		return "unknown"
 	}
 	return builder.String()
+}
+
+func serviceDNS(serviceName string, namespace string) string {
+	return strings.TrimSpace(serviceName) + "." + strings.TrimSpace(namespace) + ".svc.cluster.local"
 }

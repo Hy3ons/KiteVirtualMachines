@@ -219,7 +219,7 @@ main() {
 
   build_image "anacnu.com/kite-api:latest" "${ROOT_DIR}/kite/Dockerfile.api" "${ROOT_DIR}/kite"
   build_image "anacnu.com/kite-controller:latest" "${ROOT_DIR}/kite/Dockerfile.controller" "${ROOT_DIR}/kite"
-  build_image "anacnu.com/kite-account:latest" "${ROOT_DIR}/kite/Dockerfile.account" "${ROOT_DIR}/kite"
+  build_image "anacnu.com/kite-host-agent:latest" "${ROOT_DIR}/kite/Dockerfile.host-agent" "${ROOT_DIR}/kite"
   build_image "anacnu.com/kite-frontend:latest" "${ROOT_DIR}/kite-frontend/Dockerfile" "${ROOT_DIR}/kite-frontend"
 
   ensure_namespace
@@ -228,7 +228,7 @@ main() {
   log "waiting for deployments"
   wait_for_rollout kite-api
   wait_for_rollout kite-controller
-  kubectl -n "${KITE_NAMESPACE}" rollout status daemonset/kite-account --timeout=180s || {
+  kubectl -n "${KITE_NAMESPACE}" rollout status daemonset/kite-host-agent --timeout=180s || {
     show_debug
     exit 1
   }

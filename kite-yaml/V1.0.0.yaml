@@ -10,7 +10,7 @@ metadata:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: kite-account
+  name: kite-control-plane
   namespace: kite
 
 ---
@@ -57,7 +57,7 @@ metadata:
   name: kite-vm-cluster-manager-binding
 subjects:
   - kind: ServiceAccount
-    name: kite-account
+    name: kite-control-plane
     namespace: kite
 roleRef:
   kind: ClusterRole
@@ -105,11 +105,11 @@ subjects:
     name: cdi-sa
     namespace: cdi
 
-  # kite-controller는 kite-account로 사용자 namespace의 DataVolume을 생성한다.
+  # kite-controller는 kite-control-plane ServiceAccount로 사용자 namespace의 DataVolume을 생성한다.
   # Kubernetes admission/CDI authorization은 "요청을 만든 주체"가 source namespace에서
-  # datavolumes/source create 권한을 가지는지도 확인하므로 kite-account도 묶어준다.
+  # datavolumes/source create 권한을 가지는지도 확인하므로 kite-control-plane도 묶어준다.
   - kind: ServiceAccount
-    name: kite-account
+    name: kite-control-plane
     namespace: kite
 
 roleRef:

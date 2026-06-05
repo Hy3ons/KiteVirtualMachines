@@ -119,7 +119,7 @@ func ReconcileKiteVirtualMachineService(ctx context.Context, dynamicClient dynam
 		powerState = currentPowerStateFromVM(kiteVM)
 	}
 
-	return updateKiteVirtualMachineStatus(ctx, dynamicClient, kiteVM, phase, powerState, domain, metav1.ConditionFalse, kiteVMReasonReconciled, "VM Service is synced")
+	return updateKiteVirtualMachineStatus(ctx, dynamicClient, kiteVM, phase, powerState, domain, kiteVM.Status.NodeName, metav1.ConditionFalse, kiteVMReasonReconciled, "VM Service is synced")
 }
 
 // serviceFromEventObject extracts a Service object from an informer event.

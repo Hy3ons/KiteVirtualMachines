@@ -12,10 +12,11 @@ import (
 var ubuntu2204CloudInitTemplate string
 
 type Ubuntu2204CloudInit struct {
-	VmName    string
-	Namespace string
-	Id        string
-	Password  string
+	VmName       string
+	Namespace    string
+	Id           string
+	Password     string
+	SSHPublicKey string
 }
 
 // Render creates a cloud-init Secret object for an Ubuntu 22.04 virtual machine.

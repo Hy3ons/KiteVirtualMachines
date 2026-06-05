@@ -2,6 +2,7 @@ package apps
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -28,6 +29,7 @@ import (
 	"kite/internal/render/ingress"
 	kubevirtmachine "kite/internal/render/kubevirt-machine"
 	vmservice "kite/internal/render/vm-service"
+	"kite/internal/sshkey"
 )
 
 var kiteVirtualMachineGVR = schema.GroupVersionResource{
@@ -89,6 +91,10 @@ const (
 	kiteGlobalConfigNamespace          = "kite"
 	kiteGlobalConfigName               = "kite-runtime-config"
 	kiteGlobalBaseDomainKey            = "baseDomain"
+	kiteSecretTypeLabel                = "kite.anacnu.com/kite-secret-type"
+	kiteVMSSHKeySecretType             = "vm-ssh-key"
+	vmSSHPrivateKeyName                = "id_rsa"
+	vmSSHPublicKeyName                 = "id_rsa.pub"
 )
 
 // RunKiteVirtualMachineReconciler creates and runs the KiteVirtualMachine informer loop.
@@ -210,7 +216,7 @@ func ReconcileKiteVirtualMachine(ctx context.Context, dynamicClient dynamic.Inte
 		return reconcileKiteVirtualMachineDesiredState(ctx, dynamicClient, vm)
 	}
 
-	if err := updateKiteVirtualMachineStatus(ctx, dynamicClient, vm, kiteVMPhaseDeleting, currentPowerStateFromVM(vm), "", metav1.ConditionFalse, kiteVMReasonDeleting, "delete intent accepted; removing VM-owned resources"); err != nil {
+	if err := updateKiteVirtualMachineStatus(ctx, dynamicClient, vm, kiteVMPhaseDeleting, currentPowerStateFromVM(vm), "", vm.Status.NodeName, metav1.ConditionFalse, kiteVMReasonDeleting, "delete intent accepted; removing VM-owned resources"); err != nil {
 		return err
 	}
 
@@ -249,7 +255,7 @@ func ReconcileKiteVirtualMachine(ctx context.Context, dynamicClient dynamic.Inte
 // vm provides the desired spec that should be reflected in the cluster.
 func reconcileKiteVirtualMachineDesiredState(ctx context.Context, dynamicClient dynamic.Interface, vm *kite.KiteVirtualMachine) error {
 	if err := validateKiteVirtualMachineSpec(vm); err != nil {
-		if statusErr := updateKiteVirtualMachineStatus(ctx, dynamicClient, vm, kiteVMPhaseFailed, currentPowerStateFromVM(vm), "", metav1.ConditionFalse, kiteVMReasonFailed, err.Error()); statusErr != nil {
+		if statusErr := updateKiteVirtualMachineStatus(ctx, dynamicClient, vm, kiteVMPhaseFailed, currentPowerStateFromVM(vm), "", vm.Status.NodeName, metav1.ConditionFalse, kiteVMReasonFailed, err.Error()); statusErr != nil {
 			return fmt.Errorf("%w; failed to update failed status: %v", err, statusErr)
 		}
 
@@ -261,14 +267,22 @@ func reconcileKiteVirtualMachineDesiredState(ctx context.Context, dynamicClient 
 		return err
 	}
 
-	objects, err := kiteVirtualMachineDesiredObjects(vm, domain)
+	keyPair, err := ensureKiteVirtualMachineSSHKeySecret(ctx, dynamicClient, vm)
+	if err != nil {
+		if statusErr := updateKiteVirtualMachineStatus(ctx, dynamicClient, vm, kiteVMPhaseFailed, currentPowerStateFromVM(vm), domain, vm.Status.NodeName, metav1.ConditionFalse, kiteVMReasonFailed, err.Error()); statusErr != nil {
+			return fmt.Errorf("%w; failed to update failed status: %v", err, statusErr)
+		}
+		return err
+	}
+
+	objects, err := kiteVirtualMachineDesiredObjects(vm, domain, keyPair.PublicKey)
 	if err != nil {
 		return err
 	}
 
 	for _, obj := range objects {
 		if err := applyKiteVirtualMachineObject(ctx, dynamicClient, obj); err != nil {
-			if statusErr := updateKiteVirtualMachineStatus(ctx, dynamicClient, vm, kiteVMPhaseFailed, currentPowerStateFromVM(vm), domain, metav1.ConditionFalse, kiteVMReasonFailed, err.Error()); statusErr != nil {
+			if statusErr := updateKiteVirtualMachineStatus(ctx, dynamicClient, vm, kiteVMPhaseFailed, currentPowerStateFromVM(vm), domain, vm.Status.NodeName, metav1.ConditionFalse, kiteVMReasonFailed, err.Error()); statusErr != nil {
 				return fmt.Errorf("%w; failed to update failed status: %v", err, statusErr)
 			}
 
@@ -276,7 +290,7 @@ func reconcileKiteVirtualMachineDesiredState(ctx context.Context, dynamicClient 
 		}
 	}
 
-	if err := updateKiteVirtualMachineStatus(ctx, dynamicClient, vm, kiteVMPhaseProvisioning, currentPowerStateFromVM(vm), domain, metav1.ConditionFalse, kiteVMReasonReconciled, "VM resources are applied and waiting for KubeVirt readiness"); err != nil {
+	if err := updateKiteVirtualMachineStatus(ctx, dynamicClient, vm, kiteVMPhaseProvisioning, currentPowerStateFromVM(vm), domain, vm.Status.NodeName, metav1.ConditionFalse, kiteVMReasonReconciled, "VM resources are applied and waiting for KubeVirt readiness"); err != nil {
 		return err
 	}
 
@@ -327,7 +341,7 @@ func validateKiteVirtualMachineSpec(vm *kite.KiteVirtualMachine) error {
 // vm provides the desired VM spec.
 // domain is the optional full domain name used to render Ingress.
 // The returned objects are applied in dependency order by the VM reconciler.
-func kiteVirtualMachineDesiredObjects(vm *kite.KiteVirtualMachine, domain string) ([]*unstructured.Unstructured, error) {
+func kiteVirtualMachineDesiredObjects(vm *kite.KiteVirtualMachine, domain string, publicKey string) ([]*unstructured.Unstructured, error) {
 	dataVolume, err := (&datavolume.DataVolumeData{
 		VmName:    vm.Name,
 		Namespace: vm.Namespace,
@@ -339,10 +353,11 @@ func kiteVirtualMachineDesiredObjects(vm *kite.KiteVirtualMachine, domain string
 	}
 
 	cloudInit, err := (&cloudinituserdata.Ubuntu2204CloudInit{
-		VmName:    vm.Name,
-		Namespace: vm.Namespace,
-		Id:        vm.Spec.SSHID,
-		Password:  vm.Spec.SSHPassword,
+		VmName:       vm.Name,
+		Namespace:    vm.Namespace,
+		Id:           vm.Spec.SSHID,
+		Password:     vm.Spec.SSHPassword,
+		SSHPublicKey: publicKey,
 	}).Render()
 	if err != nil {
 		return nil, fmt.Errorf("failed to render cloud-init Secret: %w", err)
@@ -413,6 +428,85 @@ func currentPowerStateFromVM(vm *kite.KiteVirtualMachine) string {
 	}
 
 	return "Off"
+}
+
+// ensureKiteVirtualMachineSSHKeySecret returns the stable VM SSH key pair Secret.
+// ctx controls Kubernetes API calls.
+// dynamicClient reads or creates the core/v1 Secret in the KiteVirtualMachine namespace.
+// vm identifies the VM whose cloud-init public key and host-agent private key must match.
+func ensureKiteVirtualMachineSSHKeySecret(ctx context.Context, dynamicClient dynamic.Interface, vm *kite.KiteVirtualMachine) (sshkey.KeyPair, error) {
+	name := sshKeySecretName(vm.Name)
+	current, err := dynamicClient.Resource(secretGVR).Namespace(vm.Namespace).Get(ctx, name, metav1.GetOptions{})
+	if err == nil {
+		return keyPairFromSecret(current)
+	}
+	if !apierrors.IsNotFound(err) {
+		return sshkey.KeyPair{}, fmt.Errorf("failed to read SSH key Secret %s/%s: %w", vm.Namespace, name, err)
+	}
+
+	keyPair, err := sshkey.GenerateRSA(2048)
+	if err != nil {
+		return sshkey.KeyPair{}, fmt.Errorf("failed to generate SSH key pair for %s/%s: %w", vm.Namespace, vm.Name, err)
+	}
+
+	secret := newKiteVirtualMachineSSHKeySecret(vm, keyPair)
+	if _, err := dynamicClient.Resource(secretGVR).Namespace(vm.Namespace).Create(ctx, secret, metav1.CreateOptions{}); err != nil {
+		if !apierrors.IsAlreadyExists(err) {
+			return sshkey.KeyPair{}, fmt.Errorf("failed to create SSH key Secret %s/%s: %w", vm.Namespace, name, err)
+		}
+	}
+	return keyPair, nil
+}
+
+// keyPairFromSecret decodes the VM SSH key Secret managed by kite-controller.
+// secret is a core/v1 Secret with data.id_rsa and data.id_rsa.pub.
+// The returned pair is used by cloud-init rendering and host-agent account reconcile.
+func keyPairFromSecret(secret *unstructured.Unstructured) (sshkey.KeyPair, error) {
+	data, _, _ := unstructured.NestedStringMap(secret.Object, "data")
+	privateKey, err := base64.StdEncoding.DecodeString(data[vmSSHPrivateKeyName])
+	if err != nil {
+		return sshkey.KeyPair{}, fmt.Errorf("failed to decode %s in Secret %s/%s: %w", vmSSHPrivateKeyName, secret.GetNamespace(), secret.GetName(), err)
+	}
+	publicKey, err := base64.StdEncoding.DecodeString(data[vmSSHPublicKeyName])
+	if err != nil {
+		return sshkey.KeyPair{}, fmt.Errorf("failed to decode %s in Secret %s/%s: %w", vmSSHPublicKeyName, secret.GetNamespace(), secret.GetName(), err)
+	}
+
+	if strings.TrimSpace(string(privateKey)) == "" || strings.TrimSpace(string(publicKey)) == "" {
+		return sshkey.KeyPair{}, fmt.Errorf("SSH key Secret %s/%s is missing required key data", secret.GetNamespace(), secret.GetName())
+	}
+
+	return sshkey.KeyPair{
+		PrivateKey: string(privateKey),
+		PublicKey:  strings.TrimSpace(string(publicKey)),
+	}, nil
+}
+
+// newKiteVirtualMachineSSHKeySecret renders the Secret that stores one VM SSH key pair.
+// vm identifies the owning KiteVirtualMachine.
+// keyPair contains the private key for kite-host-agent and the public key for cloud-init.
+func newKiteVirtualMachineSSHKeySecret(vm *kite.KiteVirtualMachine, keyPair sshkey.KeyPair) *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]any{
+			"apiVersion": "v1",
+			"kind":       "Secret",
+			"metadata": map[string]any{
+				"name":      sshKeySecretName(vm.Name),
+				"namespace": vm.Namespace,
+				"labels": map[string]any{
+					kiteManagedByLabel:   kiteControllerLabel,
+					kiteSecretTypeLabel:  kiteVMSSHKeySecretType,
+					kiteVMNameLabel:      vm.Name,
+					kiteVMNamespaceLabel: vm.Namespace,
+				},
+			},
+			"type": "Opaque",
+			"data": map[string]any{
+				vmSSHPrivateKeyName: base64.StdEncoding.EncodeToString([]byte(keyPair.PrivateKey)),
+				vmSSHPublicKeyName:  base64.StdEncoding.EncodeToString([]byte(keyPair.PublicKey)),
+			},
+		},
+	}
 }
 
 // kiteVirtualMachineDomain returns the optional full domain name for a VM.
@@ -635,6 +729,7 @@ func deleteKiteVirtualMachineOwnedResources(ctx context.Context, dynamicClient d
 		{gvr: ingressGVR, name: name},
 		{gvr: serviceGVR, name: "vps-access-" + name},
 		{gvr: serviceGVR, name: "vps-web-" + name},
+		{gvr: secretGVR, name: sshKeySecretName(name)},
 		{gvr: secretGVR, name: name + "-cloud-init-userdata"},
 		{gvr: dataVolumeGVR, name: name + "-disk"},
 	}
@@ -656,7 +751,7 @@ func deleteKiteVirtualMachineOwnedResources(ctx context.Context, dynamicClient d
 // ctx controls Kubernetes API get and status update calls.
 // dynamicClient updates anacnu.com/v1 kitevirtualmachines through the status subresource.
 // vm identifies the CRD and provides the metadata generation used as observedGeneration.
-func updateKiteVirtualMachineStatus(ctx context.Context, dynamicClient dynamic.Interface, vm *kite.KiteVirtualMachine, phase string, powerState string, domain string, conditionStatus metav1.ConditionStatus, reason string, message string) error {
+func updateKiteVirtualMachineStatus(ctx context.Context, dynamicClient dynamic.Interface, vm *kite.KiteVirtualMachine, phase string, powerState string, domain string, nodeName string, conditionStatus metav1.ConditionStatus, reason string, message string) error {
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		current, err := dynamicClient.Resource(kiteVirtualMachineGVR).Namespace(vm.Namespace).Get(ctx, vm.Name, metav1.GetOptions{})
 		if apierrors.IsNotFound(err) {
@@ -667,7 +762,7 @@ func updateKiteVirtualMachineStatus(ctx context.Context, dynamicClient dynamic.I
 		}
 
 		observedGeneration := current.GetGeneration()
-		if kiteVirtualMachineStatusMatches(current, observedGeneration, phase, powerState, domain, conditionStatus, reason, message) {
+		if kiteVirtualMachineStatusMatches(current, observedGeneration, phase, powerState, domain, nodeName, conditionStatus, reason, message) {
 			return nil
 		}
 
@@ -687,6 +782,19 @@ func updateKiteVirtualMachineStatus(ctx context.Context, dynamicClient dynamic.I
 			}
 		} else {
 			unstructured.RemoveNestedField(next.Object, "status", "domain")
+		}
+		if nodeName != "" {
+			if err := unstructured.SetNestedField(next.Object, nodeName, "status", "nodeName"); err != nil {
+				return err
+			}
+		} else {
+			unstructured.RemoveNestedField(next.Object, "status", "nodeName")
+		}
+		resourceNames := kiteVirtualMachineResourceNames(vm.Name)
+		for field, value := range resourceNames {
+			if err := unstructured.SetNestedField(next.Object, value, "status", field); err != nil {
+				return err
+			}
 		}
 
 		conditions, _, _ := unstructured.NestedSlice(next.Object, "status", "conditions")
@@ -711,17 +819,25 @@ func updateKiteVirtualMachineStatus(ctx context.Context, dynamicClient dynamic.I
 // current is the latest KiteVirtualMachine object from the API server.
 // The remaining parameters are the status values the controller wants to write.
 // A true return lets reconcile avoid noisy status updates.
-func kiteVirtualMachineStatusMatches(current *unstructured.Unstructured, observedGeneration int64, phase string, powerState string, domain string, conditionStatus metav1.ConditionStatus, reason string, message string) bool {
+func kiteVirtualMachineStatusMatches(current *unstructured.Unstructured, observedGeneration int64, phase string, powerState string, domain string, nodeName string, conditionStatus metav1.ConditionStatus, reason string, message string) bool {
 	currentPhase, _, _ := unstructured.NestedString(current.Object, "status", "phase")
 	currentPowerState, _, _ := unstructured.NestedString(current.Object, "status", "currentPowerState")
 	currentObservedGeneration, _, _ := unstructured.NestedInt64(current.Object, "status", "observedGeneration")
 	currentDomain, _, _ := unstructured.NestedString(current.Object, "status", "domain")
+	currentNodeName, _, _ := unstructured.NestedString(current.Object, "status", "nodeName")
 	currentCondition := findKiteVirtualMachineCondition(current.Object)
+	for field, value := range kiteVirtualMachineResourceNames(current.GetName()) {
+		currentValue, _, _ := unstructured.NestedString(current.Object, "status", field)
+		if currentValue != value {
+			return false
+		}
+	}
 
 	return currentPhase == phase &&
 		currentPowerState == powerState &&
 		currentObservedGeneration == observedGeneration &&
 		currentDomain == domain &&
+		currentNodeName == nodeName &&
 		machineStringValue(currentCondition["status"]) == string(conditionStatus) &&
 		machineStringValue(currentCondition["reason"]) == reason &&
 		machineStringValue(currentCondition["message"]) == message
@@ -792,6 +908,25 @@ func findKiteVirtualMachineCondition(object map[string]any) map[string]any {
 func machineStringValue(value any) string {
 	text, _ := value.(string)
 	return text
+}
+
+// kiteVirtualMachineResourceNames returns stable child resource names for one KiteVM.
+// vmName is metadata.name from the KiteVirtualMachine.
+// The returned map is written to status so agents can find controller-owned resources.
+func kiteVirtualMachineResourceNames(vmName string) map[string]string {
+	return map[string]string{
+		"sshKeySecretName":    sshKeySecretName(vmName),
+		"cloudInitSecretName": vmName + "-cloud-init-userdata",
+		"serviceName":         "vps-access-" + vmName,
+		"dataVolumeName":      vmName + "-disk",
+	}
+}
+
+// sshKeySecretName returns the stable Secret name for a VM SSH key pair.
+// vmName is metadata.name from the KiteVirtualMachine.
+// The returned name is used by kite-controller and kite-host-agent.
+func sshKeySecretName(vmName string) string {
+	return vmName + "-ssh-key"
 }
 
 // updateKiteVirtualMachineFinalizers updates finalizers on one KiteVirtualMachine CRD.

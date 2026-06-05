@@ -113,6 +113,7 @@ func machineReconcileListKinds() map[schema.GroupVersionResource]string {
 	return map[schema.GroupVersionResource]string{
 		kiteVirtualMachineGVR:     "KiteVirtualMachineList",
 		kubeVirtVirtualMachineGVR: "VirtualMachineList",
+		secretGVR:                 "SecretList",
 	}
 }
 

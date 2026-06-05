@@ -12,7 +12,7 @@
 ### A. 내 가상머신 목록
 - **테이블 UI**:
   - 컬럼: VM Name, Status, CPU, Memory, Disk, **Domain**, **SSH ID**, Actions.
-  - *참고*: SSH 접속은 NodePort 없이 host Linux 계정과 `kite-account` proxy shell을 통해 처리합니다.
+  - *참고*: SSH 접속은 외부 포트 할당 없이 host Linux 계정과 `kite-host-agent` proxy shell을 통해 처리합니다.
 - **제어(Actions)**:
   - **시작 (Power On)**: 꺼진 VM을 켬 (`powerState: "On"`으로 Patch 요청).
   - **종료 (Power Off)**: 켜진 VM을 끔 (`powerState: "Off"`로 Patch 요청).

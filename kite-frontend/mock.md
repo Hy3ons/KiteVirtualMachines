@@ -174,7 +174,7 @@ Response `200`:
 }
 ```
 
-`vps-access-<vmName>` SSH Service는 ClusterIP이며, `kite-account`가 Service를 직접 조회해서 host Linux 계정의 proxy shell을 구성한다.
+`vps-access-<vmName>` SSH Service는 ClusterIP이며, `kite-host-agent`가 VM SSH key Secret을 읽어 host Linux 계정의 proxy shell을 구성한다.
 
 ### `POST /api/v1/vms`
 
