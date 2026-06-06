@@ -709,12 +709,7 @@ func kubeVirtVirtualMachineExists(ctx context.Context, dynamicClient dynamic.Int
 // dynamicClient deletes kubevirt.io/v1 virtualmachines in the KiteVirtualMachine namespace.
 // NotFound is treated as success so direct user or cluster-side cleanup does not leave reconcile stuck.
 func deleteKubeVirtVirtualMachine(ctx context.Context, dynamicClient dynamic.Interface, namespace string, name string) error {
-	err := dynamicClient.Resource(kubeVirtVirtualMachineGVR).Namespace(namespace).Delete(ctx, name, metav1.DeleteOptions{})
-	if apierrors.IsNotFound(err) {
-		return nil
-	}
-
-	return err
+	return deleteOwnedNamespacedResource(ctx, dynamicClient, kubeVirtVirtualMachineGVR, namespace, name, namespace, name)
 }
 
 // deleteKiteVirtualMachineOwnedResources deletes non-VM Kubernetes objects owned by one KiteVirtualMachine.
@@ -735,16 +730,50 @@ func deleteKiteVirtualMachineOwnedResources(ctx context.Context, dynamicClient d
 	}
 
 	for _, resource := range resources {
-		err := dynamicClient.Resource(resource.gvr).Namespace(namespace).Delete(ctx, resource.name, metav1.DeleteOptions{})
-		if apierrors.IsNotFound(err) {
-			continue
-		}
-		if err != nil {
+		if err := deleteOwnedNamespacedResource(ctx, dynamicClient, resource.gvr, namespace, resource.name, namespace, name); err != nil {
 			return fmt.Errorf("failed to delete owned resource %s/%s in %s: %w", resource.gvr.Resource, resource.name, namespace, err)
 		}
 	}
 
 	return nil
+}
+
+// deleteOwnedNamespacedResource deletes one namespaced resource only when Kite owner labels match.
+// ctx controls Kubernetes get and delete calls.
+// dynamicClient reads the current object before deleting it.
+// gvr, namespace, and name identify the candidate child resource.
+// ownerNamespace and ownerName identify the KiteVirtualMachine that is allowed to own the resource.
+func deleteOwnedNamespacedResource(ctx context.Context, dynamicClient dynamic.Interface, gvr schema.GroupVersionResource, namespace string, name string, ownerNamespace string, ownerName string) error {
+	current, err := dynamicClient.Resource(gvr).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	if !resourceOwnedByKiteVirtualMachine(current, ownerNamespace, ownerName) {
+		log.Printf("skipped deleting %s/%s in %s because Kite owner labels do not match %s/%s", gvr.Resource, name, namespace, ownerNamespace, ownerName)
+		return nil
+	}
+
+	err = dynamicClient.Resource(gvr).Namespace(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+
+	return err
+}
+
+// resourceOwnedByKiteVirtualMachine checks Kite ownership labels before destructive cleanup.
+// obj is a Kubernetes resource that may have been created by kite-controller.
+// ownerNamespace and ownerName identify the KiteVirtualMachine being deleted.
+// The returned value is true only for resources explicitly labeled as owned by that VM.
+func resourceOwnedByKiteVirtualMachine(obj *unstructured.Unstructured, ownerNamespace string, ownerName string) bool {
+	labels := obj.GetLabels()
+	return labels[kiteManagedByLabel] == kiteControllerLabel &&
+		labels[kiteVMNamespaceLabel] == ownerNamespace &&
+		labels[kiteVMNameLabel] == ownerName
 }
 
 // updateKiteVirtualMachineStatus writes controller-observed state back to a KiteVirtualMachine CRD.

@@ -56,6 +56,47 @@ func TestReconcileKiteVirtualMachineDeleteIntentDeletesCRDWhenKubeVirtMissing(t 
 	}
 }
 
+// TestDeleteOwnedNamespacedResourceSkipsUnlabeledResource verifies destructive cleanup label guards.
+// t is the Go test handle used for assertions.
+// The test protects golden resources such as kite/ubuntu-22.04 from VM cleanup by name alone.
+func TestDeleteOwnedNamespacedResourceSkipsUnlabeledResource(t *testing.T) {
+	ctx := context.Background()
+	namespace := "kite"
+	name := "ubuntu-22.04"
+	client := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), machineReconcileListKinds(),
+		newMachineReconcileDataVolume(namespace, name, nil),
+	)
+
+	if err := deleteOwnedNamespacedResource(ctx, client, dataVolumeGVR, namespace, name, namespace, name); err != nil {
+		t.Fatalf("deleteOwnedNamespacedResource returned error: %v", err)
+	}
+
+	if _, err := client.Resource(dataVolumeGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{}); err != nil {
+		t.Fatalf("expected unlabeled DataVolume to remain, got %v", err)
+	}
+}
+
+// TestDeleteOwnedNamespacedResourceDeletesMatchingOwner verifies labeled child cleanup.
+// t is the Go test handle used for assertions.
+// The test ensures the label guard still deletes resources explicitly owned by the KiteVM.
+func TestDeleteOwnedNamespacedResourceDeletesMatchingOwner(t *testing.T) {
+	ctx := context.Background()
+	namespace := "user-a"
+	name := "vm-a-disk"
+	ownerName := "vm-a"
+	client := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), machineReconcileListKinds(),
+		newMachineReconcileDataVolume(namespace, name, kiteOwnerLabels(namespace, ownerName)),
+	)
+
+	if err := deleteOwnedNamespacedResource(ctx, client, dataVolumeGVR, namespace, name, namespace, ownerName); err != nil {
+		t.Fatalf("deleteOwnedNamespacedResource returned error: %v", err)
+	}
+
+	if _, err := client.Resource(dataVolumeGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("expected labeled DataVolume to be deleted, got %v", err)
+	}
+}
+
 // TestReconcileKiteVirtualMachineFailsClearlyWhenDataVolumeAPIMissing verifies CDI dependency errors.
 // t is the Go test handle used for assertions.
 // The test is used by the controller package to keep missing CDI failures readable in VM status.
@@ -113,7 +154,20 @@ func machineReconcileListKinds() map[schema.GroupVersionResource]string {
 	return map[schema.GroupVersionResource]string{
 		kiteVirtualMachineGVR:     "KiteVirtualMachineList",
 		kubeVirtVirtualMachineGVR: "VirtualMachineList",
+		dataVolumeGVR:             "DataVolumeList",
 		secretGVR:                 "SecretList",
+	}
+}
+
+// kiteOwnerLabels returns labels used by controller-rendered VM child resources.
+// namespace is the KiteVirtualMachine namespace.
+// name is the KiteVirtualMachine metadata.name.
+// The returned map is used by tests that exercise deletion ownership guards.
+func kiteOwnerLabels(namespace string, name string) map[string]any {
+	return map[string]any{
+		kiteManagedByLabel:   kiteControllerLabel,
+		kiteVMNamespaceLabel: namespace,
+		kiteVMNameLabel:      name,
 	}
 }
 
@@ -176,7 +230,30 @@ func newMachineReconcileKubeVirtVirtualMachine(namespace string, name string) *u
 			"metadata": map[string]any{
 				"name":      name,
 				"namespace": namespace,
+				"labels":    kiteOwnerLabels(namespace, name),
 			},
+		},
+	}
+}
+
+// newMachineReconcileDataVolume creates an unstructured CDI DataVolume test object.
+// namespace is metadata.namespace for the DataVolume.
+// name is metadata.name for the DataVolume.
+// labels are optional metadata.labels used to model managed and unmanaged resources.
+func newMachineReconcileDataVolume(namespace string, name string, labels map[string]any) *unstructured.Unstructured {
+	metadata := map[string]any{
+		"name":      name,
+		"namespace": namespace,
+	}
+	if labels != nil {
+		metadata["labels"] = labels
+	}
+
+	return &unstructured.Unstructured{
+		Object: map[string]any{
+			"apiVersion": "cdi.kubevirt.io/v1beta1",
+			"kind":       "DataVolume",
+			"metadata":   metadata,
 		},
 	}
 }
