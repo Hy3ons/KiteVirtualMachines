@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { SEO } from '../components/SEO';
 import { vmApi } from '../api';
-import { Layout, Typography, Space, Tag, Breadcrumb, Card, Tabs, Button, Descriptions, message, Popconfirm, Spin, Avatar } from 'antd';
+import { Layout, Typography, Space, Tag, Breadcrumb, Card, Tabs, Button, Descriptions, message, Popconfirm, Spin, Avatar, Alert } from 'antd';
 import { useParams, useNavigate } from 'react-router-dom';
-import { PoweroffOutlined, DeleteOutlined, CodeOutlined, DesktopOutlined, SafetyCertificateOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import { PoweroffOutlined, DeleteOutlined, CodeOutlined, DesktopOutlined, SafetyCertificateOutlined, ArrowLeftOutlined, CaretRightOutlined, CopyOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../store/useAuthStore';
 import { GlobalHeader } from '../components/GlobalHeader';
 import { MOCK_ENV } from '../config/mockEnv';
@@ -48,6 +48,18 @@ export const VmDetail: React.FC = () => {
     fetchVmDetail();
   }, [vmName]);
 
+  const handleStart = async () => {
+    if (!vmName) return;
+    try {
+      message.loading({ content: 'Starting VM...', key: 'start' });
+      await vmApi.startVm(vmName);
+      message.success({ content: 'VM Start Requested', key: 'start' });
+      fetchVmDetail();
+    } catch (error) {
+      message.error({ content: '시작 요청 실패', key: 'start' });
+    }
+  };
+
   const handleStop = async () => {
     if (!vmName) return;
     try {
@@ -58,6 +70,12 @@ export const VmDetail: React.FC = () => {
     } catch (error) {
       message.error({ content: '종료 요청 실패', key: 'stop' });
     }
+  };
+
+  const copySSHCommand = async () => {
+    if (!vm) return;
+    await navigator.clipboard.writeText(`ssh ${vm.sshId}@${MOCK_ENV.BASE_DOMAIN}`);
+    message.success('SSH 명령어를 복사했습니다.');
   };
 
   const handleDelete = async () => {
@@ -121,7 +139,7 @@ export const VmDetail: React.FC = () => {
             {vm.phase === 'Running' ? (
               <Button danger icon={<PoweroffOutlined />} onClick={handleStop}>Stop</Button>
             ) : (
-              <Button type="primary" style={{ backgroundColor: '#52c41a' }} onClick={() => setVm({ ...vm, phase: 'Running' })}>Start</Button>
+              <Button type="primary" icon={<CaretRightOutlined />} onClick={handleStart}>Start</Button>
             )}
           </Space>
         </div>
@@ -166,10 +184,22 @@ export const VmDetail: React.FC = () => {
                 <Card hoverable style={{ marginTop: 16 }}>
                   <Title level={4}>SSH 접속 방법</Title>
                   <Paragraph>Kite가 설치된 서버에 VM 생성 시 입력한 계정으로 접속합니다.</Paragraph>
+                  {vm.phase !== 'Running' && (
+                    <Alert
+                      message="VM이 실행 중이 아닙니다."
+                      description="SSH 접속은 VM이 Running 상태가 된 뒤에 사용할 수 있습니다."
+                      type="warning"
+                      showIcon
+                      style={{ marginBottom: 24 }}
+                    />
+                  )}
                   
-                  <div style={{ background: '#f5f5f5', padding: '16px', borderRadius: '4px', marginBottom: '24px' }}>
-                    <Text strong>한 줄 명령어로 바로 접속하기 (가장 간단함)</Text>
-                    <div style={{ marginTop: '8px', fontFamily: 'monospace', background: '#2d2d2d', color: '#fff', padding: '12px', borderRadius: '4px' }}>
+                  <div style={{ background: '#f5f5f5', padding: '16px', borderRadius: 0, marginBottom: '24px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center' }}>
+                      <Text strong>한 줄 명령어로 바로 접속하기</Text>
+                      <Button icon={<CopyOutlined />} onClick={copySSHCommand}>Copy</Button>
+                    </div>
+                    <div style={{ marginTop: '8px', fontFamily: 'monospace', background: '#2d2d2d', color: '#fff', padding: '12px', borderRadius: 0 }}>
                       ssh {vm.sshId}@{MOCK_ENV.BASE_DOMAIN}
                     </div>
                   </div>

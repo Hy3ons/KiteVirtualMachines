@@ -19,16 +19,13 @@ html, body {
   height: 100%;
 }
 
-/* Premium micro-interactions and transitions */
 .ant-card {
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
-  border: none !important;
-  box-shadow: 0 8px 24px rgba(139, 115, 85, 0.08), 0 2px 8px rgba(139, 115, 85, 0.04) !important;
+  border: 1px solid #EFE9E3 !important;
+  box-shadow: 0 4px 16px rgba(44, 37, 31, 0.05) !important;
 }
 
 .ant-card:hover {
-  box-shadow: 0 12px 32px rgba(139, 115, 85, 0.15), 0 4px 12px rgba(139, 115, 85, 0.08) !important;
-  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(44, 37, 31, 0.08) !important;
 }
 
 .ant-btn {
@@ -37,8 +34,9 @@ html, body {
 
 .ant-table-wrapper {
   background: #ffffff;
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(139, 115, 85, 0.08), 0 2px 8px rgba(139, 115, 85, 0.04);
+  border: 1px solid #EFE9E3;
+  border-radius: 0;
+  box-shadow: 0 4px 16px rgba(44, 37, 31, 0.05);
   overflow: hidden;
   padding: 24px;
 }

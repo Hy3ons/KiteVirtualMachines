@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { SEO } from '../components/SEO';
 import { vmApi } from '../api';
-import { Layout, Typography, Button, Table, Space, Tag, Modal, Form, Input, InputNumber, message, Popconfirm, Drawer, Alert, Row, Col, Card, Avatar } from 'antd';
-import { PlusOutlined, PoweroffOutlined, CaretRightOutlined, DeleteOutlined, LogoutOutlined, CodeOutlined, UserOutlined } from '@ant-design/icons';
+import { Layout, Typography, Button, Table, Space, Tag, Modal, Form, Input, InputNumber, message, Popconfirm, Drawer, Alert, Row, Col, Card, Avatar, Statistic, Progress, Empty, Tooltip } from 'antd';
+import { PlusOutlined, PoweroffOutlined, CaretRightOutlined, DeleteOutlined, LogoutOutlined, CodeOutlined, UserOutlined, ReloadOutlined, CloudServerOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../store/useAuthStore';
 import { useNavigate } from 'react-router-dom';
 import { GlobalHeader } from '../components/GlobalHeader';
@@ -15,6 +15,7 @@ const LEVEL_1_FIXED_CPU = 2;
 const LEVEL_1_FIXED_MEMORY = '4Gi';
 const LEVEL_1_FIXED_DISK_GI = 20;
 const MIN_DISK_GI = 20;
+const LEVEL_1_VM_QUOTA = MOCK_ENV.MAX_VM_QUOTA_LEVEL_1;
 
 interface VM {
   id: string;
@@ -39,6 +40,11 @@ export const UserDashboard: React.FC = () => {
   // Connection Drawer State
   const [isDrawerVisible, setIsDrawerVisible] = useState(false);
   const [selectedVm, setSelectedVm] = useState<VM | null>(null);
+  const runningVmCount = vms.filter((vm) => vm.phase === 'Running').length;
+  const stoppedVmCount = vms.filter((vm) => vm.phase === 'Stopped').length;
+  const pendingVmCount = vms.filter((vm) => vm.phase === 'Creating' || vm.phase === 'Terminating').length;
+  const quotaPercent = safeAccessLevel === 1 ? Math.min(Math.round((vms.length / LEVEL_1_VM_QUOTA) * 100), 100) : 0;
+  const canCreateVm = safeAccessLevel >= 1 && (safeAccessLevel !== 1 || vms.length < LEVEL_1_VM_QUOTA);
 
   // 권한별 설명 텍스트
   const getAccessLevelDescription = (level: number) => {
@@ -104,8 +110,8 @@ export const UserDashboard: React.FC = () => {
       return;
     }
 
-    if (safeAccessLevel === 1 && vms.length >= MOCK_ENV.MAX_VM_QUOTA_LEVEL_1) {
-      message.error(`VM 생성 한도(최대 ${MOCK_ENV.MAX_VM_QUOTA_LEVEL_1}개)를 초과했습니다. 관리자에게 권한을 요청하세요.`);
+    if (safeAccessLevel === 1 && vms.length >= LEVEL_1_VM_QUOTA) {
+      message.error(`VM 생성 한도(최대 ${LEVEL_1_VM_QUOTA}개)를 초과했습니다. 관리자에게 권한을 요청하세요.`);
       return;
     }
 
@@ -196,8 +202,8 @@ export const UserDashboard: React.FC = () => {
       />
       
       <Content style={{ padding: '40px', maxWidth: '1300px', margin: '0 auto', width: '100%' }}>
-        <Row gutter={24} style={{ marginBottom: 32 }}>
-          <Col span={24}>
+        <Row gutter={[24, 24]} style={{ marginBottom: 32 }}>
+          <Col xs={24} lg={14}>
             <Card hoverable>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
@@ -228,19 +234,54 @@ export const UserDashboard: React.FC = () => {
               </div>
             </Card>
           </Col>
+          <Col xs={24} sm={8} lg={4}>
+            <Card hoverable>
+              <Statistic title="VMs" value={vms.length} prefix={<CloudServerOutlined />} valueStyle={{ color: '#8B7355' }} />
+            </Card>
+          </Col>
+          <Col xs={24} sm={8} lg={3}>
+            <Card hoverable>
+              <Statistic title="Running" value={runningVmCount} valueStyle={{ color: '#7A9C74' }} />
+            </Card>
+          </Col>
+          <Col xs={24} sm={8} lg={3}>
+            <Card hoverable>
+              <Statistic title={pendingVmCount > 0 ? 'Pending' : 'Stopped'} value={pendingVmCount > 0 ? pendingVmCount : stoppedVmCount} valueStyle={{ color: pendingVmCount > 0 ? '#D4A373' : '#C86B6B' }} />
+            </Card>
+          </Col>
         </Row>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        {safeAccessLevel === 1 && (
+          <Card style={{ marginBottom: 24 }}>
+            <Space direction="vertical" style={{ width: '100%' }} size={8}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
+                <Text strong>Level 1 VM quota</Text>
+                <Text type="secondary">{vms.length} / {LEVEL_1_VM_QUOTA}</Text>
+              </div>
+              <Progress percent={quotaPercent} strokeColor="#8B7355" showInfo={false} />
+              <Text type="secondary">CPU 2, RAM 4Gi, Disk 20Gi 스펙으로만 생성됩니다.</Text>
+            </Space>
+          </Card>
+        )}
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, marginBottom: '24px' }}>
           <Title level={2} style={{ margin: 0 }}>My Virtual Machines</Title>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            size="large"
-            disabled={safeAccessLevel < 1}
-            onClick={() => setIsModalVisible(true)}
-          >
-            Create VM
-          </Button>
+          <Space>
+            <Tooltip title="목록 새로고침">
+              <Button icon={<ReloadOutlined />} onClick={fetchVms} loading={loading} />
+            </Tooltip>
+            <Tooltip title={!canCreateVm ? (safeAccessLevel < 1 ? 'VM 생성 권한이 없습니다.' : 'Level 1 VM 생성 한도에 도달했습니다.') : ''}>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                size="large"
+                disabled={!canCreateVm}
+                onClick={() => setIsModalVisible(true)}
+              >
+                Create VM
+              </Button>
+            </Tooltip>
+          </Space>
         </div>
         
         <Table 
@@ -249,6 +290,20 @@ export const UserDashboard: React.FC = () => {
           rowKey="id" 
           loading={loading}
           pagination={false}
+          locale={{
+            emptyText: (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={safeAccessLevel < 1 ? 'VM 생성 권한이 없습니다.' : '아직 생성된 VM이 없습니다.'}
+              >
+                {canCreateVm && (
+                  <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsModalVisible(true)}>
+                    Create VM
+                  </Button>
+                )}
+              </Empty>
+            )
+          }}
         />
       </Content>
 
@@ -307,7 +362,7 @@ export const UserDashboard: React.FC = () => {
 
           <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
             <Button onClick={() => setIsModalVisible(false)} style={{ marginRight: 8 }}>Cancel</Button>
-            <Button type="primary" htmlType="submit" disabled={safeAccessLevel < 1}>Create</Button>
+            <Button type="primary" htmlType="submit" disabled={!canCreateVm}>Create</Button>
           </Form.Item>
         </Form>
       </Modal>

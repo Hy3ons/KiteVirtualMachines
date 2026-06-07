@@ -16,7 +16,7 @@ export const GlobalHeader: React.FC<GlobalHeaderProps> = ({ rightContent }) => {
     <Header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 40px', borderBottom: '1px solid #EFE9E3', background: '#FFFFFF' }}>
       <div style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={() => navigate('/')}>
         <img src="/favicon.png" alt="Kite Logo" style={{ height: '64px', objectFit: 'contain', transform: 'scale(1.5)', transformOrigin: 'left center', marginRight: '28px' }} />
-        <span style={{ fontSize: '26px', fontWeight: 900, color: '#8B7355', fontFamily: '"Outfit", "Inter", "Helvetica Neue", sans-serif', letterSpacing: '-1px' }}>Kite</span>
+        <span style={{ fontSize: '26px', fontWeight: 900, color: '#8B7355', fontFamily: '"Outfit", "Inter", "Helvetica Neue", sans-serif', letterSpacing: 0 }}>Kite</span>
       </div>
 
       <Space size="large">
