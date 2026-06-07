@@ -91,6 +91,8 @@ const (
 	kiteGlobalConfigNamespace          = "kite"
 	kiteGlobalConfigName               = "kite-runtime-config"
 	kiteGlobalBaseDomainKey            = "baseDomain"
+	kiteGlobalVMStorageClassNameKey    = "vmStorageClassName"
+	kiteDefaultVMStorageClassName      = "kite-vm-storage"
 	kiteSecretTypeLabel                = "kite.anacnu.com/kite-secret-type"
 	kiteVMSSHKeySecretType             = "vm-ssh-key"
 	vmSSHPrivateKeyName                = "id_rsa"
@@ -267,6 +269,11 @@ func reconcileKiteVirtualMachineDesiredState(ctx context.Context, dynamicClient 
 		return err
 	}
 
+	storageClassName, err := kiteVirtualMachineStorageClassName(ctx, dynamicClient)
+	if err != nil {
+		return err
+	}
+
 	keyPair, err := ensureKiteVirtualMachineSSHKeySecret(ctx, dynamicClient, vm)
 	if err != nil {
 		if statusErr := updateKiteVirtualMachineStatus(ctx, dynamicClient, vm, kiteVMPhaseFailed, currentPowerStateFromVM(vm), domain, vm.Status.NodeName, metav1.ConditionFalse, kiteVMReasonFailed, err.Error()); statusErr != nil {
@@ -275,7 +282,7 @@ func reconcileKiteVirtualMachineDesiredState(ctx context.Context, dynamicClient 
 		return err
 	}
 
-	objects, err := kiteVirtualMachineDesiredObjects(vm, domain, keyPair.PublicKey)
+	objects, err := kiteVirtualMachineDesiredObjects(vm, domain, keyPair.PublicKey, storageClassName)
 	if err != nil {
 		return err
 	}
@@ -340,13 +347,16 @@ func validateKiteVirtualMachineSpec(vm *kite.KiteVirtualMachine) error {
 // kiteVirtualMachineDesiredObjects renders every Kubernetes object owned by one KiteVirtualMachine.
 // vm provides the desired VM spec.
 // domain is the optional full domain name used to render Ingress.
+// publicKey is injected into cloud-init so users can SSH through the host agent.
+// storageClassName selects the StorageClass for the VM disk DataVolume.
 // The returned objects are applied in dependency order by the VM reconciler.
-func kiteVirtualMachineDesiredObjects(vm *kite.KiteVirtualMachine, domain string, publicKey string) ([]*unstructured.Unstructured, error) {
+func kiteVirtualMachineDesiredObjects(vm *kite.KiteVirtualMachine, domain string, publicKey string, storageClassName string) ([]*unstructured.Unstructured, error) {
 	dataVolume, err := (&datavolume.DataVolumeData{
-		VmName:    vm.Name,
-		Namespace: vm.Namespace,
-		VmImage:   datavolume.VmImage(vm.Spec.Image),
-		Storage:   vm.Spec.Disk,
+		VmName:           vm.Name,
+		Namespace:        vm.Namespace,
+		VmImage:          datavolume.VmImage(vm.Spec.Image),
+		Storage:          vm.Spec.Disk,
+		StorageClassName: storageClassName,
 	}).Render()
 	if err != nil {
 		return nil, fmt.Errorf("failed to render DataVolume: %w", err)
@@ -534,6 +544,28 @@ func kiteVirtualMachineDomain(ctx context.Context, dynamicClient dynamic.Interfa
 	}
 
 	return strings.Trim(prefix, ".") + "." + baseDomain, nil
+}
+
+// kiteVirtualMachineStorageClassName returns the StorageClass used for VM disk DataVolumes.
+// ctx controls the ConfigMap read.
+// dynamicClient reads kite/kite-runtime-config data.vmStorageClassName.
+// The returned string defaults to kite-vm-storage when the runtime ConfigMap or key is missing.
+func kiteVirtualMachineStorageClassName(ctx context.Context, dynamicClient dynamic.Interface) (string, error) {
+	config, err := dynamicClient.Resource(configMapGVR).Namespace(kiteGlobalConfigNamespace).Get(ctx, kiteGlobalConfigName, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return kiteDefaultVMStorageClassName, nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to read global Kite config: %w", err)
+	}
+
+	storageClassName, _, _ := unstructured.NestedString(config.Object, "data", kiteGlobalVMStorageClassNameKey)
+	storageClassName = strings.TrimSpace(storageClassName)
+	if storageClassName == "" {
+		return kiteDefaultVMStorageClassName, nil
+	}
+
+	return storageClassName, nil
 }
 
 // applyKiteVirtualMachineObject applies one rendered VM-owned Kubernetes object.

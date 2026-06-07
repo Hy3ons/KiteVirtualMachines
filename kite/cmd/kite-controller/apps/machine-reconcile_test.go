@@ -128,6 +128,40 @@ func TestReconcileKiteVirtualMachineFailsClearlyWhenDataVolumeAPIMissing(t *test
 	}
 }
 
+// TestKiteVirtualMachineStorageClassNameDefaultsWhenConfigMissing verifies the Longhorn default.
+// t is the Go test handle used for assertions.
+// The test is used by VM reconcile code when kite-runtime-config has not been created yet.
+func TestKiteVirtualMachineStorageClassNameDefaultsWhenConfigMissing(t *testing.T) {
+	ctx := context.Background()
+	client := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), machineReconcileListKinds())
+
+	storageClassName, err := kiteVirtualMachineStorageClassName(ctx, client)
+	if err != nil {
+		t.Fatalf("kiteVirtualMachineStorageClassName returned error: %v", err)
+	}
+	if storageClassName != kiteDefaultVMStorageClassName {
+		t.Fatalf("expected default storage class %q, got %q", kiteDefaultVMStorageClassName, storageClassName)
+	}
+}
+
+// TestKiteVirtualMachineStorageClassNameReadsRuntimeConfig verifies ConfigMap override handling.
+// t is the Go test handle used for assertions.
+// The test is used by VM reconcile code that renders DataVolumes from production runtime config.
+func TestKiteVirtualMachineStorageClassNameReadsRuntimeConfig(t *testing.T) {
+	ctx := context.Background()
+	client := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), machineReconcileListKinds(),
+		newMachineReconcileRuntimeConfig("custom-storage"),
+	)
+
+	storageClassName, err := kiteVirtualMachineStorageClassName(ctx, client)
+	if err != nil {
+		t.Fatalf("kiteVirtualMachineStorageClassName returned error: %v", err)
+	}
+	if storageClassName != "custom-storage" {
+		t.Fatalf("expected configured storage class, got %q", storageClassName)
+	}
+}
+
 // firstStatusConditionMessage returns the first condition message from an unstructured status.
 // obj is a KiteVirtualMachine object with a status.conditions slice.
 // The returned string is empty when no message exists.
@@ -156,6 +190,7 @@ func machineReconcileListKinds() map[schema.GroupVersionResource]string {
 		kubeVirtVirtualMachineGVR: "VirtualMachineList",
 		dataVolumeGVR:             "DataVolumeList",
 		secretGVR:                 "SecretList",
+		configMapGVR:              "ConfigMapList",
 	}
 }
 
@@ -254,6 +289,25 @@ func newMachineReconcileDataVolume(namespace string, name string, labels map[str
 			"apiVersion": "cdi.kubevirt.io/v1beta1",
 			"kind":       "DataVolume",
 			"metadata":   metadata,
+		},
+	}
+}
+
+// newMachineReconcileRuntimeConfig creates a kite-runtime-config test ConfigMap.
+// storageClassName is stored in data.vmStorageClassName.
+// The returned object is used by storage configuration tests.
+func newMachineReconcileRuntimeConfig(storageClassName string) *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]any{
+			"apiVersion": "v1",
+			"kind":       "ConfigMap",
+			"metadata": map[string]any{
+				"name":      kiteGlobalConfigName,
+				"namespace": kiteGlobalConfigNamespace,
+			},
+			"data": map[string]any{
+				kiteGlobalVMStorageClassNameKey: storageClassName,
+			},
 		},
 	}
 }

@@ -4,10 +4,11 @@ import "testing"
 
 func TestDataVolumeRenderUsesGoldenPVCSource(t *testing.T) {
 	obj, err := (&DataVolumeData{
-		VmName:    "vm-a",
-		Namespace: "user-a",
-		VmImage:   Ubuntu2204,
-		Storage:   "25Gi",
+		VmName:           "vm-a",
+		Namespace:        "user-a",
+		VmImage:          Ubuntu2204,
+		Storage:          "25Gi",
+		StorageClassName: "kite-vm-storage",
 	}).Render()
 	if err != nil {
 		t.Fatalf("failed to render DataVolume: %v", err)
@@ -21,8 +22,9 @@ func TestDataVolumeRenderUsesGoldenPVCSource(t *testing.T) {
 	if sourceNamespace != "kite" {
 		t.Fatalf("expected golden PVC source namespace kite, got %q", sourceNamespace)
 	}
-	if _, found, _ := unstructuredNestedString(obj.Object, "spec", "pvc", "storageClassName"); found {
-		t.Fatal("expected storageClassName to be omitted so the cluster default is used")
+	storageClassName, _, _ := unstructuredNestedString(obj.Object, "spec", "pvc", "storageClassName")
+	if storageClassName != "kite-vm-storage" {
+		t.Fatalf("expected Longhorn-backed storageClassName, got %q", storageClassName)
 	}
 }
 

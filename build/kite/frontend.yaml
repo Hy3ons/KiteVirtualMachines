@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kite-frontend
+  namespace: kite
+  labels:
+    app: kite-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kite-frontend
+  template:
+    metadata:
+      labels:
+        app: kite-frontend
+    spec:
+      containers:
+        - name: kite-frontend
+          image: anacnu.com/kite-frontend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kite-frontend
+  namespace: kite
+spec:
+  type: ClusterIP
+  selector:
+    app: kite-frontend
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 80

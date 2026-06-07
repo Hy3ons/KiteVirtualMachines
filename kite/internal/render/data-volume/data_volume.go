@@ -20,14 +20,15 @@ const (
 )
 
 type DataVolumeData struct {
-	VmName    string
-	Namespace string
-	VmImage   VmImage
-	Storage   string
+	VmName           string
+	Namespace        string
+	VmImage          VmImage
+	Storage          string
+	StorageClassName string
 }
 
 // Render creates a KubeVirt DataVolume object from DataVolumeData.
-// The receiver provides VM name, namespace, image source, and storage size template values.
+// The receiver provides VM name, namespace, image source, storage size, and optional StorageClass values.
 // The returned object is applied by the KiteVirtualMachine reconcile flow.
 // This method uses an embedded template so the controller does not depend on source-tree files at runtime.
 func (s *DataVolumeData) Render() (*unstructured.Unstructured, error) {

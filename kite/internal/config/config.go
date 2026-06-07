@@ -22,6 +22,12 @@ const (
 	JWTSecretKey                 = "jwtSecret"
 	PasswordSaltKey              = "passwordSalt"
 	AccessTokenTTLMinutesKey     = "accessTokenTTLMinutes"
+	VMStorageClassNameKey        = "vmStorageClassName"
+	GoldenImageNamespaceKey      = "goldenImageNamespace"
+	DefaultVMImageKey            = "defaultVmImage"
+	DefaultVMStorageClassName    = "kite-vm-storage"
+	DefaultGoldenImageNamespace  = "kite"
+	DefaultVMImage               = "ubuntu-22.04"
 )
 
 var configMapGVR = schema.GroupVersionResource{
@@ -152,11 +158,15 @@ func normalizedRuntimeData(obj *unstructured.Unstructured) (map[string]string, b
 
 // defaultRuntimeData returns default config data for the first API startup.
 // JWTSecret and PasswordSalt are generated once.
+// Storage and image defaults are used by production k3s installs with Longhorn.
 func defaultRuntimeData() map[string]string {
 	return map[string]string{
 		JWTSecretKey:             GenerateSecret("jwt"),
 		PasswordSaltKey:          GenerateSecret("salt"),
 		AccessTokenTTLMinutesKey: strconv.Itoa(DefaultAccessTokenTTLMinutes),
+		VMStorageClassNameKey:    DefaultVMStorageClassName,
+		GoldenImageNamespaceKey:  DefaultGoldenImageNamespace,
+		DefaultVMImageKey:        DefaultVMImage,
 	}
 }
 

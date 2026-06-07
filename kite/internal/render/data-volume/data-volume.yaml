@@ -16,6 +16,9 @@ spec:
       namespace: kite
 
   pvc:
+    {{ if .StorageClassName }}
+    storageClassName: {{ .StorageClassName }}
+    {{ end }}
     accessModes: ["ReadWriteOnce"]
     resources:
       requests:

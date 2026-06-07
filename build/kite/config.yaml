@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kite-runtime-config
+  namespace: kite
+data:
+  baseDomain: ""
+  accessTokenTTLMinutes: "60"
+  vmStorageClassName: "kite-vm-storage"
+  goldenImageNamespace: "kite"
+  defaultVmImage: "ubuntu-22.04"

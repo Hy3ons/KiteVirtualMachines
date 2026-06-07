@@ -1,0 +1,69 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kite-control-plane-role
+rules:
+  - apiGroups: ["anacnu.com"]
+    resources: ["kiteusers", "kiteusers/status", "kitevirtualmachines", "kitevirtualmachines/status"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["namespaces", "persistentvolumeclaims", "services", "secrets", "configmaps", "resourcequotas", "limitranges"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies", "ingresses"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["kubevirt.io"]
+    resources: ["virtualmachines", "virtualmachineinstances", "virtualmachineinstancemigrations"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["cdi.kubevirt.io"]
+    resources: ["datavolumes", "datavolumes/source"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["subresources.kubevirt.io"]
+    resources: ["virtualmachines/start", "virtualmachines/stop", "virtualmachines/restart"]
+    verbs: ["update"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kite-control-plane-binding
+subjects:
+  - kind: ServiceAccount
+    name: kite-control-plane
+    namespace: kite
+roleRef:
+  kind: ClusterRole
+  name: kite-control-plane-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cdi-cloner-source-pvc-reader
+  namespace: kite
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["cdi.kubevirt.io"]
+    resources: ["datavolumes/source"]
+    verbs: ["create"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cdi-cloner-binding
+  namespace: kite
+subjects:
+  - kind: ServiceAccount
+    name: cdi-sa
+    namespace: cdi
+  - kind: ServiceAccount
+    name: kite-control-plane
+    namespace: kite
+roleRef:
+  kind: Role
+  name: cdi-cloner-source-pvc-reader
+  apiGroup: rbac.authorization.k8s.io

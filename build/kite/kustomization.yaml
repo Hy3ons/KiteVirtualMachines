@@ -1,0 +1,10 @@
+resources:
+  - crds.yaml
+  - namespace.yaml
+  - serviceaccount.yaml
+  - config.yaml
+  - rbac.yaml
+  - frontend.yaml
+  - api.yaml
+  - controller.yaml
+  - host-agent.yaml

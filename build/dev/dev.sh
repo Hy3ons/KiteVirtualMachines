@@ -3,22 +3,26 @@ set -euo pipefail
 
 # dev.sh builds Kite images from the local source tree and deploys them to a Kubernetes cluster.
 # Supported targets:
-#   KITE_CLUSTER=minikube ./dev.sh
-#   KITE_CLUSTER=k3s ./dev.sh
-#   KITE_CLUSTER=current ./dev.sh
+#   KITE_CLUSTER=minikube build/dev/dev.sh
+#   KITE_CLUSTER=k3s build/dev/dev.sh
+#   KITE_CLUSTER=k3d build/dev/dev.sh
+#   KITE_CLUSTER=kind build/dev/dev.sh
+#   KITE_CLUSTER=k8s build/dev/dev.sh
+#   KITE_CLUSTER=current build/dev/dev.sh
 #
 # minikube mode can start the profile and load images into the Minikube runtime.
 # k3s mode builds images with local Docker and imports them into k3s containerd.
 # current mode only builds local Docker images and applies Kubernetes manifests; use it when the
 # current cluster can already pull the configured image names from a registry.
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 KITE_NAMESPACE="${KITE_NAMESPACE:-kite}"
 KITE_CLUSTER="${KITE_CLUSTER:-auto}"
 IMAGE_REGISTRY="${IMAGE_REGISTRY:-anacnu.com}"
 IMAGE_TAG="${IMAGE_TAG:-dev-$(date +%Y%m%d%H%M%S)}"
-MANIFEST_TEMPLATE="${ROOT_DIR}/kite-yaml/install.yaml"
+KITE_MANIFEST_DIR="${ROOT_DIR}/build/kite"
 RENDERED_MANIFEST="$(mktemp "${TMPDIR:-/tmp}/kite-install.XXXXXX.yaml")"
+PUSH_IMAGES="${PUSH_IMAGES:-false}"
 
 # Minikube knobs. They are used only when KITE_CLUSTER=minikube or auto detects minikube.
 MINIKUBE_PROFILE="${MINIKUBE_PROFILE:-minikube}"
@@ -26,13 +30,17 @@ MINIKUBE_DRIVER="${MINIKUBE_DRIVER:-}"
 MINIKUBE_CPUS="${MINIKUBE_CPUS:-4}"
 MINIKUBE_MEMORY="${MINIKUBE_MEMORY:-8192}"
 MINIKUBE_START="${MINIKUBE_START:-true}"
-MINIKUBE_BUILD_STRATEGY="${MINIKUBE_BUILD_STRATEGY:-auto}"
+MINIKUBE_BUILD_STRATEGY="${MINIKUBE_BUILD_STRATEGY:-${BUILD_STRATEGY:-auto}}"
 
 # k3s image import command. Kubernetes reads images from the k8s.io containerd namespace.
 # Override when sudo is not needed:
-#   K3S_CTR_CMD="k3s ctr -n k8s.io" KITE_CLUSTER=k3s ./dev.sh
+#   K3S_CTR_CMD="k3s ctr -n k8s.io" KITE_CLUSTER=k3s build/dev/dev.sh
 K3S_CTR_CMD="${K3S_CTR_CMD:-sudo k3s ctr -n k8s.io}"
 K3S_IMPORT_IMAGES="${K3S_IMPORT_IMAGES:-true}"
+K3D_CLUSTER_NAME="${K3D_CLUSTER_NAME:-}"
+K3D_LOAD_IMAGES="${K3D_LOAD_IMAGES:-true}"
+KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-}"
+KIND_LOAD_IMAGES="${KIND_LOAD_IMAGES:-true}"
 
 cleanup() {
   rm -f "${RENDERED_MANIFEST}"
@@ -69,8 +77,14 @@ detect_cluster() {
     minikube|*minikube*)
       echo "minikube"
       ;;
-    *k3s*|*k3d*)
+    *k3d*)
+      echo "k3d"
+      ;;
+    *k3s*)
       echo "k3s"
+      ;;
+    kind-*|*kind*)
+      echo "kind"
       ;;
     *)
       if command -v k3s >/dev/null 2>&1; then
@@ -131,6 +145,18 @@ build_local_image() {
   require_command docker
   log "building ${image}"
   DOCKER_BUILDKIT=1 docker build --progress=plain -t "${image}" -f "${dockerfile}" "${context}"
+}
+
+push_local_image() {
+  local image="$1"
+
+  if [[ "${PUSH_IMAGES}" != "true" ]]; then
+    return
+  fi
+
+  require_command docker
+  log "pushing ${image}"
+  docker push "${image}"
 }
 
 build_minikube_image_with_minikube() {
@@ -237,22 +263,59 @@ load_image_into_k3s() {
   docker save "${image}" | ${K3S_CTR_CMD} images import -
 }
 
+load_image_into_k3d() {
+  local image="$1"
+  local args=()
+
+  if [[ "${K3D_LOAD_IMAGES}" != "true" ]]; then
+    log "skipping k3d image import for ${image}"
+    return
+  fi
+
+  require_command k3d
+  if [[ -n "${K3D_CLUSTER_NAME}" ]]; then
+    args+=("--cluster" "${K3D_CLUSTER_NAME}")
+  fi
+
+  log "importing ${image} into k3d"
+  k3d image import "${image}" "${args[@]}"
+}
+
+load_image_into_kind() {
+  local image="$1"
+  local args=()
+
+  if [[ "${KIND_LOAD_IMAGES}" != "true" ]]; then
+    log "skipping kind image load for ${image}"
+    return
+  fi
+
+  require_command kind
+  if [[ -n "${KIND_CLUSTER_NAME}" ]]; then
+    args+=(--name "${KIND_CLUSTER_NAME}")
+  fi
+
+  log "loading ${image} into kind"
+  kind load docker-image "${image}" "${args[@]}"
+}
+
 render_manifest() {
   local pull_policy="IfNotPresent"
 
-  if [[ "${1}" == "minikube" || "${1}" == "k3s" ]]; then
+  if [[ "${1}" == "minikube" || "${1}" == "k3s" || "${1}" == "k3d" || "${1}" == "kind" ]]; then
     pull_policy="Never"
   fi
 
   log "rendering manifest with image tag ${IMAGE_TAG}"
 
-  sed \
+  require_command kubectl
+  kubectl kustomize "${KITE_MANIFEST_DIR}" | sed \
     -e "s#anacnu.com/kite-api:latest#$(image_name kite-api)#g" \
     -e "s#anacnu.com/kite-controller:latest#$(image_name kite-controller)#g" \
     -e "s#anacnu.com/kite-host-agent:latest#$(image_name kite-host-agent)#g" \
     -e "s#anacnu.com/kite-frontend:latest#$(image_name kite-frontend)#g" \
     -e "s#imagePullPolicy: IfNotPresent#imagePullPolicy: ${pull_policy}#g" \
-    "${MANIFEST_TEMPLATE}" > "${RENDERED_MANIFEST}"
+    > "${RENDERED_MANIFEST}"
 }
 
 apply_manifest() {
@@ -315,14 +378,42 @@ build_images_for_cluster() {
       load_image_into_k3s "${host_agent_image}"
       load_image_into_k3s "${frontend_image}"
       ;;
-    current)
+    k3d)
       build_local_image "${api_image}" "${ROOT_DIR}/kite/Dockerfile.api" "${ROOT_DIR}/kite"
       build_local_image "${controller_image}" "${ROOT_DIR}/kite/Dockerfile.controller" "${ROOT_DIR}/kite"
       build_local_image "${host_agent_image}" "${ROOT_DIR}/kite/Dockerfile.host-agent" "${ROOT_DIR}/kite"
       build_local_image "${frontend_image}" "${ROOT_DIR}/kite-frontend/Dockerfile" "${ROOT_DIR}/kite-frontend"
+      load_image_into_k3d "${api_image}"
+      load_image_into_k3d "${controller_image}"
+      load_image_into_k3d "${host_agent_image}"
+      load_image_into_k3d "${frontend_image}"
+      ;;
+    kind)
+      build_local_image "${api_image}" "${ROOT_DIR}/kite/Dockerfile.api" "${ROOT_DIR}/kite"
+      build_local_image "${controller_image}" "${ROOT_DIR}/kite/Dockerfile.controller" "${ROOT_DIR}/kite"
+      build_local_image "${host_agent_image}" "${ROOT_DIR}/kite/Dockerfile.host-agent" "${ROOT_DIR}/kite"
+      build_local_image "${frontend_image}" "${ROOT_DIR}/kite-frontend/Dockerfile" "${ROOT_DIR}/kite-frontend"
+      load_image_into_kind "${api_image}"
+      load_image_into_kind "${controller_image}"
+      load_image_into_kind "${host_agent_image}"
+      load_image_into_kind "${frontend_image}"
+      ;;
+    current|k8s|kubernetes)
+      build_local_image "${api_image}" "${ROOT_DIR}/kite/Dockerfile.api" "${ROOT_DIR}/kite"
+      build_local_image "${controller_image}" "${ROOT_DIR}/kite/Dockerfile.controller" "${ROOT_DIR}/kite"
+      build_local_image "${host_agent_image}" "${ROOT_DIR}/kite/Dockerfile.host-agent" "${ROOT_DIR}/kite"
+      build_local_image "${frontend_image}" "${ROOT_DIR}/kite-frontend/Dockerfile" "${ROOT_DIR}/kite-frontend"
+      push_local_image "${api_image}"
+      push_local_image "${controller_image}"
+      push_local_image "${host_agent_image}"
+      push_local_image "${frontend_image}"
+      if [[ "${PUSH_IMAGES}" != "true" ]]; then
+        log "using locally built images only; this works for local Docker-backed clusters or preloaded image names"
+        log "set PUSH_IMAGES=true when the current Kubernetes cluster must pull from ${IMAGE_REGISTRY}"
+      fi
       ;;
     *)
-      echo "[kite] unknown KITE_CLUSTER=${cluster}; use auto, minikube, k3s, or current" >&2
+      echo "[kite] unknown KITE_CLUSTER=${cluster}; use auto, minikube, k3s, k3d, kind, k8s, kubernetes, or current" >&2
       exit 1
       ;;
   esac

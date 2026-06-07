@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kite-controller
+  namespace: kite
+  labels:
+    app: kite-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kite-controller
+  template:
+    metadata:
+      labels:
+        app: kite-controller
+    spec:
+      serviceAccountName: kite-control-plane
+      containers:
+        - name: kite-controller
+          image: anacnu.com/kite-controller:latest
+          imagePullPolicy: IfNotPresent
