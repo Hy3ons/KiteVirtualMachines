@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/dynamic"
 
@@ -26,7 +27,10 @@ const (
 	defaultMemory     = "4Gi"
 	defaultImage      = "ubuntu-22.04"
 	defaultPowerState = "Off"
+	minDiskSize       = "20Gi"
 )
+
+var minimumDiskQuantity = resource.MustParse(minDiskSize)
 
 var sshIDPattern = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
 
@@ -279,6 +283,9 @@ func createRecord(req CreateRequest) (store.KiteVirtualMachineRecord, error) {
 	if req.Disk == "" || req.SSHID == "" || req.SSHPassword == "" {
 		return store.KiteVirtualMachineRecord{}, invalid("disk, sshId, and sshPassword are required")
 	}
+	if err := validateDisk(req.Disk); err != nil {
+		return store.KiteVirtualMachineRecord{}, err
+	}
 	if !sshIDPattern.MatchString(req.SSHID) {
 		return store.KiteVirtualMachineRecord{}, invalid("sshId must be a Linux username using lowercase letters, numbers, underscore, or hyphen")
 	}
@@ -350,6 +357,9 @@ func applyUpdate(record *store.KiteVirtualMachineRecord, req UpdateRequest) erro
 	}
 	if req.Disk != nil {
 		record.Spec.Disk = strings.TrimSpace(*req.Disk)
+		if err := validateDisk(record.Spec.Disk); err != nil {
+			return err
+		}
 	}
 	if req.DomainPrefix != nil {
 		record.Spec.DomainPrefix = strings.TrimSpace(*req.DomainPrefix)
@@ -372,6 +382,22 @@ func applyUpdate(record *store.KiteVirtualMachineRecord, req UpdateRequest) erro
 	}
 	if req.Delete != nil {
 		record.Spec.Delete = *req.Delete
+	}
+
+	return nil
+}
+
+// validateDisk checks that a VM disk value is a valid Kubernetes quantity and at least 20Gi.
+// disk is the normalized spec.disk value that will be stored in KiteVirtualMachine.
+// A nil error means the disk can be accepted by create and update flows.
+// This function is used by VM service validation before writing CRDs.
+func validateDisk(disk string) error {
+	quantity, err := resource.ParseQuantity(strings.TrimSpace(disk))
+	if err != nil {
+		return invalid("disk must be a valid Kubernetes quantity")
+	}
+	if quantity.Cmp(minimumDiskQuantity) < 0 {
+		return invalid("disk must be at least 20Gi")
 	}
 
 	return nil

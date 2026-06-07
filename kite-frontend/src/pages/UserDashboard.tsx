@@ -11,6 +11,11 @@ import { MOCK_ENV } from '../config/mockEnv';
 const { Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
 
+const LEVEL_1_FIXED_CPU = 2;
+const LEVEL_1_FIXED_MEMORY = '4Gi';
+const LEVEL_1_FIXED_DISK_GI = 20;
+const MIN_DISK_GI = 20;
+
 interface VM {
   id: string;
   name: string;
@@ -37,7 +42,8 @@ export const UserDashboard: React.FC = () => {
 
   // 권한별 설명 텍스트
   const getAccessLevelDescription = (level: number) => {
-    if (level === 1) return '일반 계정입니다. 더 많은 자원이 필요하다면 관리자에게 권한을 요청하세요! (최대 3개의 VM 생성 가능)';
+    if (level === 0) return 'VM 생성 권한이 없는 계정입니다. 사용이 필요하면 관리자에게 권한을 요청하세요.';
+    if (level === 1) return '일반 계정입니다. VM은 최대 3개까지 생성할 수 있고 스펙은 CPU 2, RAM 4Gi, Disk 20Gi로 고정됩니다.';
     if (level === 2) return '매니저 계정입니다. 일반 권한을 포함하며, 타 유저의 VM 상태 제어 및 관리가 가능합니다.';
     if (level >= 3) return '최고 관리자 계정입니다. 매니저 권한을 포함하며, Host Setup 및 클러스터 인프라 전역을 통제할 수 있습니다.';
     return '';
@@ -93,10 +99,19 @@ export const UserDashboard: React.FC = () => {
   };
 
   const handleCreate = async (values: any) => {
+    if (safeAccessLevel < 1) {
+      message.error('VM 생성 권한이 없습니다. 관리자에게 권한을 요청하세요.');
+      return;
+    }
+
     if (safeAccessLevel === 1 && vms.length >= MOCK_ENV.MAX_VM_QUOTA_LEVEL_1) {
       message.error(`VM 생성 한도(최대 ${MOCK_ENV.MAX_VM_QUOTA_LEVEL_1}개)를 초과했습니다. 관리자에게 권한을 요청하세요.`);
       return;
     }
+
+    const disk = safeAccessLevel === 1 ? LEVEL_1_FIXED_DISK_GI : values.disk;
+    const cpu = safeAccessLevel === 1 ? LEVEL_1_FIXED_CPU : values.cpu;
+    const memory = safeAccessLevel === 1 ? LEVEL_1_FIXED_MEMORY : values.memory;
     
     try {
       setIsModalVisible(false);
@@ -106,7 +121,9 @@ export const UserDashboard: React.FC = () => {
         domainPrefix: values.domainPrefix,
         sshId: values.sshId,
         sshPassword: values.sshPassword,
-        disk: values.disk,
+        cpu,
+        memory,
+        disk,
         powerState: 'On'
       });
       message.success({ content: 'VM Create Requested', key: 'create' });
@@ -204,7 +221,7 @@ export const UserDashboard: React.FC = () => {
                   <div style={{ textAlign: 'center', borderLeft: '1px solid #eee', paddingLeft: '24px' }}>
                     <Text type="secondary" style={{ fontSize: '12px' }}>VM QUOTA</Text>
                     <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#C9B59C' }}>
-                      {safeAccessLevel === 1 ? 'Max 3 VMs' : 'Unlimited'}
+                      {safeAccessLevel === 0 ? 'No Access' : safeAccessLevel === 1 ? 'Max 3 VMs' : 'Unlimited'}
                     </div>
                   </div>
                 </Space>
@@ -215,7 +232,13 @@ export const UserDashboard: React.FC = () => {
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
           <Title level={2} style={{ margin: 0 }}>My Virtual Machines</Title>
-          <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => setIsModalVisible(true)}>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            size="large"
+            disabled={safeAccessLevel < 1}
+            onClick={() => setIsModalVisible(true)}
+          >
             Create VM
           </Button>
         </div>
@@ -237,6 +260,25 @@ export const UserDashboard: React.FC = () => {
         centered
       >
         <Form form={form} layout="vertical" onFinish={handleCreate} style={{ marginTop: 24 }}>
+          {safeAccessLevel === 0 && (
+            <Alert
+              message="VM 생성 권한 없음"
+              description="Level 0 계정은 VM을 생성할 수 없습니다. 관리자에게 권한을 요청하세요."
+              type="warning"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+          )}
+          {safeAccessLevel === 1 && (
+            <Alert
+              message="일반 계정 VM 스펙 고정"
+              description={`Level 1 계정은 CPU ${LEVEL_1_FIXED_CPU}, RAM ${LEVEL_1_FIXED_MEMORY}, Disk ${LEVEL_1_FIXED_DISK_GI}Gi로 생성됩니다.`}
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+          )}
+
           <Form.Item name="name" label="VM Name" rules={[{ required: true, message: '영문 소문자/숫자 조합의 이름을 입력하세요.' }]}>
             <Input placeholder="my-ubuntu-vm" />
           </Form.Item>
@@ -253,17 +295,19 @@ export const UserDashboard: React.FC = () => {
             <Input.Password placeholder="Strong password" />
           </Form.Item>
           
-          <Form.Item name="disk" label="Disk Size (Gi)" initialValue={30} rules={[{ required: true }]}>
-            <InputNumber min={30} max={100} style={{ width: '100%' }} />
+          <Form.Item name="disk" label="Disk Size (Gi)" initialValue={safeAccessLevel === 1 ? LEVEL_1_FIXED_DISK_GI : MIN_DISK_GI} rules={[{ required: true }]}>
+            <InputNumber min={MIN_DISK_GI} max={100} disabled={safeAccessLevel === 1} style={{ width: '100%' }} />
           </Form.Item>
 
           <div style={{ backgroundColor: '#EFE9E3', padding: '12px', marginBottom: '24px', fontSize: '13px', color: '#555' }}>
-            * CPU (2) 및 Memory (4Gi), OS Image (ubuntu-22.04)는 기본 스펙으로 자동 할당됩니다.
+            {safeAccessLevel === 1
+              ? '* Level 1 계정은 CPU 2, Memory 4Gi, Disk 20Gi, OS Image ubuntu-22.04로 고정 생성됩니다.'
+              : '* 최소 Disk는 20Gi입니다. CPU, Memory, OS Image를 입력하지 않으면 기본값 CPU 2, Memory 4Gi, ubuntu-22.04가 적용됩니다.'}
           </div>
 
           <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
             <Button onClick={() => setIsModalVisible(false)} style={{ marginRight: 8 }}>Cancel</Button>
-            <Button type="primary" htmlType="submit">Create</Button>
+            <Button type="primary" htmlType="submit" disabled={safeAccessLevel < 1}>Create</Button>
           </Form.Item>
         </Form>
       </Modal>

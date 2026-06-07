@@ -11,6 +11,12 @@ import (
 	vmservice "kite/internal/vm"
 )
 
+const (
+	levelOneFixedCPU    = 2
+	levelOneFixedMemory = "4Gi"
+	levelOneFixedDisk   = "20Gi"
+)
+
 type vmCreateRequest struct {
 	Name         string `json:"name"`
 	CPU          int    `json:"cpu"`
@@ -41,9 +47,10 @@ type vmPowerRequest struct {
 // RegisterVirtualMachines attaches user VM routes to the versioned API router.
 // api is the /api/v1 router group.
 // deps provides auth and Kubernetes dependencies.
+// Level 0 users are not allowed to use VM APIs.
 // This function is used by RegisterV1 for frontend dashboard VM operations.
 func RegisterVirtualMachines(api *gin.RouterGroup, deps Dependencies) {
-	vms := api.Group("/vms", RequireAccessLevel(deps, auth.AccessLevelReadOnly))
+	vms := api.Group("/vms", RequireAccessLevel(deps, auth.AccessLevelUser))
 	vms.GET("", vmListHandler(deps))
 	vms.POST("", vmCreateHandler(deps))
 	vms.GET("/:name", vmGetHandler(deps))
@@ -77,11 +84,16 @@ func vmListHandler(deps Dependencies) gin.HandlerFunc {
 // vmCreateHandler creates a KiteVirtualMachine CRD in the current user's namespace.
 // deps provides Kubernetes and auth dependencies.
 // The request body contains frontend VM form fields.
+// Level 0 users cannot create VMs, and level 1 users always receive the fixed entry-level spec.
 // This handler does not call KubeVirt directly; kite-controller performs provisioning.
 func vmCreateHandler(deps Dependencies) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user, ok := currentUser(c, deps)
 		if !ok {
+			return
+		}
+		if user.AccessLevel < int64(auth.AccessLevelUser) {
+			c.JSON(http.StatusForbidden, gin.H{"message": "VM creation requires access level 1 or higher"})
 			return
 		}
 
@@ -90,6 +102,7 @@ func vmCreateHandler(deps Dependencies) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "invalid request body"})
 			return
 		}
+		applyAccessLevelCreateLimits(user.AccessLevel, &req)
 
 		created, err := vmServiceFromDependencies(deps).Create(c.Request.Context(), vmservice.CreateRequest{
 			Name:         req.Name,
@@ -109,6 +122,42 @@ func vmCreateHandler(deps Dependencies) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusCreated, gin.H{"vm": created})
+	}
+}
+
+// applyAccessLevelCreateLimits enforces VM create-time resource limits from the authenticated user.
+// accessLevel is copied from the current KiteUser CRD.
+// req is the parsed HTTP create body and is modified before it reaches the VM service.
+// This function is used by vmCreateHandler to keep frontend limits authoritative on the API server.
+func applyAccessLevelCreateLimits(accessLevel int64, req *vmCreateRequest) {
+	if accessLevel != int64(auth.AccessLevelUser) {
+		return
+	}
+
+	req.CPU = levelOneFixedCPU
+	req.Memory = levelOneFixedMemory
+	req.Disk = levelOneFixedDisk
+}
+
+// applyAccessLevelUpdateLimits enforces fixed resource updates for level 1 users.
+// accessLevel is copied from the current KiteUser CRD.
+// req is the parsed PATCH body and is modified only when resource fields are present.
+// This function is used by vmUpdateHandler to prevent direct API calls from raising level 1 VM specs.
+func applyAccessLevelUpdateLimits(accessLevel int64, req *vmUpdateRequest) {
+	if accessLevel != int64(auth.AccessLevelUser) {
+		return
+	}
+
+	if req.CPU != nil {
+		cpu := levelOneFixedCPU
+		req.CPU = &cpu
+	}
+	if req.Memory != nil {
+		memory := levelOneFixedMemory
+		req.Memory = &memory
+	}
+	if req.Disk != nil {
+		req.Disk = levelOneFixedDisk
 	}
 }
 
@@ -136,6 +185,7 @@ func vmGetHandler(deps Dependencies) gin.HandlerFunc {
 // vmUpdateHandler patches mutable VM desired-state fields.
 // deps provides Kubernetes and auth dependencies.
 // The route parameter is metadata.name in the current user's namespace.
+// Level 1 users cannot change the fixed CPU, memory, or disk limits.
 // This handler is used for general VM edits and direct powerState patches.
 func vmUpdateHandler(deps Dependencies) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -149,6 +199,7 @@ func vmUpdateHandler(deps Dependencies) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "invalid request body"})
 			return
 		}
+		applyAccessLevelUpdateLimits(user.AccessLevel, &req)
 
 		disk := normalizeOptionalDisk(req.Disk)
 		vm, err := vmServiceFromDependencies(deps).Update(c.Request.Context(), user.Namespace, c.Param("name"), vmservice.UpdateRequest{
