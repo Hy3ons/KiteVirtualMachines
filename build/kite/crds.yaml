@@ -108,7 +108,6 @@ spec:
       - ku
     categories:
       - kite
-      - all
   scope: Cluster
 
 ---
@@ -210,5 +209,4 @@ spec:
       - ktvm
     categories:
       - kite
-      - all
   scope: Namespaced
