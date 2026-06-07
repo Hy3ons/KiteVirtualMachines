@@ -63,7 +63,7 @@ func NewManager(hostRoot string) *Manager {
 
 // Ensure makes one host Linux account match the desired KiteVirtualMachine access state.
 // ctx controls nsenter command execution.
-// desired contains the VM sshId, sshPassword, private key, and fixed ClusterIP Service DNS target.
+// desired contains the VM sshId, sshPassword, private key, and fixed Kubernetes Service DNS target.
 // A nil error means the host user, password, private key, shell script, and login shell were reconciled.
 func (m *Manager) Ensure(ctx context.Context, desired DesiredAccount) error {
 	if err := validateDesiredAccount(desired); err != nil {
@@ -172,6 +172,37 @@ func validateDesiredAccount(desired DesiredAccount) error {
 		return errors.New("SSH Service name and namespace are required")
 	}
 	return nil
+}
+
+// EnsureClusterDNS configures the host resolver for Kubernetes Service DNS names.
+// ctx controls nsenter command execution.
+// dnsIP is the kube-system/kube-dns ClusterIP discovered by kite-host-agent.
+// This function is used before writing proxy shells that target *.svc.cluster.local.
+func (m *Manager) EnsureClusterDNS(ctx context.Context, dnsIP string) error {
+	dnsIP = strings.TrimSpace(dnsIP)
+	if dnsIP == "" {
+		return errors.New("cluster DNS IP is required")
+	}
+	if err := m.runHost(ctx, "sh", "-c", "command -v resolvectl >/dev/null 2>&1"); err != nil {
+		return fmt.Errorf("resolvectl is required to configure host cluster DNS: %w", err)
+	}
+
+	link, err := m.runHostOutput(ctx, "sh", "-c", "ip route show default 2>/dev/null | awk '{print $5; exit}'")
+	if err != nil {
+		return err
+	}
+	link = strings.TrimSpace(link)
+	if link == "" {
+		return errors.New("failed to detect host default network interface")
+	}
+
+	if err := m.runHost(ctx, "resolvectl", "dns", link, dnsIP); err != nil {
+		return err
+	}
+	if err := m.runHost(ctx, "resolvectl", "domain", link, "~cluster.local", "~svc.cluster.local"); err != nil {
+		return err
+	}
+	return m.runHost(ctx, "resolvectl", "default-route", link, "false")
 }
 
 func (m *Manager) ensureOwnership(ctx context.Context, owner OwnerMetadata) error {
@@ -356,6 +387,23 @@ func (m *Manager) runHostWithInput(ctx context.Context, input string, name strin
 		return fmt.Errorf("host command %s failed: %s", name, message)
 	}
 	return nil
+}
+
+func (m *Manager) runHostOutput(ctx context.Context, name string, args ...string) (string, error) {
+	nsenterArgs := append([]string{"-t", "1", "-m", "-u", "-i", "-n", "-p", "--", name}, args...)
+	cmd := exec.CommandContext(ctx, "nsenter", nsenterArgs...)
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	output, err := cmd.Output()
+	if err != nil {
+		message := strings.TrimSpace(stderr.String())
+		if message == "" {
+			message = err.Error()
+		}
+		return "", fmt.Errorf("host command %s failed: %s", name, message)
+	}
+	return string(output), nil
 }
 
 func isMissingUserError(err error) bool {

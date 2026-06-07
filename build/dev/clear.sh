@@ -27,6 +27,7 @@ CLEAR_LONGHORN_DATA="${CLEAR_LONGHORN_DATA:-false}"
 CLEAR_LONGHORN_DATA_CONFIRM="${CLEAR_LONGHORN_DATA_CONFIRM:-false}"
 KITE_LONGHORN_DISK_NAME="${KITE_LONGHORN_DISK_NAME:-kite-longhorn}"
 KITE_LONGHORN_DISK_TAG="${KITE_LONGHORN_DISK_TAG:-kite}"
+CLEAR_HOST_DNS="${CLEAR_HOST_DNS:-true}"
 
 log() {
   echo "[kite] $*"
@@ -80,6 +81,8 @@ delete_kite_resources() {
   kubectl delete -f "${ROOT_DIR}/build/kite-storage/longhorn" --ignore-not-found=true || true
   remove_kite_longhorn_disks
 
+  reset_kite_host_dns
+
   log "stopping Kite workloads"
   kubectl delete -f "${ROOT_DIR}/build/kite/host-agent.yaml" --ignore-not-found=true --wait=false || true
   kubectl delete -f "${ROOT_DIR}/build/kite/controller.yaml" --ignore-not-found=true --wait=false || true
@@ -101,6 +104,30 @@ delete_kite_resources() {
   kubectl delete -f "${ROOT_DIR}/build/kite/crds.yaml" --ignore-not-found=true --wait=false || true
   kubectl delete clusterrole kite-control-plane-role --ignore-not-found=true --wait=false || true
   kubectl delete clusterrolebinding kite-control-plane-binding --ignore-not-found=true --wait=false || true
+}
+
+reset_kite_host_dns() {
+  if [[ "${CLEAR_HOST_DNS}" != "true" ]]; then
+    log "skipping host DNS cleanup because CLEAR_HOST_DNS=${CLEAR_HOST_DNS}"
+    return
+  fi
+  if ! kubectl -n "${KITE_NAMESPACE}" get pods -l app=kite-host-agent >/dev/null 2>&1; then
+    return
+  fi
+
+  log "removing Kite cluster.local host DNS routing"
+  kubectl -n "${KITE_NAMESPACE}" get pods -l app=kite-host-agent -o name 2>/dev/null \
+    | while read -r pod; do
+        [[ -z "${pod}" ]] && continue
+        kubectl -n "${KITE_NAMESPACE}" exec "${pod}" -- nsenter -t 1 -m -u -i -n -p -- sh -c '
+          if command -v resolvectl >/dev/null 2>&1; then
+            iface="$(ip route show default 2>/dev/null | awk "{print \$5; exit}")"
+            if [ -n "$iface" ]; then
+              resolvectl revert "$iface" >/dev/null 2>&1 || true
+            fi
+          fi
+        ' >/dev/null 2>&1 || true
+      done
 }
 
 delete_kite_custom_resources() {

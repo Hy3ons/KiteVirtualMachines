@@ -51,6 +51,11 @@ var (
 		Version:  "v1",
 		Resource: "secrets",
 	}
+	serviceGVR = schema.GroupVersionResource{
+		Group:    "",
+		Version:  "v1",
+		Resource: "services",
+	}
 )
 
 func main() {
@@ -219,6 +224,10 @@ func ensureAccountForVM(ctx context.Context, dynamicClient dynamic.Interface, ma
 		return err
 	}
 
+	if err := ensureHostClusterDNS(ctx, dynamicClient, manager); err != nil {
+		log.Printf("failed to reconcile host cluster DNS: %v", err)
+	}
+
 	return manager.Ensure(ctx, hostaccount.DesiredAccount{
 		Username:         vm.Spec.SSHID,
 		Password:         vm.Spec.SSHPassword,
@@ -384,6 +393,25 @@ func serviceNameForVM(vm *kitev1.KiteVirtualMachine) string {
 		return strings.TrimSpace(vm.Status.ServiceName)
 	}
 	return sshServiceNamePrefix + vm.Name
+}
+
+// ensureHostClusterDNS configures the host resolver so Kubernetes Service DNS names resolve.
+// ctx controls the kube-dns Service read and host resolver commands.
+// dynamicClient reads kube-system/kube-dns to discover the cluster DNS Service IP.
+// manager applies host-side resolver configuration through nsenter.
+func ensureHostClusterDNS(ctx context.Context, dynamicClient dynamic.Interface, manager *hostaccount.Manager) error {
+	service, err := dynamicClient.Resource(serviceGVR).Namespace("kube-system").Get(ctx, "kube-dns", metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to read kube-dns Service: %w", err)
+	}
+
+	clusterIP, _, _ := unstructured.NestedString(service.Object, "spec", "clusterIP")
+	clusterIP = strings.TrimSpace(clusterIP)
+	if clusterIP == "" || clusterIP == "None" {
+		return fmt.Errorf("kube-dns Service has no ClusterIP")
+	}
+
+	return manager.EnsureClusterDNS(ctx, clusterIP)
 }
 
 // vmKey creates a stable namespace/name key for map lookups.
