@@ -16,6 +16,19 @@ Prepare a k3s cluster and confirm `kubectl` can reach it.
 kubectl get nodes
 ```
 
+Install without git or a repository clone:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/install.sh | bash
+```
+
+Use a specific branch or tag:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/install.sh \
+  | KITE_INSTALL_REF=stage bash
+```
+
 Install everything. Longhorn installation is opt-in because production nodes
 must satisfy Longhorn prerequisites such as usable disks and required host
 packages.
@@ -54,6 +67,19 @@ CDI.
 
 ```sh
 build/deploy/scripts/uninstall-kite.sh
+```
+
+Run the same cleanup without git or a repository clone:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/clean.sh | bash
+```
+
+Use a specific branch or tag:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/clean.sh \
+  | KITE_CLEAN_REF=stage bash
 ```
 
 Set `DELETE_GOLDEN_IMAGE=true` to explicitly delete the imported golden image
@@ -112,3 +138,9 @@ listen on `2222`, and restarts the service so the gateway can own port `22`.
 `KITE_MANAGE_HOST_SSHD=true` or `KITE_RESTORE_HOST_SSHD=true` for
 non-interactive opt-in, and set `MANAGE_HOST_SSHD=false` or
 `RESTORE_HOST_SSHD=false` to skip these host changes.
+
+When no Kite VM uses the SSH login username, `kite-gateway` falls back to the
+host sshd at the node IP on port `2222`. This lets existing host accounts keep
+using `ssh <host-user>@<node-ip>` on port `22` after the gateway is installed.
+If a Kite VM `sshId` conflicts with a host user, the VM route has priority and
+host administration should use `ssh <host-user>@<node-ip> -p 2222`.

@@ -124,3 +124,9 @@ the service so the gateway can own port `22`. `./clear.sh` asks before restoring
 that backup. Set `KITE_MANAGE_HOST_SSHD=true` or `KITE_RESTORE_HOST_SSHD=true`
 for non-interactive opt-in, and set `MANAGE_HOST_SSHD=false` or
 `RESTORE_HOST_SSHD=false` to skip these host changes.
+
+When no Kite VM uses the SSH login username, `kite-gateway` falls back to the
+host sshd at the node IP on port `2222`. This lets existing host accounts keep
+using `ssh <host-user>@<node-ip>` on port `22` after the gateway is installed.
+If a Kite VM `sshId` conflicts with a host user, the VM route has priority and
+host administration should use `ssh <host-user>@<node-ip> -p 2222`.

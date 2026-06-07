@@ -66,6 +66,58 @@ flowchart TD
 
 Kite는 명령형 RPC로 controller를 호출하지 않습니다. API 서버는 CRD의 desired state를 쓰고, controller는 Kubernetes controller 방식으로 reconcile합니다.
 
+## Design Decisions
+
+### CRD 중심 reconcile
+
+Kite는 API 서버가 controller에 직접 명령을 보내는 구조를 쓰지 않습니다.
+`kite-api`는 사용자 요청을 검증한 뒤 `KiteUser`와 `KiteVirtualMachine` CRD의
+`spec`만 갱신합니다. `kite-controller`는 이 desired state를 watch하고 실제
+Namespace, KubeVirt VM, DataVolume, Service, Secret, Ingress 상태를 맞춥니다.
+
+이 방식을 선택한 이유는 다음과 같습니다.
+
+- Kubernetes API server와 etcd를 단일 상태 저장소로 사용해 API와 controller를 느슨하게 분리합니다.
+- API process가 재시작되어도 이미 기록된 CRD spec을 기준으로 controller가 계속 수렴할 수 있습니다.
+- 실제 KubeVirt/CDI 리소스 상태 변화는 controller가 `status`에 다시 기록하므로 프론트엔드는 CRD 상태만 보면 됩니다.
+- gRPC 같은 별도 API 계약을 유지하지 않아도 Kubernetes validation, RBAC, watch cache를 그대로 활용할 수 있습니다.
+
+### SSH gateway
+
+Kite는 VM별 NodePort를 만들지 않습니다. VM마다 외부 포트를 하나씩 소모하면
+포트 관리가 어려워지고, VM 삭제 실패 시 고아 포트가 남을 수 있기 때문입니다.
+대신 `kite-gateway`가 외부 SSH 22번을 받고, SSH login username을
+`KiteVirtualMachine.spec.sshId`와 매칭해 내부 `vps-access-<vmName>` ClusterIP
+Service로 프록시합니다.
+
+```text
+ssh <sshId>@<node-ip>:22
+  -> kite-gateway
+  -> KiteVirtualMachine(spec.sshId) lookup
+  -> vps-access-<vmName>.<namespace>.svc.cluster.local:22
+  -> VM sshd
+```
+
+외부 사용자의 password는 `spec.sshPasswordHash`로 검증하고, VM 내부 접속은
+controller가 만든 SSH key Secret을 사용합니다. VM cloud-init에는 이 public key만
+들어가며 VM 내부 password login은 꺼져 있습니다.
+
+기존 host sshd도 고려합니다. 설치 시 host sshd가 22번을 쓰고 있으면 확인 후
+2222로 옮기고, `kite-gateway`는 VM route가 없는 username에 한해 host sshd
+`<node-ip>:2222`로 fallback합니다. 그래서 기존 host 계정도 계속 아래 방식으로
+접속할 수 있습니다.
+
+```sh
+ssh <host-user>@<node-ip>
+```
+
+단, host Linux username과 VM `sshId`가 같으면 VM route가 우선입니다. 이때 host
+관리는 명시적으로 2222 포트를 사용합니다.
+
+```sh
+ssh <host-user>@<node-ip> -p 2222
+```
+
 ## Components
 
 ### `kite/cmd`
@@ -180,6 +232,19 @@ Development cleanup:
 KITE_CLUSTER=k3s ./clear.sh
 ```
 
+Git-free cleanup is also available:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/clean.sh | bash
+```
+
+This downloads only the top-level `clean.sh` first. The script then downloads
+the selected GitHub archive into a temporary directory and runs
+`build/dev/clear.sh`, so the machine does not need `git` or a repository clone.
+By default it removes Kite CRDs, namespace resources, deployments, Services,
+and Kite-owned runtime state. Longhorn storage cleanup stays opt-in because it
+can delete VM disk infrastructure.
+
 Longhorn cleanup is opt-in because it can remove VM disk infrastructure:
 
 ```sh
@@ -203,6 +268,37 @@ RESTORE_HOST_SSHD=false KITE_CLUSTER=k3s ./clear.sh
 `./install.sh` contains a pull-based install flow for k3s clusters. Longhorn,
 KubeVirt, and CDI are required for VM disk provisioning and VM runtime. Kite
 images are pulled from GHCR instead of being built locally.
+
+Git is not required for the pull-based installer. The command below does not
+run `git clone`; it downloads a GitHub archive with `curl` and `tar` into a
+temporary directory, then applies the production manifests. On a prepared k3s or
+Kubernetes host with `kubectl` configured, run:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/install.sh | bash
+```
+
+Install from another branch or tag:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/install.sh \
+  | KITE_INSTALL_REF=stage bash
+```
+
+The remote installer downloads the selected repository ref as a tar archive and
+runs `build/deploy/scripts/install-all.sh`. It uses GHCR images and does not
+build containers locally.
+
+The download install flow is intentionally split into two steps:
+
+1. `install.sh` is the small bootstrap script fetched by `curl`.
+2. The bootstrap script downloads the selected repository ref as a tar archive,
+   extracts it under a temporary directory, and executes
+   `build/deploy/scripts/install-all.sh` from that extracted copy.
+
+That inner installer installs or waits for Longhorn, KubeVirt, and CDI, prepares
+the Ubuntu golden image DataVolume, creates the Kite gateway host key Secret,
+and deploys the Kite manifests using GHCR images.
 
 ```sh
 kubectl get nodes
@@ -233,10 +329,51 @@ Uninstall Kite resources:
 build/deploy/scripts/uninstall-kite.sh
 ```
 
+Uninstall without git or a repository clone:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/clean.sh | bash
+```
+
+Use a specific branch or tag:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/clean.sh \
+  | KITE_CLEAN_REF=stage bash
+```
+
+The remote cleanup flow mirrors the installer. `clean.sh` downloads the selected
+repository ref as a tar archive and then runs `build/dev/clear.sh`. The cleanup
+removes Kite application resources and Kite CRDs first, then optionally restores
+the host SSHD handoff and removes Kite Longhorn disk data only when the explicit
+cleanup environment variables are set.
+
 More details are in `build/deploy/README.md`.
 
 The same host SSHD handoff variables are supported by `./install.sh` and
 `build/deploy/scripts/uninstall-kite.sh`.
+
+## Container Images
+
+Production images are published to GHCR when commits land on `main`.
+
+| Component | Image |
+| --- | --- |
+| `kite-api` | `ghcr.io/hy3ons/kite-api` |
+| `kite-controller` | `ghcr.io/hy3ons/kite-controller` |
+| `kite-gateway` | `ghcr.io/hy3ons/kite-gateway` |
+| `kite-frontend` | `ghcr.io/hy3ons/kite-frontend` |
+
+The workflow publishes these tags:
+
+- `latest`
+- `main`
+- `production`
+- `sha-<commit>`
+
+The workflow logs in with the `GHCR_TOKEN` GitHub secret. `./install.sh` uses
+the GHCR images by default, while `./dev.sh` builds images locally and imports
+or loads them into the selected development cluster.
 
 ## Smoke Test
 

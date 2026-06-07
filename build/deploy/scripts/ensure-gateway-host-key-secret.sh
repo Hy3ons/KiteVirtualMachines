@@ -11,6 +11,7 @@ KITE_GATEWAY_HOST_KEY_SECRET="${KITE_GATEWAY_HOST_KEY_SECRET:-kite-gateway-host-
 KITE_GATEWAY_HOST_KEY_SOURCE="${KITE_GATEWAY_HOST_KEY_SOURCE:-auto}"
 KITE_GATEWAY_HOST_KEY_REFRESH="${KITE_GATEWAY_HOST_KEY_REFRESH:-false}"
 KITE_GATEWAY_HOST_KEY_FILE_NAME="${KITE_GATEWAY_HOST_KEY_FILE_NAME:-ssh_host_rsa_key}"
+GATEWAY_HOST_KEY_TMPDIR=""
 
 log() {
   echo "[kite-deploy] $*"
@@ -117,11 +118,17 @@ write_gateway_key() {
   esac
 }
 
+cleanup() {
+  if [[ -n "${GATEWAY_HOST_KEY_TMPDIR}" ]]; then
+    rm -rf "${GATEWAY_HOST_KEY_TMPDIR}"
+  fi
+}
+
 main() {
-  local tmpdir
   local key_path
 
   require_command kubectl
+  trap cleanup EXIT
   kubectl apply -f "${ROOT_DIR}/build/kite/namespace.yaml"
 
   if kubectl -n "${KITE_NAMESPACE}" get secret "${KITE_GATEWAY_HOST_KEY_SECRET}" >/dev/null 2>&1; then
@@ -132,9 +139,8 @@ main() {
     log "refreshing gateway host key Secret ${KITE_NAMESPACE}/${KITE_GATEWAY_HOST_KEY_SECRET}"
   fi
 
-  tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/kite-gateway-host-key.XXXXXX")"
-  trap 'rm -rf "${tmpdir}"' EXIT
-  key_path="${tmpdir}/${KITE_GATEWAY_HOST_KEY_FILE_NAME}"
+  GATEWAY_HOST_KEY_TMPDIR="$(mktemp -d "${TMPDIR:-/tmp}/kite-gateway-host-key.XXXXXX")"
+  key_path="${GATEWAY_HOST_KEY_TMPDIR}/${KITE_GATEWAY_HOST_KEY_FILE_NAME}"
   write_gateway_key "${key_path}"
 
   kubectl -n "${KITE_NAMESPACE}" create secret generic "${KITE_GATEWAY_HOST_KEY_SECRET}" \

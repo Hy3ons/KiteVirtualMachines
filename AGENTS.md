@@ -129,6 +129,37 @@ For `KiteVirtualMachine`, user power intent belongs in
 if the actual KubeVirt state drifts from the desired power state, reconcile it
 back.
 
+## Branch Rules
+
+`main` is the production publishing branch. A push to `main` triggers the GHCR
+image publishing workflow and updates production Docker image tags.
+
+Before starting user-requested code or documentation work, check the current
+branch with `git status -sb` or `git branch --show-current`.
+
+Do not work directly on `main` unless the user explicitly asks for a direct
+`main` change. Use this branch flow instead:
+
+1. Make sure a `stage` branch exists and is based on the current `main`.
+2. Start each task from `stage`.
+3. Create a task branch from `stage` using a scoped prefix:
+   - `feature/<what>` for new behavior,
+   - `fix/<what>` for bug fixes,
+   - `refactor/<what>` for structure-only changes,
+   - `docs/<what>` for documentation-only changes,
+   - `chore/<what>` for scripts, CI, or maintenance changes.
+4. Do the work on that task branch.
+5. When the task is complete and verified, merge the task branch back into
+   `stage`.
+6. Push `stage` when the user asks to publish the staged work.
+
+Only merge `stage` into `main`, or push `main`, when the user explicitly says it
+is time to put `stage` into `main`.
+
+If the working tree already has uncommitted user changes, do not overwrite or
+move them silently. Inspect the status, keep unrelated changes intact, and ask
+for direction only when the branch operation cannot be done safely.
+
 ## Commit Rules
 
 When creating a git commit, follow this commit message convention.

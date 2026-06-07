@@ -35,6 +35,22 @@ SSH login username == KiteVirtualMachine.spec.sshId
 
 Duplicate live `sshId` values are rejected by the route table.
 
+If no live Kite VM route exists for the SSH username, the gateway can fall back
+to the host OpenSSH daemon. The default manifest points this fallback at the
+node IP on port `2222`, which is where the install scripts move host sshd when
+Kite owns external port `22`.
+
+```text
+ssh <host-linux-user>@<node-ip>:22
+  -> kite-gateway
+  -> no KiteVM spec.sshId match
+  -> host sshd at <node-ip>:2222
+```
+
+Kite VM routes have priority. If a VM `spec.sshId` is the same as a host Linux
+username, port `22` goes to the VM route. Use `ssh <host-user>@<node-ip> -p
+2222` for direct host administration in that case.
+
 ## Authentication And VM Login
 
 External password authentication is checked against
@@ -75,6 +91,9 @@ The handoff is handled by `build/deploy/scripts/manage-host-sshd.sh`:
 - `KITE_GATEWAY_HOST_KEY_PATH`: PEM host key path. Install scripts create the `kite-gateway-host-key` Secret and mount it at `/etc/kite-gateway/ssh/ssh_host_rsa_key`.
 - `KITE_GATEWAY_BACKEND_TIMEOUT_SECONDS`: VM sshd wait timeout. Default `90`.
 - `KITE_GATEWAY_BACKEND_RETRY_SECONDS`: backend retry interval. Default `2`.
+- `KITE_GATEWAY_HOST_FALLBACK_ENABLED`: whether unknown SSH usernames may fall back to host sshd. Default `true`.
+- `KITE_GATEWAY_HOST_SSHD_ADDRESS`: host sshd fallback address. The default manifest sets this to `$(KITE_NODE_IP):2222`.
+- `KITE_GATEWAY_HOST_FALLBACK_TIMEOUT_SECONDS`: host fallback password auth timeout. Default `5`.
 
 ## Host Key
 
