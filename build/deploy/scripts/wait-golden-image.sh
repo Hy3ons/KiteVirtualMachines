@@ -13,12 +13,14 @@ log() {
 main() {
   local elapsed=0
   local phase
+  local progress
 
   log "waiting for DataVolume ${NAMESPACE}/${IMAGE_NAME} to reach Succeeded"
   while (( elapsed <= TIMEOUT_SECONDS )); do
     phase="$(kubectl -n "${NAMESPACE}" get datavolume "${IMAGE_NAME}" -o jsonpath='{.status.phase}' 2>/dev/null || true)"
+    progress="$(kubectl -n "${NAMESPACE}" get datavolume "${IMAGE_NAME}" -o jsonpath='{.status.progress}' 2>/dev/null || true)"
     if [[ "${phase}" == "Succeeded" ]]; then
-      log "DataVolume ${NAMESPACE}/${IMAGE_NAME} is Succeeded"
+      log "DataVolume ${NAMESPACE}/${IMAGE_NAME} is Succeeded progress=${progress:-100%}"
       return
     fi
     if [[ "${phase}" == "Failed" ]]; then
@@ -27,7 +29,7 @@ main() {
       exit 1
     fi
 
-    log "DataVolume phase=${phase:-unknown}; waiting"
+    log "DataVolume phase=${phase:-unknown} progress=${progress:-unknown}; waiting"
     sleep "${SLEEP_SECONDS}"
     elapsed=$((elapsed + SLEEP_SECONDS))
   done
