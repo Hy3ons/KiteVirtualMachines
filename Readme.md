@@ -173,14 +173,14 @@ PUSH_IMAGES=true IMAGE_REGISTRY=registry.example.com/kite KITE_CLUSTER=k8s ./dev
 Development cleanup:
 
 ```sh
-KITE_CLUSTER=k3s build/dev/clear.sh
+KITE_CLUSTER=k3s ./clear.sh
 ```
 
 Longhorn cleanup is opt-in because it can remove VM disk infrastructure:
 
 ```sh
-CLEAR_LONGHORN=true KITE_CLUSTER=k3s build/dev/clear.sh
-CLEAR_LONGHORN_DATA=true CLEAR_LONGHORN_DATA_CONFIRM=true KITE_CLUSTER=k3s build/dev/clear.sh
+CLEAR_LONGHORN=true KITE_CLUSTER=k3s ./clear.sh
+CLEAR_LONGHORN_DATA=true CLEAR_LONGHORN_DATA_CONFIRM=true KITE_CLUSTER=k3s ./clear.sh
 ```
 
 More details are in `build/dev/README.md`.

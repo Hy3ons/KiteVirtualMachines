@@ -60,16 +60,17 @@ KITE_CLUSTER=k3s build/dev/dev.sh
 
 Defaults are `production`, `/api/v1`, and `false`.
 
-`clear.sh` removes Kite development resources and local Kite images.
+`./clear.sh` is the root cleanup wrapper. It removes Kite development resources
+and local Kite images through `build/dev/clear.sh`.
 
 ```sh
-KITE_CLUSTER=k3s build/dev/clear.sh
+KITE_CLUSTER=k3s ./clear.sh
 ```
 
 Longhorn cleanup is disabled by default because it deletes VM disk data.
 
 ```sh
-CLEAR_LONGHORN=true KITE_CLUSTER=k3s build/dev/clear.sh
+CLEAR_LONGHORN=true KITE_CLUSTER=k3s ./clear.sh
 ```
 
 `CLEAR_LONGHORN=true` uninstalls Longhorn only when no Longhorn PV remains. If
@@ -80,5 +81,5 @@ confirmation flag. This can be used without uninstalling Longhorn, but the
 script skips data deletion while Longhorn PVs still exist.
 
 ```sh
-CLEAR_LONGHORN_DATA=true CLEAR_LONGHORN_DATA_CONFIRM=true KITE_CLUSTER=k3s build/dev/clear.sh
+CLEAR_LONGHORN_DATA=true CLEAR_LONGHORN_DATA_CONFIRM=true KITE_CLUSTER=k3s ./clear.sh
 ```
