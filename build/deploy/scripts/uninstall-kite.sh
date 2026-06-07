@@ -104,7 +104,7 @@ main() {
 
   log "deleting remaining Kite namespace and cluster-scoped resources"
   kubectl delete namespace "${KITE_NAMESPACE}" --ignore-not-found=true
-  kubectl delete crd kiteusers.anacnu.com kitevirtualmachines.anacnu.com --ignore-not-found=true
+  kubectl delete crd kiteusers.hy3ons.github.io kitevirtualmachines.hy3ons.github.io --ignore-not-found=true
   kubectl delete clusterrole kite-control-plane-role --ignore-not-found=true
   kubectl delete clusterrolebinding kite-control-plane-binding --ignore-not-found=true
 

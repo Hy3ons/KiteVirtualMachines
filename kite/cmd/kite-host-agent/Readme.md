@@ -128,10 +128,10 @@ sequenceDiagram
 ```yaml
 metadata:
   labels:
-    kite.anacnu.com/managed-by: kite-controller
-    kite.anacnu.com/kite-secret-type: vm-ssh-key
-    kite.anacnu.com/kite-vm-name: <vmName>
-    kite.anacnu.com/kite-vm-namespace: <vmNamespace>
+    hy3ons.github.io/managed-by: kite-controller
+    hy3ons.github.io/kite-secret-type: vm-ssh-key
+    hy3ons.github.io/kite-vm-name: <vmName>
+    hy3ons.github.io/kite-vm-namespace: <vmNamespace>
 ```
 
 ## Host Account Ensure

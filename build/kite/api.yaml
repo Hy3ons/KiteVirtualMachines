@@ -18,7 +18,7 @@ spec:
       serviceAccountName: kite-control-plane
       containers:
         - name: kite-api
-          image: anacnu.com/kite-api:latest
+          image: ghcr.io/hy3ons/kite-api:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080

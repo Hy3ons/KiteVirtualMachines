@@ -94,7 +94,7 @@ func userReconcileListKinds() map[schema.GroupVersionResource]string {
 func newUserReconcileKiteUser(name string, namespace string, observedNamespace string) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
 		Object: map[string]any{
-			"apiVersion": "anacnu.com/v1",
+			"apiVersion": "hy3ons.github.io/v1",
 			"kind":       "KiteUser",
 			"metadata": map[string]any{
 				"name":       name,

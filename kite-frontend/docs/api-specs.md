@@ -24,7 +24,7 @@
     {
       "id": "uuid",
       "name": "dev-vm-1",
-      "domain": "dev.anacnu.com",
+      "domain": "dev.hy3ons.github.io",
       "phase": "Running",
       "cpu": 2,
       "memory": "4Gi",
@@ -48,7 +48,7 @@
 ## 3. 관리자 대시보드 (Admin Dashboard)
 
 ### 3-1. 전역 도메인 설정 (`POST /api/v1/admin/domain`)
-- **Request Body**: `{ "baseDomain": "anacnu.com" }`
+- **Request Body**: `{ "baseDomain": "hy3ons.github.io" }`
 - **Description**: `etcd` 또는 K8s ConfigMap에 클러스터 베이스 도메인을 저장/수정합니다.
 
 ### 3-2. 와일드카드 인증서 갱신 (`POST /api/v1/admin/cert`)

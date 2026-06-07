@@ -213,7 +213,7 @@ func kiteOwnerLabels(namespace string, name string) map[string]any {
 func newMachineReconcileKiteVirtualMachine(namespace string, name string, deleteIntent bool) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
 		Object: map[string]any{
-			"apiVersion": "anacnu.com/v1",
+			"apiVersion": "hy3ons.github.io/v1",
 			"kind":       "KiteVirtualMachine",
 			"metadata": map[string]any{
 				"name":      name,
@@ -233,7 +233,7 @@ func newMachineReconcileKiteVirtualMachine(namespace string, name string, delete
 func newMachineReconcileKiteVirtualMachineSpec(namespace string, name string) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
 		Object: map[string]any{
-			"apiVersion": "anacnu.com/v1",
+			"apiVersion": "hy3ons.github.io/v1",
 			"kind":       "KiteVirtualMachine",
 			"metadata": map[string]any{
 				"name":       name,

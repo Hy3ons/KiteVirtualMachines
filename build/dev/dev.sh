@@ -18,7 +18,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 KITE_NAMESPACE="${KITE_NAMESPACE:-kite}"
 KITE_CLUSTER="${KITE_CLUSTER:-auto}"
-IMAGE_REGISTRY="${IMAGE_REGISTRY:-anacnu.com}"
+IMAGE_REGISTRY="${IMAGE_REGISTRY:-ghcr.io/hy3ons}"
 IMAGE_TAG="${IMAGE_TAG:-dev-$(date +%Y%m%d%H%M%S)}"
 KITE_MANIFEST_DIR="${ROOT_DIR}/build/kite"
 KUSTOMIZE_OVERLAY_DIR="$(mktemp -d "${ROOT_DIR}/build/dev/.kustomize.XXXXXX")"
@@ -329,16 +329,16 @@ resources:
   - ../../kite
 
 images:
-  - name: anacnu.com/kite-api
+  - name: ghcr.io/hy3ons/kite-api
     newName: ${IMAGE_REGISTRY}/kite-api
     newTag: ${IMAGE_TAG}
-  - name: anacnu.com/kite-controller
+  - name: ghcr.io/hy3ons/kite-controller
     newName: ${IMAGE_REGISTRY}/kite-controller
     newTag: ${IMAGE_TAG}
-  - name: anacnu.com/kite-host-agent
+  - name: ghcr.io/hy3ons/kite-host-agent
     newName: ${IMAGE_REGISTRY}/kite-host-agent
     newTag: ${IMAGE_TAG}
-  - name: anacnu.com/kite-frontend
+  - name: ghcr.io/hy3ons/kite-frontend
     newName: ${IMAGE_REGISTRY}/kite-frontend
     newTag: ${IMAGE_TAG}
 

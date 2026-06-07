@@ -33,7 +33,7 @@ import (
 )
 
 var kiteVirtualMachineGVR = schema.GroupVersionResource{
-	Group:    "anacnu.com",
+	Group:    "hy3ons.github.io",
 	Version:  "v1",
 	Resource: "kitevirtualmachines",
 }
@@ -75,7 +75,7 @@ var configMapGVR = schema.GroupVersionResource{
 }
 
 const (
-	kiteVirtualMachineCleanupFinalizer = "kite.anacnu.com/kite-vm-cleanup"
+	kiteVirtualMachineCleanupFinalizer = "hy3ons.github.io/kite-vm-cleanup"
 	kiteVirtualMachineStatusManager    = "kite-controller-vm-status"
 	kiteVirtualMachineApplyManager     = "kite-controller-vm-reconciler"
 	kiteVMPhaseProvisioning            = "Provisioning"
@@ -93,7 +93,7 @@ const (
 	kiteGlobalBaseDomainKey            = "baseDomain"
 	kiteGlobalVMStorageClassNameKey    = "vmStorageClassName"
 	kiteDefaultVMStorageClassName      = "kite-vm-storage"
-	kiteSecretTypeLabel                = "kite.anacnu.com/kite-secret-type"
+	kiteSecretTypeLabel                = "hy3ons.github.io/kite-secret-type"
 	kiteVMSSHKeySecretType             = "vm-ssh-key"
 	vmSSHPrivateKeyName                = "id_rsa"
 	vmSSHPublicKeyName                 = "id_rsa.pub"
@@ -810,7 +810,7 @@ func resourceOwnedByKiteVirtualMachine(obj *unstructured.Unstructured, ownerName
 
 // updateKiteVirtualMachineStatus writes controller-observed state back to a KiteVirtualMachine CRD.
 // ctx controls Kubernetes API get and status update calls.
-// dynamicClient updates anacnu.com/v1 kitevirtualmachines through the status subresource.
+// dynamicClient updates hy3ons.github.io/v1 kitevirtualmachines through the status subresource.
 // vm identifies the CRD and provides the metadata generation used as observedGeneration.
 func updateKiteVirtualMachineStatus(ctx context.Context, dynamicClient dynamic.Interface, vm *kite.KiteVirtualMachine, phase string, powerState string, domain string, nodeName string, conditionStatus metav1.ConditionStatus, reason string, message string) error {
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -992,7 +992,7 @@ func sshKeySecretName(vmName string) string {
 
 // updateKiteVirtualMachineFinalizers updates finalizers on one KiteVirtualMachine CRD.
 // ctx controls the Kubernetes API update request.
-// dynamicClient writes anacnu.com/v1 kitevirtualmachines in the resource namespace.
+// dynamicClient writes hy3ons.github.io/v1 kitevirtualmachines in the resource namespace.
 // resource is copied so the informer cache object is not mutated unexpectedly.
 // finalizers is the complete replacement finalizer list.
 func updateKiteVirtualMachineFinalizers(ctx context.Context, dynamicClient dynamic.Interface, resource *unstructured.Unstructured, finalizers []string) error {
@@ -1032,7 +1032,7 @@ func removeKiteVirtualMachineFinalizer(finalizers []string) []string {
 
 // deleteKiteVirtualMachineCRD deletes the KiteVirtualMachine CRD after real resources are gone.
 // ctx controls the Kubernetes API delete request.
-// dynamicClient deletes anacnu.com/v1 kitevirtualmachines in the same namespace.
+// dynamicClient deletes hy3ons.github.io/v1 kitevirtualmachines in the same namespace.
 // NotFound is treated as success because another reconcile pass may have already removed the CRD.
 func deleteKiteVirtualMachineCRD(ctx context.Context, dynamicClient dynamic.Interface, namespace string, name string) error {
 	err := dynamicClient.Resource(kiteVirtualMachineGVR).Namespace(namespace).Delete(ctx, name, metav1.DeleteOptions{})

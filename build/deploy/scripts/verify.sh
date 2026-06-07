@@ -57,8 +57,8 @@ main() {
   kubectl get pods -n cdi
 
   log "checking Kite APIs"
-  kubectl get crd kiteusers.anacnu.com
-  kubectl get crd kitevirtualmachines.anacnu.com
+  kubectl get crd kiteusers.hy3ons.github.io
+  kubectl get crd kitevirtualmachines.hy3ons.github.io
 
   log "checking Kite workloads"
   kubectl -n "${KITE_NAMESPACE}" rollout status deployment/kite-api --timeout=180s

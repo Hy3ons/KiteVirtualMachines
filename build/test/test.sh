@@ -42,8 +42,8 @@ echo "[kite] checking namespace"
 kubectl get namespace "${KITE_NAMESPACE}" >/dev/null
 
 echo "[kite] checking CRDs"
-kubectl get crd kiteusers.anacnu.com >/dev/null
-kubectl get crd kitevirtualmachines.anacnu.com >/dev/null
+kubectl get crd kiteusers.hy3ons.github.io >/dev/null
+kubectl get crd kitevirtualmachines.hy3ons.github.io >/dev/null
 
 echo "[kite] checking deployments"
 kubectl -n "${KITE_NAMESPACE}" rollout status deployment/kite-api --timeout=120s
@@ -79,6 +79,6 @@ echo "${login_response}"
 echo
 
 echo "[kite] checking created KiteUser"
-kubectl get kiteusers.anacnu.com
+kubectl get kiteusers.hy3ons.github.io
 
 echo "[kite] smoke test complete"

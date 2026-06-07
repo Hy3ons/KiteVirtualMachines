@@ -27,10 +27,10 @@ const (
 	resyncPeriod              = time.Second * 30
 	localGCPeriod             = time.Second * 60
 	crdMissingSweepThreshold  = 5
-	kiteManagedByLabel        = "kite.anacnu.com/managed-by"
-	kiteVMNameLabel           = "kite.anacnu.com/kite-vm-name"
-	kiteVMNamespaceLabel      = "kite.anacnu.com/kite-vm-namespace"
-	kiteSecretTypeLabel       = "kite.anacnu.com/kite-secret-type"
+	kiteManagedByLabel        = "hy3ons.github.io/managed-by"
+	kiteVMNameLabel           = "hy3ons.github.io/kite-vm-name"
+	kiteVMNamespaceLabel      = "hy3ons.github.io/kite-vm-namespace"
+	kiteSecretTypeLabel       = "hy3ons.github.io/kite-secret-type"
 	kiteControllerLabel       = "kite-controller"
 	kiteVMSSHKeySecretType    = "vm-ssh-key"
 	sshServiceNamePrefix      = "vps-access-"
@@ -42,7 +42,7 @@ const (
 
 var (
 	kiteVirtualMachineGVR = schema.GroupVersionResource{
-		Group:    "anacnu.com",
+		Group:    "hy3ons.github.io",
 		Version:  "v1",
 		Resource: "kitevirtualmachines",
 	}
@@ -411,7 +411,7 @@ func kiteVirtualMachineFromEvent(eventObj interface{}) (*kitev1.KiteVirtualMachi
 }
 
 // kiteVirtualMachineFromUnstructured converts a KiteVM unstructured object into the local API struct.
-// resource is the current anacnu.com/v1 KiteVirtualMachine object.
+// resource is the current hy3ons.github.io/v1 KiteVirtualMachine object.
 // The returned struct is used by informer and GC reconcile paths.
 func kiteVirtualMachineFromUnstructured(resource *unstructured.Unstructured) (*kitev1.KiteVirtualMachine, error) {
 	var vm kitev1.KiteVirtualMachine

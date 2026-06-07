@@ -1,9 +1,9 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: kiteusers.anacnu.com
+  name: kiteusers.hy3ons.github.io
 spec:
-  group: anacnu.com
+  group: hy3ons.github.io
   versions:
     - name: v1
       served: true
@@ -115,9 +115,9 @@ spec:
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: kitevirtualmachines.anacnu.com
+  name: kitevirtualmachines.hy3ons.github.io
 spec:
-  group: anacnu.com
+  group: hy3ons.github.io
   versions:
     - name: v1
       served: true

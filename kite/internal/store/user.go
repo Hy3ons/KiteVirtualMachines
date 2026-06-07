@@ -96,7 +96,7 @@ func (s *UserStore) Delete(ctx context.Context, name string) error {
 func newKiteUserObject(record KiteUserRecord) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
 		Object: map[string]any{
-			"apiVersion": "anacnu.com/v1",
+			"apiVersion": "hy3ons.github.io/v1",
 			"kind":       "KiteUser",
 			"metadata": map[string]any{
 				"name": record.Name,

@@ -4,4 +4,4 @@ metadata:
   name: kite
   labels:
     app.kubernetes.io/name: kite
-    kite.anacnu.com/managed-by: kite-install
+    hy3ons.github.io/managed-by: kite-install

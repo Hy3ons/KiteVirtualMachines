@@ -243,7 +243,7 @@ func newEmptyUserTestRouter(t *testing.T) http.Handler {
 func newUserTestObject(name string, username string, namespace string, accessLevel int) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
 		Object: map[string]any{
-			"apiVersion": "anacnu.com/v1",
+			"apiVersion": "hy3ons.github.io/v1",
 			"kind":       "KiteUser",
 			"metadata": map[string]any{
 				"name": name,
@@ -263,7 +263,7 @@ func newUserTestObject(name string, username string, namespace string, accessLev
 func newVirtualMachineTestObject(name string, namespace string) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
 		Object: map[string]any{
-			"apiVersion": "anacnu.com/v1",
+			"apiVersion": "hy3ons.github.io/v1",
 			"kind":       "KiteVirtualMachine",
 			"metadata": map[string]any{
 				"name":      name,
@@ -292,7 +292,7 @@ func newTestTokenService(t *testing.T) *auth.TokenService {
 }
 
 var userTestVirtualMachineGVR = schema.GroupVersionResource{
-	Group:    "anacnu.com",
+	Group:    "hy3ons.github.io",
 	Version:  "v1",
 	Resource: "kitevirtualmachines",
 }

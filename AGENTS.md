@@ -65,12 +65,12 @@ Current custom resources:
   - CRD file: `build/kite/crds.yaml`
   - scope: `Cluster`
   - resource: `kiteusers`
-  - group/version: `anacnu.com/v1`
+  - group/version: `hy3ons.github.io/v1`
 - `KiteVirtualMachine`
   - CRD file: `build/kite/crds.yaml`
   - scope: `Namespaced`
   - resource: `kitevirtualmachines`
-  - group/version: `anacnu.com/v1`
+  - group/version: `hy3ons.github.io/v1`
 
 Do not run `protoc` or commit generated protobuf files.
 
@@ -93,7 +93,7 @@ When creating Kite custom resources, use these GVR values:
 
 ```go
 schema.GroupVersionResource{
-	Group:    "anacnu.com",
+	Group:    "hy3ons.github.io",
 	Version:  "v1",
 	Resource: "kiteusers",
 }
@@ -101,7 +101,7 @@ schema.GroupVersionResource{
 
 ```go
 schema.GroupVersionResource{
-	Group:    "anacnu.com",
+	Group:    "hy3ons.github.io",
 	Version:  "v1",
 	Resource: "kitevirtualmachines",
 }

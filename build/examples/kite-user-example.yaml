@@ -1,4 +1,4 @@
-apiVersion: anacnu.com/v1
+apiVersion: hy3ons.github.io/v1
 kind: KiteUser
 metadata:
   name: example-user1

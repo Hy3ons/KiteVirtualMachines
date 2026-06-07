@@ -12,13 +12,13 @@ import (
 const defaultTimeout = 3 * time.Second
 
 var kiteUserGVR = schema.GroupVersionResource{
-	Group:    "anacnu.com",
+	Group:    "hy3ons.github.io",
 	Version:  "v1",
 	Resource: "kiteusers",
 }
 
 var kiteVirtualMachineGVR = schema.GroupVersionResource{
-	Group:    "anacnu.com",
+	Group:    "hy3ons.github.io",
 	Version:  "v1",
 	Resource: "kitevirtualmachines",
 }

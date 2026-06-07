@@ -9,7 +9,7 @@ interface SEOProps {
 
 export const SEO: React.FC<SEOProps> = ({ title, description, url }) => {
   const defaultDescription = "Kubernetes 기반의 안전하고 빠른 가상머신 프로비저닝 플랫폼, Kite.";
-  const siteUrl = "https://kite.anacnu.com"; // Replace with actual production domain when deployed
+  const siteUrl = "https://hy3ons.github.io"; // Replace with actual production domain when deployed
 
   return (
     <Helmet>

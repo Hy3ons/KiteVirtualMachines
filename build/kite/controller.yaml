@@ -18,5 +18,5 @@ spec:
       serviceAccountName: kite-control-plane
       containers:
         - name: kite-controller
-          image: anacnu.com/kite-controller:latest
+          image: ghcr.io/hy3ons/kite-controller:latest
           imagePullPolicy: IfNotPresent

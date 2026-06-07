@@ -14,7 +14,7 @@ Kite Frontend는 쿠버네티스 기반의 가상머신(VM) 및 인프라 프로
 - **Deployment & Serving**: Docker Multi-stage Build 적용
   - 빌드 단계: `node:20-alpine` 환경에서 정적(Static) 파일 빌드
   - 서빙 단계: `nginx:alpine`을 이용하여 빌드된 정적 파일을 80번 포트로 서빙
-- 이 프론트엔드는 쿠버네티스에서 `anacnu.com/kite-frontend:latest` 이미지 기반의 Deployment(`replicas: 1`)로 실행됩니다.
+- 이 프론트엔드는 쿠버네티스에서 `ghcr.io/hy3ons/kite-frontend:latest` 이미지 기반의 Deployment(`replicas: 1`)로 실행됩니다.
 
 ## 3. Directory Structure & `docs`
 프로젝트의 구조 및 특히 `docs` 폴더가 어떤 역할을 하는지 알아두어야 합니다.

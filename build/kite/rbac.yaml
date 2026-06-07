@@ -3,7 +3,7 @@ kind: ClusterRole
 metadata:
   name: kite-control-plane-role
 rules:
-  - apiGroups: ["anacnu.com"]
+  - apiGroups: ["hy3ons.github.io"]
     resources: ["kiteusers", "kiteusers/status", "kitevirtualmachines", "kitevirtualmachines/status"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: [""]

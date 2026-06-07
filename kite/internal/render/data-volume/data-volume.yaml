@@ -5,9 +5,9 @@ metadata:
   name: {{ .VmName }}-disk
   namespace: {{ .Namespace }}
   labels:
-    kite.anacnu.com/managed-by: kite-controller
-    kite.anacnu.com/kite-vm-name: {{ .VmName }}
-    kite.anacnu.com/kite-vm-namespace: {{ .Namespace }}
+    hy3ons.github.io/managed-by: kite-controller
+    hy3ons.github.io/kite-vm-name: {{ .VmName }}
+    hy3ons.github.io/kite-vm-namespace: {{ .Namespace }}
 
 spec:
   source:

@@ -20,9 +20,9 @@ import (
 )
 
 const (
-	kiteManagedByLabel     = "kite.anacnu.com/managed-by"
-	kiteVMNameLabel        = "kite.anacnu.com/kite-vm-name"
-	kiteVMNamespaceLabel   = "kite.anacnu.com/kite-vm-namespace"
+	kiteManagedByLabel     = "hy3ons.github.io/managed-by"
+	kiteVMNameLabel        = "hy3ons.github.io/kite-vm-name"
+	kiteVMNamespaceLabel   = "hy3ons.github.io/kite-vm-namespace"
 	kiteControllerLabel    = "kite-controller"
 	kubeVirtStatusUnknown  = "Unknown"
 	kubeVirtStatusRunning  = "Running"

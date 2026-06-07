@@ -5,7 +5,7 @@ metadata:
   namespace: longhorn-system
   labels:
     app.kubernetes.io/name: kite-longhorn-disk-directory
-    kite.anacnu.com/managed-by: kite-storage
+    hy3ons.github.io/managed-by: kite-storage
 spec:
   selector:
     matchLabels:
@@ -14,7 +14,7 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: kite-longhorn-disk-directory
-        kite.anacnu.com/managed-by: kite-storage
+        hy3ons.github.io/managed-by: kite-storage
     spec:
       hostPID: true
       tolerations:

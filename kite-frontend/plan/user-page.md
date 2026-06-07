@@ -21,7 +21,7 @@
 ### B. 가상머신 생성 (Modal 창 또는 서랍 UI)
 - **입력 항목 (유저가 직접 작성)**:
   - **이름 (Name)**: 인스턴스 이름 (영문 소문자/숫자 조합)
-  - **도메인 프리픽스 (Domain Prefix)**: 웹 접속용 서브도메인 프리픽스 (예: `my-dev` 입력 시 `my-dev.anacnu.com`으로 맵핑됨)
+  - **도메인 프리픽스 (Domain Prefix)**: 웹 접속용 서브도메인 프리픽스 (예: `my-dev` 입력 시 `my-dev.hy3ons.github.io`으로 맵핑됨)
   - **SSH 접속 정보**: VM 접속을 위한 계정 ID와 Password (또는 SSH Key) 입력
   - **Disk (Storage)**: 기본 제공 `25Gi`. `access_level`에 따라 유동적으로 입력 허용. (백엔드 검증 필수)
 - **고정 항목 (화면에서 변경 불가/숨김)**:

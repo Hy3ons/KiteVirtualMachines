@@ -1,4 +1,4 @@
-apiVersion: anacnu.com/v1
+apiVersion: hy3ons.github.io/v1
 kind: KiteVirtualMachine
 metadata:
   name: test-kite-vm

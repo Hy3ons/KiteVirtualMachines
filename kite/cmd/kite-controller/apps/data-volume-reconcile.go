@@ -194,7 +194,7 @@ func dataVolumeStatusMessage(dataVolume *unstructured.Unstructured) string {
 
 // updateKiteVirtualMachineDataVolumeStatus writes DataVolume fields into one KiteVirtualMachine status.
 // ctx controls Kubernetes API get and status update calls.
-// dynamicClient updates anacnu.com/v1 kitevirtualmachines through the status subresource.
+// dynamicClient updates hy3ons.github.io/v1 kitevirtualmachines through the status subresource.
 // vm identifies the CRD whose DataVolume status should be updated.
 func updateKiteVirtualMachineDataVolumeStatus(ctx context.Context, dynamicClient dynamic.Interface, vm *kite.KiteVirtualMachine, dataVolumePhase string, dataVolumeProgress string, dataVolumeMessage string, overallPhase string, conditionStatus metav1.ConditionStatus, reason string) error {
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {

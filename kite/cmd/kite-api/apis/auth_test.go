@@ -119,7 +119,7 @@ func newTestRouter(t *testing.T) http.Handler {
 }
 
 var userTestGVR = schema.GroupVersionResource{
-	Group:    "anacnu.com",
+	Group:    "hy3ons.github.io",
 	Version:  "v1",
 	Resource: "kiteusers",
 }
@@ -127,7 +127,7 @@ var userTestGVR = schema.GroupVersionResource{
 func newLoginTestUser(username string, passwordHash string, accessLevel int) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
 		Object: map[string]any{
-			"apiVersion": "anacnu.com/v1",
+			"apiVersion": "hy3ons.github.io/v1",
 			"kind":       "KiteUser",
 			"metadata": map[string]any{
 				"name": username,

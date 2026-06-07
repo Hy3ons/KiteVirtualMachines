@@ -72,13 +72,13 @@ func newHealthTestRouter(t *testing.T, dynamicClient dynamic.Interface) http.Han
 }
 
 var healthTestKiteUserGVR = schema.GroupVersionResource{
-	Group:    "anacnu.com",
+	Group:    "hy3ons.github.io",
 	Version:  "v1",
 	Resource: "kiteusers",
 }
 
 var healthTestKiteVirtualMachineGVR = schema.GroupVersionResource{
-	Group:    "anacnu.com",
+	Group:    "hy3ons.github.io",
 	Version:  "v1",
 	Resource: "kitevirtualmachines",
 }

@@ -37,13 +37,13 @@ const (
 	kiteUserReasonFailed       = "ReconcileFailed"
 	kiteUserReadyMessage       = "user namespace, network policies, and resource quota are ready"
 	kiteUserStatusFieldManager = "kite-controller-user-status"
-	kiteNamespaceManagedByKey  = "kite.anacnu.com/managed-by"
+	kiteNamespaceManagedByKey  = "hy3ons.github.io/managed-by"
 	kiteNamespaceManagedBy     = "kite-controller"
 )
 
 var (
 	kiteUserGVR = schema.GroupVersionResource{
-		Group:    "anacnu.com",
+		Group:    "hy3ons.github.io",
 		Version:  "v1",
 		Resource: "kiteusers",
 	}

@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: kite-frontend
-          image: anacnu.com/kite-frontend:latest
+          image: ghcr.io/hy3ons/kite-frontend:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80

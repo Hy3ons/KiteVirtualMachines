@@ -34,5 +34,5 @@ docker build \
   --build-arg VITE_BUILD_MODE=production \
   --build-arg VITE_API_BASE_URL=/api/v1 \
   --build-arg VITE_USE_MOCK=false \
-  -t anacnu.com/kite-frontend:latest .
+  -t ghcr.io/hy3ons/kite-frontend:latest .
 ```

@@ -4,8 +4,8 @@ metadata:
   name: kite-platform
   namespace: {{ .Namespace }}
   labels:
-    kite.anacnu.com/managed-by: kite-controller
-    kite.anacnu.com/platform-ingress: "true"
+    hy3ons.github.io/managed-by: kite-controller
+    hy3ons.github.io/platform-ingress: "true"
 
 spec:
   rules:

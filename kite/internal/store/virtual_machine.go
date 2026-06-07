@@ -111,7 +111,7 @@ func (s *VirtualMachineStore) Delete(ctx context.Context, namespace string, name
 func newKiteVirtualMachineObject(record KiteVirtualMachineRecord) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
 		Object: map[string]any{
-			"apiVersion": "anacnu.com/v1",
+			"apiVersion": "hy3ons.github.io/v1",
 			"kind":       "KiteVirtualMachine",
 			"metadata": map[string]any{
 				"name":      record.Name,

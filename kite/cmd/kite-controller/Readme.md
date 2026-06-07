@@ -17,7 +17,7 @@ Kite Controller는 Kite CRD를 감시하고 실제 Kubernetes/KubeVirt 리소스
 ## 현재 상태
 
 - Kubernetes 클러스터 연결 코드가 있습니다.
-- `kitevirtualmachines.anacnu.com/v1` 리소스를 감시하는 informer 초안이 있습니다.
+- `kitevirtualmachines.hy3ons.github.io/v1` 리소스를 감시하는 informer 초안이 있습니다.
 - gRPC 서버 초안이 남아 있지만 설계상 폐기 대상입니다.
 - 실제 reconcile 로직은 아직 대부분 구현해야 합니다.
 
