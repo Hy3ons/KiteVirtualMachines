@@ -1,6 +1,7 @@
 # Kite
-
-<img width="250" height="250" alt="Kite" src="https://github.com/user-attachments/assets/98cc9bf6-5876-40cf-8c49-014421cdf7ee" />
+<div align="center">
+  <img width="250" height="250" alt="Kite" src="https://github.com/user-attachments/assets/98cc9bf6-5876-40cf-8c49-014421cdf7ee" />
+</div>
 
 Kite는 Kubernetes 클러스터 위에서 사용자별 KubeVirt 가상 머신을 생성하고 운영하기 위한 컨트롤 플레인입니다.
 
