@@ -67,6 +67,11 @@ and local Kite images through `build/dev/clear.sh`.
 KITE_CLUSTER=k3s ./clear.sh
 ```
 
+Host account cleanup is enabled by default. Before stopping `kite-host-agent`,
+the script removes Kite-managed Linux users and `/var/lib/kite/accounts/*.json`
+metadata by using the metadata files as the ownership source. Set
+`CLEAR_HOST_ACCOUNTS=false` to skip this host account cleanup.
+
 Longhorn cleanup is disabled by default because it deletes VM disk data.
 
 ```sh

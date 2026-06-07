@@ -28,6 +28,7 @@ CLEAR_LONGHORN_DATA_CONFIRM="${CLEAR_LONGHORN_DATA_CONFIRM:-false}"
 KITE_LONGHORN_DISK_NAME="${KITE_LONGHORN_DISK_NAME:-kite-longhorn}"
 KITE_LONGHORN_DISK_TAG="${KITE_LONGHORN_DISK_TAG:-kite}"
 CLEAR_HOST_DNS="${CLEAR_HOST_DNS:-true}"
+CLEAR_HOST_ACCOUNTS="${CLEAR_HOST_ACCOUNTS:-true}"
 
 log() {
   echo "[kite] $*"
@@ -82,6 +83,7 @@ delete_kite_resources() {
   remove_kite_longhorn_disks
 
   reset_kite_host_dns
+  clear_kite_host_accounts
 
   log "stopping Kite workloads"
   kubectl delete -f "${ROOT_DIR}/build/kite/host-agent.yaml" --ignore-not-found=true --wait=false || true
@@ -126,6 +128,41 @@ reset_kite_host_dns() {
               resolvectl revert "$iface" >/dev/null 2>&1 || true
             fi
           fi
+        ' >/dev/null 2>&1 || true
+      done
+}
+
+clear_kite_host_accounts() {
+  if [[ "${CLEAR_HOST_ACCOUNTS}" != "true" ]]; then
+    log "skipping host account cleanup because CLEAR_HOST_ACCOUNTS=${CLEAR_HOST_ACCOUNTS}"
+    return
+  fi
+  if ! kubectl -n "${KITE_NAMESPACE}" get pods -l app=kite-host-agent >/dev/null 2>&1; then
+    return
+  fi
+
+  log "removing Kite-managed host accounts and metadata"
+  kubectl -n "${KITE_NAMESPACE}" get pods -l app=kite-host-agent -o name 2>/dev/null \
+    | while read -r pod; do
+        [[ -z "${pod}" ]] && continue
+        kubectl -n "${KITE_NAMESPACE}" exec "${pod}" -- nsenter -t 1 -m -u -i -n -p -- sh -c '
+          account_root="/var/lib/kite/accounts"
+          [ -d "$account_root" ] || exit 0
+
+          for metadata in "$account_root"/*.json; do
+            [ -e "$metadata" ] || continue
+            username="${metadata##*/}"
+            username="${username%.json}"
+            if ! printf "%s\n" "$username" | grep -Eq "^[a-z_][a-z0-9_-]{0,31}$"; then
+              continue
+            fi
+
+            pkill -KILL -u "$username" >/dev/null 2>&1 || true
+            userdel -r "$username" >/dev/null 2>&1 || true
+            rm -f "$metadata"
+          done
+
+          rmdir "$account_root" /var/lib/kite 2>/dev/null || true
         ' >/dev/null 2>&1 || true
       done
 }

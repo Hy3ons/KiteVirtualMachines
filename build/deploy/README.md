@@ -59,6 +59,11 @@ build/deploy/scripts/uninstall-kite.sh
 Set `DELETE_GOLDEN_IMAGE=true` to explicitly delete the imported golden image
 DataVolume and PVC before removing the namespace.
 
+Host account cleanup is enabled by default. Before deleting the Kite manifests,
+the script removes Kite-managed Linux users and `/var/lib/kite/accounts/*.json`
+metadata by using the metadata files as the ownership source. Set
+`DELETE_HOST_ACCOUNTS=false` to skip this host account cleanup.
+
 Longhorn removal is opt-in because it deletes VM disk infrastructure:
 
 ```sh
