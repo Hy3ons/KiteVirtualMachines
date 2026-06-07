@@ -21,6 +21,7 @@ KITE_CLUSTER="${KITE_CLUSTER:-auto}"
 IMAGE_REGISTRY="${IMAGE_REGISTRY:-anacnu.com}"
 IMAGE_TAG="${IMAGE_TAG:-dev-$(date +%Y%m%d%H%M%S)}"
 KITE_MANIFEST_DIR="${ROOT_DIR}/build/kite"
+KUSTOMIZE_OVERLAY_DIR="$(mktemp -d "${ROOT_DIR}/build/dev/.kustomize.XXXXXX")"
 RENDERED_MANIFEST="$(mktemp "${TMPDIR:-/tmp}/kite-install.XXXXXX.yaml")"
 PUSH_IMAGES="${PUSH_IMAGES:-false}"
 FRONTEND_VITE_BUILD_MODE="${FRONTEND_VITE_BUILD_MODE:-production}"
@@ -46,6 +47,7 @@ KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-}"
 KIND_LOAD_IMAGES="${KIND_LOAD_IMAGES:-true}"
 
 cleanup() {
+  rm -rf "${KUSTOMIZE_OVERLAY_DIR}"
   rm -f "${RENDERED_MANIFEST}"
 }
 trap cleanup EXIT
@@ -322,13 +324,91 @@ render_manifest() {
   log "rendering manifest with image tag ${IMAGE_TAG}"
 
   require_command kubectl
-  kubectl kustomize "${KITE_MANIFEST_DIR}" | sed \
-    -e "s#anacnu.com/kite-api:latest#$(image_name kite-api)#g" \
-    -e "s#anacnu.com/kite-controller:latest#$(image_name kite-controller)#g" \
-    -e "s#anacnu.com/kite-host-agent:latest#$(image_name kite-host-agent)#g" \
-    -e "s#anacnu.com/kite-frontend:latest#$(image_name kite-frontend)#g" \
-    -e "s#imagePullPolicy: IfNotPresent#imagePullPolicy: ${pull_policy}#g" \
-    > "${RENDERED_MANIFEST}"
+  cat > "${KUSTOMIZE_OVERLAY_DIR}/kustomization.yaml" <<EOF
+resources:
+  - ../../kite
+
+images:
+  - name: anacnu.com/kite-api
+    newName: ${IMAGE_REGISTRY}/kite-api
+    newTag: ${IMAGE_TAG}
+  - name: anacnu.com/kite-controller
+    newName: ${IMAGE_REGISTRY}/kite-controller
+    newTag: ${IMAGE_TAG}
+  - name: anacnu.com/kite-host-agent
+    newName: ${IMAGE_REGISTRY}/kite-host-agent
+    newTag: ${IMAGE_TAG}
+  - name: anacnu.com/kite-frontend
+    newName: ${IMAGE_REGISTRY}/kite-frontend
+    newTag: ${IMAGE_TAG}
+
+patches:
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: kite-api
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: kite-api
+      spec:
+        template:
+          spec:
+            containers:
+              - name: kite-api
+                imagePullPolicy: ${pull_policy}
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: kite-controller
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: kite-controller
+      spec:
+        template:
+          spec:
+            containers:
+              - name: kite-controller
+                imagePullPolicy: ${pull_policy}
+  - target:
+      group: apps
+      version: v1
+      kind: DaemonSet
+      name: kite-host-agent
+    patch: |-
+      apiVersion: apps/v1
+      kind: DaemonSet
+      metadata:
+        name: kite-host-agent
+      spec:
+        template:
+          spec:
+            containers:
+              - name: kite-host-agent
+                imagePullPolicy: ${pull_policy}
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: kite-frontend
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: kite-frontend
+      spec:
+        template:
+          spec:
+            containers:
+              - name: kite-frontend
+                imagePullPolicy: ${pull_policy}
+EOF
+  kubectl kustomize "${KUSTOMIZE_OVERLAY_DIR}" > "${RENDERED_MANIFEST}"
 }
 
 apply_manifest() {
