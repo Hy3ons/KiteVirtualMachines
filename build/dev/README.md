@@ -24,6 +24,18 @@ push them when the cluster pulls from a registry:
 PUSH_IMAGES=true IMAGE_REGISTRY=registry.example.com/kite KITE_CLUSTER=k8s build/dev/dev.sh
 ```
 
+The frontend image does not read `.env.*` files. `dev.sh` injects Vite values
+through Docker build args from the current shell session:
+
+```sh
+FRONTEND_VITE_BUILD_MODE=production \
+FRONTEND_VITE_API_BASE_URL=/api/v1 \
+FRONTEND_VITE_USE_MOCK=false \
+KITE_CLUSTER=k3s build/dev/dev.sh
+```
+
+Defaults are `production`, `/api/v1`, and `false`.
+
 `clear.sh` removes Kite development resources and local Kite images.
 
 ```sh

@@ -1,12 +1,14 @@
 import { apiClient } from './axios';
 
+const useMockApi = import.meta.env.VITE_USE_MOCK === 'true';
+
 // ========================
 // Auth
 // ========================
 export const authApi = {
   login: async (credentials: any) => {
     // 로컬 DEV 환경에서 백엔드 없이 UI 퍼블리싱/수정을 위한 admin 우회 로직
-    if (import.meta.env.VITE_USE_MOCK === 'true' && credentials.email === 'admin') {
+    if (useMockApi && credentials.email === 'admin') {
       return {
         accessToken: 'dummy-admin-token',
         user: { access_level: 3, username: 'admin', namespace: 'system', profile_image: '' }
@@ -40,7 +42,7 @@ export const configApi = {
 // ========================
 export const vmApi = {
   getVms: async () => {
-    if (import.meta.env.VITE_USE_MOCK === 'true') {
+    if (useMockApi) {
       return { vms: [
         { id: '1', name: 'dev-vm-1', domain: 'dev.apps.example.com', phase: 'Running', cpu: 2, memory: '4Gi', disk: '30Gi', sshId: 'ubuntu' },
         { id: '2', name: 'test-db', domain: 'db.apps.example.com', phase: 'Stopped', cpu: 2, memory: '4Gi', disk: '50Gi', sshId: 'dbuser' },
@@ -80,7 +82,7 @@ export const vmApi = {
 // ========================
 export const adminApi = {
   getUsers: async () => {
-    if (import.meta.env.VITE_USE_MOCK === 'true') {
+    if (useMockApi) {
       return { users: [
         { username: 'admin', email: 'admin@kite.com', namespace: 'system', accessLevel: 3, status: 'Active' },
         { username: 'hyeonseok', email: 'hyeonseok@kite.com', namespace: 'hyeonseok-ns', accessLevel: 1, status: 'Active' }
@@ -104,7 +106,7 @@ export const adminApi = {
     return data;
   },
   getVms: async () => {
-    if (import.meta.env.VITE_USE_MOCK === 'true') {
+    if (useMockApi) {
       return { vms: [
         { id: '1', owner: 'hyeonseok-ns', namespace: 'hyeonseok-ns', name: 'dev-vm-1', domain: 'dev.apps.example.com', phase: 'Running', cpu: 2, memory: '4Gi' }
       ]};

@@ -4,9 +4,13 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "stage": "vite --mode staging",
-    "build": "tsc -b && vite build",
+    "dev": "VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8080/api/v1} VITE_USE_MOCK=${VITE_USE_MOCK:-true} vite --mode development",
+    "stage": "VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8080/api/v1} VITE_USE_MOCK=${VITE_USE_MOCK:-false} vite --mode staging",
+    "typecheck": "tsc -b",
+    "build": "npm run typecheck && vite build",
+    "build:dev": "VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8080/api/v1} VITE_USE_MOCK=${VITE_USE_MOCK:-true} npm run build -- --mode development",
+    "build:stage": "VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8080/api/v1} VITE_USE_MOCK=${VITE_USE_MOCK:-false} npm run build -- --mode staging",
+    "build:prod": "VITE_API_BASE_URL=${VITE_API_BASE_URL:-/api/v1} VITE_USE_MOCK=${VITE_USE_MOCK:-false} npm run build -- --mode production",
     "lint": "eslint .",
     "preview": "vite preview"
   },

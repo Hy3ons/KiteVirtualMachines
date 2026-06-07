@@ -23,6 +23,9 @@ IMAGE_TAG="${IMAGE_TAG:-dev-$(date +%Y%m%d%H%M%S)}"
 KITE_MANIFEST_DIR="${ROOT_DIR}/build/kite"
 RENDERED_MANIFEST="$(mktemp "${TMPDIR:-/tmp}/kite-install.XXXXXX.yaml")"
 PUSH_IMAGES="${PUSH_IMAGES:-false}"
+FRONTEND_VITE_BUILD_MODE="${FRONTEND_VITE_BUILD_MODE:-production}"
+FRONTEND_VITE_API_BASE_URL="${FRONTEND_VITE_API_BASE_URL:-/api/v1}"
+FRONTEND_VITE_USE_MOCK="${FRONTEND_VITE_USE_MOCK:-false}"
 
 # Minikube knobs. They are used only when KITE_CLUSTER=minikube or auto detects minikube.
 MINIKUBE_PROFILE="${MINIKUBE_PROFILE:-minikube}"
@@ -141,10 +144,12 @@ build_local_image() {
   local image="$1"
   local dockerfile="$2"
   local context="$3"
+  shift 3
+  local build_args=("$@")
 
   require_command docker
   log "building ${image}"
-  DOCKER_BUILDKIT=1 docker build --progress=plain -t "${image}" -f "${dockerfile}" "${context}"
+  DOCKER_BUILDKIT=1 docker build --progress=plain "${build_args[@]}" -t "${image}" -f "${dockerfile}" "${context}"
 }
 
 push_local_image() {
@@ -163,19 +168,23 @@ build_minikube_image_with_minikube() {
   local image="$1"
   local dockerfile="$2"
   local context="$3"
+  shift 3
+  local build_args=("$@")
 
-  minikube -p "${MINIKUBE_PROFILE}" image build -t "${image}" -f "${dockerfile}" "${context}"
+  minikube -p "${MINIKUBE_PROFILE}" image build "${build_args[@]}" -t "${image}" -f "${dockerfile}" "${context}"
 }
 
 build_minikube_image_with_docker_env() {
   local image="$1"
   local dockerfile="$2"
   local context="$3"
+  shift 3
+  local build_args=("$@")
   local status
 
   require_command docker
   eval "$(minikube -p "${MINIKUBE_PROFILE}" docker-env)"
-  if DOCKER_BUILDKIT=1 docker build --progress=plain -t "${image}" -f "${dockerfile}" "${context}"; then
+  if DOCKER_BUILDKIT=1 docker build --progress=plain "${build_args[@]}" -t "${image}" -f "${dockerfile}" "${context}"; then
     status=0
   else
     status=$?
@@ -188,8 +197,10 @@ build_minikube_image_with_local_load() {
   local image="$1"
   local dockerfile="$2"
   local context="$3"
+  shift 3
+  local build_args=("$@")
 
-  build_local_image "${image}" "${dockerfile}" "${context}"
+  build_local_image "${image}" "${dockerfile}" "${context}" "${build_args[@]}"
   minikube -p "${MINIKUBE_PROFILE}" image load "${image}"
 }
 
@@ -197,6 +208,8 @@ build_minikube_image() {
   local image="$1"
   local dockerfile="$2"
   local context="$3"
+  shift 3
+  local build_args=("$@")
   local driver
   local os_name
 
@@ -206,15 +219,15 @@ build_minikube_image() {
 
   case "${MINIKUBE_BUILD_STRATEGY}" in
     minikube)
-      build_minikube_image_with_minikube "${image}" "${dockerfile}" "${context}"
+      build_minikube_image_with_minikube "${image}" "${dockerfile}" "${context}" "${build_args[@]}"
       return
       ;;
     docker-env)
-      build_minikube_image_with_docker_env "${image}" "${dockerfile}" "${context}"
+      build_minikube_image_with_docker_env "${image}" "${dockerfile}" "${context}" "${build_args[@]}"
       return
       ;;
     local-load)
-      build_minikube_image_with_local_load "${image}" "${dockerfile}" "${context}"
+      build_minikube_image_with_local_load "${image}" "${dockerfile}" "${context}" "${build_args[@]}"
       return
       ;;
     auto)
@@ -228,26 +241,26 @@ build_minikube_image() {
   # qemu/qemu2 and macOS commonly fail when minikube image build tries to resolve /Users inside the VM.
   if [[ "${driver}" == "qemu" || "${driver}" == "qemu2" || "${os_name}" == "Darwin" ]]; then
     log "using docker-env build to avoid Minikube VM host path issues"
-    if build_minikube_image_with_docker_env "${image}" "${dockerfile}" "${context}"; then
+    if build_minikube_image_with_docker_env "${image}" "${dockerfile}" "${context}" "${build_args[@]}"; then
       return
     fi
 
     log "docker-env build failed for ${image}; retrying local build plus minikube image load"
-    build_minikube_image_with_local_load "${image}" "${dockerfile}" "${context}"
+    build_minikube_image_with_local_load "${image}" "${dockerfile}" "${context}" "${build_args[@]}"
     return
   fi
 
-  if build_minikube_image_with_minikube "${image}" "${dockerfile}" "${context}"; then
+  if build_minikube_image_with_minikube "${image}" "${dockerfile}" "${context}" "${build_args[@]}"; then
     return
   fi
 
   log "minikube image build failed for ${image}; retrying docker-env"
-  if build_minikube_image_with_docker_env "${image}" "${dockerfile}" "${context}"; then
+  if build_minikube_image_with_docker_env "${image}" "${dockerfile}" "${context}" "${build_args[@]}"; then
     return
   fi
 
   log "docker-env build failed for ${image}; retrying local build plus minikube image load"
-  build_minikube_image_with_local_load "${image}" "${dockerfile}" "${context}"
+  build_minikube_image_with_local_load "${image}" "${dockerfile}" "${context}" "${build_args[@]}"
 }
 
 load_image_into_k3s() {
@@ -355,24 +368,30 @@ build_images_for_cluster() {
   local controller_image
   local host_agent_image
   local frontend_image
+  local -a frontend_build_args
 
   api_image="$(image_name kite-api)"
   controller_image="$(image_name kite-controller)"
   host_agent_image="$(image_name kite-host-agent)"
   frontend_image="$(image_name kite-frontend)"
+  frontend_build_args=(
+    --build-arg "VITE_BUILD_MODE=${FRONTEND_VITE_BUILD_MODE}"
+    --build-arg "VITE_API_BASE_URL=${FRONTEND_VITE_API_BASE_URL}"
+    --build-arg "VITE_USE_MOCK=${FRONTEND_VITE_USE_MOCK}"
+  )
 
   case "${cluster}" in
     minikube)
       build_minikube_image "${api_image}" "${ROOT_DIR}/kite/Dockerfile.api" "${ROOT_DIR}/kite"
       build_minikube_image "${controller_image}" "${ROOT_DIR}/kite/Dockerfile.controller" "${ROOT_DIR}/kite"
       build_minikube_image "${host_agent_image}" "${ROOT_DIR}/kite/Dockerfile.host-agent" "${ROOT_DIR}/kite"
-      build_minikube_image "${frontend_image}" "${ROOT_DIR}/kite-frontend/Dockerfile" "${ROOT_DIR}/kite-frontend"
+      build_minikube_image "${frontend_image}" "${ROOT_DIR}/kite-frontend/Dockerfile" "${ROOT_DIR}/kite-frontend" "${frontend_build_args[@]}"
       ;;
     k3s)
       build_local_image "${api_image}" "${ROOT_DIR}/kite/Dockerfile.api" "${ROOT_DIR}/kite"
       build_local_image "${controller_image}" "${ROOT_DIR}/kite/Dockerfile.controller" "${ROOT_DIR}/kite"
       build_local_image "${host_agent_image}" "${ROOT_DIR}/kite/Dockerfile.host-agent" "${ROOT_DIR}/kite"
-      build_local_image "${frontend_image}" "${ROOT_DIR}/kite-frontend/Dockerfile" "${ROOT_DIR}/kite-frontend"
+      build_local_image "${frontend_image}" "${ROOT_DIR}/kite-frontend/Dockerfile" "${ROOT_DIR}/kite-frontend" "${frontend_build_args[@]}"
       load_image_into_k3s "${api_image}"
       load_image_into_k3s "${controller_image}"
       load_image_into_k3s "${host_agent_image}"
@@ -382,7 +401,7 @@ build_images_for_cluster() {
       build_local_image "${api_image}" "${ROOT_DIR}/kite/Dockerfile.api" "${ROOT_DIR}/kite"
       build_local_image "${controller_image}" "${ROOT_DIR}/kite/Dockerfile.controller" "${ROOT_DIR}/kite"
       build_local_image "${host_agent_image}" "${ROOT_DIR}/kite/Dockerfile.host-agent" "${ROOT_DIR}/kite"
-      build_local_image "${frontend_image}" "${ROOT_DIR}/kite-frontend/Dockerfile" "${ROOT_DIR}/kite-frontend"
+      build_local_image "${frontend_image}" "${ROOT_DIR}/kite-frontend/Dockerfile" "${ROOT_DIR}/kite-frontend" "${frontend_build_args[@]}"
       load_image_into_k3d "${api_image}"
       load_image_into_k3d "${controller_image}"
       load_image_into_k3d "${host_agent_image}"
@@ -392,7 +411,7 @@ build_images_for_cluster() {
       build_local_image "${api_image}" "${ROOT_DIR}/kite/Dockerfile.api" "${ROOT_DIR}/kite"
       build_local_image "${controller_image}" "${ROOT_DIR}/kite/Dockerfile.controller" "${ROOT_DIR}/kite"
       build_local_image "${host_agent_image}" "${ROOT_DIR}/kite/Dockerfile.host-agent" "${ROOT_DIR}/kite"
-      build_local_image "${frontend_image}" "${ROOT_DIR}/kite-frontend/Dockerfile" "${ROOT_DIR}/kite-frontend"
+      build_local_image "${frontend_image}" "${ROOT_DIR}/kite-frontend/Dockerfile" "${ROOT_DIR}/kite-frontend" "${frontend_build_args[@]}"
       load_image_into_kind "${api_image}"
       load_image_into_kind "${controller_image}"
       load_image_into_kind "${host_agent_image}"
@@ -402,7 +421,7 @@ build_images_for_cluster() {
       build_local_image "${api_image}" "${ROOT_DIR}/kite/Dockerfile.api" "${ROOT_DIR}/kite"
       build_local_image "${controller_image}" "${ROOT_DIR}/kite/Dockerfile.controller" "${ROOT_DIR}/kite"
       build_local_image "${host_agent_image}" "${ROOT_DIR}/kite/Dockerfile.host-agent" "${ROOT_DIR}/kite"
-      build_local_image "${frontend_image}" "${ROOT_DIR}/kite-frontend/Dockerfile" "${ROOT_DIR}/kite-frontend"
+      build_local_image "${frontend_image}" "${ROOT_DIR}/kite-frontend/Dockerfile" "${ROOT_DIR}/kite-frontend" "${frontend_build_args[@]}"
       push_local_image "${api_image}"
       push_local_image "${controller_image}"
       push_local_image "${host_agent_image}"

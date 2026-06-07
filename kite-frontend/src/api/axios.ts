@@ -2,7 +2,7 @@ import axios from 'axios';
 import { useAuthStore } from '../store/useAuthStore';
 
 export const apiClient = axios.create({
-  // 환경변수(.env.*)에 설정된 API 주소를 바라봅니다.
+  // Vite build session에 주입된 API 주소를 사용하고, 없으면 같은 origin의 kite-api로 연결합니다.
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
   headers: {
     'Content-Type': 'application/json',

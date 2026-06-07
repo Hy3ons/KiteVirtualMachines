@@ -90,6 +90,18 @@ BUILD_STRATEGY=minikube build/dev/dev.sh
 `kubernetes`, `current`를 지원합니다. 일반 Kubernetes 클러스터가 registry에서
 이미지를 pull해야 하면 `PUSH_IMAGES=true`와 `IMAGE_REGISTRY`를 함께 지정합니다.
 
+프론트엔드 빌드는 `.env.*` 파일을 사용하지 않습니다. Vite 설정은 현재 shell
+session의 환경변수나 Docker build arg로 주입합니다. 개발 배포 스크립트에서는
+아래 값을 사용할 수 있고, 기본값은 운영 배포 기준인 `production`, `/api/v1`,
+`false`입니다.
+
+```sh
+FRONTEND_VITE_BUILD_MODE=staging \
+FRONTEND_VITE_API_BASE_URL=http://localhost:8080/api/v1 \
+FRONTEND_VITE_USE_MOCK=false \
+build/dev/dev.sh
+```
+
 ## k3s 운영 설치 흐름
 
 `build/deploy/`에는 k3s에 Kite를 운영 형태로 설치하기 위한 매니페스트와 스크립트가 있습니다.

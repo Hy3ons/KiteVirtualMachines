@@ -2,13 +2,19 @@
 FROM node:20-alpine as build
 WORKDIR /app
 
+ARG VITE_BUILD_MODE=production
+ARG VITE_API_BASE_URL=/api/v1
+ARG VITE_USE_MOCK=false
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+ENV VITE_USE_MOCK=${VITE_USE_MOCK}
+
 # Copy package.json and install dependencies
 COPY package*.json ./
 RUN npm install
 
 # Copy the rest of the source code and build
 COPY . .
-RUN npm run build
+RUN npm run build -- --mode "${VITE_BUILD_MODE}"
 
 # Stage 2: Serve the static files with Nginx
 FROM nginx:alpine
