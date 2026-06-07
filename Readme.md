@@ -1,205 +1,240 @@
 # Kite
 
-Kite는 단일 Kubernetes 클러스터 위에서 사용자별 가상 머신을 쉽게 제공하기 위한 컨트롤 플레인 프로토타입입니다.
+<img width="250" height="250" alt="Kite" src="https://github.com/user-attachments/assets/98cc9bf6-5876-40cf-8c49-014421cdf7ee" />
 
-최종 목표는 사용자가 웹 화면이나 API를 통해 VM을 요청하면 Kite가 사용자, 네임스페이스, 권한, VM, 네트워크, 스토리지 리소스를 일관되게 만들고 관리하는 것입니다. 내부적으로는 Kite 전용 CRD를 중심으로 상태를 기록하고, 컨트롤러가 Kubernetes와 KubeVirt 리소스를 실제 상태로 맞춥니다.
+Kite는 Kubernetes 클러스터 위에서 사용자별 KubeVirt 가상 머신을 생성하고 운영하기 위한 컨트롤 플레인입니다.
 
-## 현재 방향
+사용자는 웹 UI 또는 HTTP API로 계정과 VM을 요청합니다. `kite-api`는 요청을 검증하고 Kite CRD를 Kubernetes API server에 기록합니다. `kite-controller`는 CRD를 watch하면서 Namespace, KubeVirt VirtualMachine, CDI DataVolume, Service, Ingress, Secret 같은 실제 클러스터 리소스를 원하는 상태로 맞춥니다. VM 디스크는 Longhorn StorageClass와 CDI DataVolume을 사용합니다.
 
-이 저장소는 아직 완성된 제품이 아니라 구현 방향을 잡아가는 단계입니다. 지금 중요한 것은 기능을 많이 붙이는 것보다, 아래 흐름을 안정적으로 완성하는 것입니다.
+## Architecture
 
-Kite 자체의 기본 운영 리소스는 `kite` namespace에 배포합니다. 예를 들어 `kite-api`, `kite-controller`, `kite-frontend`, 그리고 이들이 사용하는 ServiceAccount는 `-n kite` 기준입니다.
+```mermaid
+flowchart TD
+    user[User / Admin]
 
-Kite CRD는 클러스터 전역 API 확장이므로 namespace에 속하지 않습니다. `KiteUser`는 cluster-scoped 리소스이고, `KiteVirtualMachine`은 사용자별 namespace에 생성되는 namespaced 리소스입니다. API와 controller는 Pod 안에서는 in-cluster config와 `kite` namespace의 service account 권한으로 Kubernetes API server에 접근합니다.
+    subgraph ui["Client Layer"]
+        frontend["kite-frontend<br/>React web UI"]
+    end
 
-1. 사용자를 KiteUser CRD로 표현합니다.
-2. 사용자의 VM 요청을 KiteVirtualMachine CRD로 표현합니다.
-3. API 서버는 인증과 사용자 요청을 받아 CRD 생성을 요청합니다.
-4. 컨트롤러는 CRD를 감시하고 필요한 Kubernetes/KubeVirt 리소스를 만듭니다.
-5. 컨트롤러는 실제 리소스 상태를 다시 CRD status에 반영합니다.
-6. 프론트엔드는 사용자와 관리자가 위 흐름을 쉽게 사용할 수 있게 만듭니다.
+    subgraph control["Kite Control Plane<br/>namespace: kite"]
+        api["kite-api<br/>Gin HTTP API"]
+        controller["kite-controller<br/>CRD reconciler"]
+        hostAgent["kite-host-agent<br/>node DaemonSet"]
+    end
 
-## 저장소 구성
+    subgraph apiServer["Kubernetes API Server"]
+        kiteUser["KiteUser CRD<br/>cluster-scoped"]
+        kiteVM["KiteVirtualMachine CRD<br/>namespaced"]
+        status["CRD status<br/>observed state"]
+    end
 
-- `kite/cmd/kite-api`: Gin 기반 HTTP API 서버입니다.
-- `kite/cmd/kite-controller`: Kite CRD를 감시하고 실제 클러스터 리소스를 맞추는 컨트롤러입니다.
-- `kite/api/proto`: 폐기 예정인 이전 gRPC 계약 초안입니다. 새 구현에서는 사용하지 않습니다.
-- `kite/api/v1`: Kite CRD를 Go 구조체로 다루기 위한 타입입니다.
-- `kite/internal/render`: Namespace, KubeVirt VM, DataVolume, Service, Ingress, NetworkPolicy, QuotaPolicy 등을 만들기 위한 YAML 렌더러입니다.
-- `build/kite`: 개발 배포와 운영 설치가 함께 사용하는 Kite 공통 매니페스트입니다.
-- `build/kite-storage`: Kite가 소유하는 Longhorn StorageClass와 golden image 매니페스트입니다.
-- `build/examples`: 수동 테스트용 Kite custom resource 예시입니다.
-- `build/dev`: 로컬 Docker 빌드와 현재 클러스터 배포를 위한 개발 스크립트입니다.
-- `build/deploy`: k3s 운영 설치용 Longhorn/KubeVirt/CDI 매니페스트와 스크립트입니다.
-- `kite-frontend`: 앞으로 구현할 웹 프론트엔드 영역입니다.
+    subgraph workload["Reconciled Cluster Resources"]
+        namespace["User Namespace"]
+        vm["KubeVirt VirtualMachine"]
+        dv["CDI DataVolume"]
+        service["Service / Ingress"]
+        secret["Secret / Cloud-init"]
+        storage["Longhorn PVC<br/>kite-vm-storage"]
+    end
 
-## 배포 namespace 기준
+    subgraph node["Kubernetes Node"]
+        account["Host Linux account"]
+        shell["SSH proxy shell"]
+    end
 
-- `install.yaml`의 기본 배포 namespace는 `kite`입니다.
-- `kite-api`, `kite-controller`, `kite-frontend`, Service, ServiceAccount, RBAC binding subject는 `kite` namespace를 사용합니다.
-- `CustomResourceDefinition`은 cluster-wide 리소스이므로 namespace를 지정하지 않습니다.
-- `KiteUser` CRD 인스턴스는 cluster-scoped라 namespace 없이 생성합니다.
-- `KiteVirtualMachine` CRD 인스턴스와 실제 KubeVirt VM 리소스는 사용자별 namespace, 예를 들면 `kite-user-ku-<uuid>`에 생성합니다.
+    user --> frontend
+    frontend --> api
+    api -->|"create/update desired state"| kiteUser
+    api -->|"create/update desired state"| kiteVM
 
-## Minikube 개발 스크립트
+    kiteUser --> controller
+    kiteVM --> controller
+    controller --> namespace
+    controller --> vm
+    controller --> dv
+    controller --> service
+    controller --> secret
+    dv --> storage
 
-로컬 Minikube에서 현재 소스 전체를 이미지로 빌드하고 배포하기 위한 스크립트가 있습니다.
+    vm -->|"runtime phase / nodeName"| controller
+    dv -->|"import / clone progress"| controller
+    controller --> status
+    status --> frontend
 
-- `build/dev/clear.sh`: 모든 Minikube profile과 로컬 Minikube 상태를 삭제합니다.
-- `build/dev/dev.sh`: Docker 이미지로 `kite-api`, `kite-controller`, `kite-host-agent`, `kite-frontend`를 빌드한 뒤 `build/kite` 공통 매니페스트를 현재 클러스터에 적용합니다.
-
-Longhorn까지 정리해야 하는 개발 클러스터에서는 `CLEAR_LONGHORN=true`를 추가합니다.
-다만 Longhorn PV가 남아 있으면 다른 워크로드 사용 가능성이 있어 Longhorn uninstall은 건너뜁니다.
-Kite 전용 Longhorn 데이터 디렉터리인 `/mnt/kite-longhorn`까지 지우려면 `CLEAR_LONGHORN_DATA=true`와
-`CLEAR_LONGHORN_DATA_CONFIRM=true`를 함께 지정합니다. 이 경우에도 Longhorn PV가 남아 있으면 데이터 삭제는 건너뜁니다.
-- `./test.sh` 또는 `./test`: 배포 상태, CRD, API health, signup/login smoke test를 확인합니다.
-
-기본 실행 순서:
-
-```sh
-build/dev/clear.sh
-build/dev/dev.sh
-./test
+    kiteVM --> hostAgent
+    secret --> hostAgent
+    vm -->|"scheduled node"| hostAgent
+    hostAgent --> account
+    hostAgent --> shell
 ```
 
-`build/dev/dev.sh`는 기본으로 `kite` namespace를 사용합니다. 필요하면 아래 환경변수로 조정할 수 있습니다.
+Kite는 명령형 RPC로 controller를 호출하지 않습니다. API 서버는 CRD의 desired state를 쓰고, controller는 Kubernetes controller 방식으로 reconcile합니다.
 
-```sh
-MINIKUBE_PROFILE=minikube MINIKUBE_CPUS=4 MINIKUBE_MEMORY=8192 build/dev/dev.sh
-KITE_NAMESPACE=kite API_LOCAL_PORT=18080 ./test
+## Components
+
+### `kite/cmd`
+
+- `kite/cmd/kite-api`: Gin 기반 HTTP API 서버입니다. 로그인, 회원가입, 사용자 관리, VM 관리, 전역 설정 API를 제공하고 `KiteUser`, `KiteVirtualMachine` CRD를 Kubernetes API server에 기록합니다.
+- `kite/cmd/kite-controller`: Kite CRD와 KubeVirt/CDI 리소스를 watch하는 controller입니다. CRD spec을 원하는 상태로 보고 실제 Kubernetes 리소스를 생성, 갱신, 삭제한 뒤 CRD status에 관측 상태를 씁니다.
+- `kite/cmd/kite-host-agent`: 각 Kubernetes node에서 DaemonSet으로 실행되는 host agent입니다. VM이 배치된 node의 Linux 계정, SSH private key, proxy shell을 맞춰 host SSH 접속을 VM SSH 접속으로 연결합니다.
+
+### `kite/api`
+
+- `kite/api/v1`: Kite CRD spec/status를 Go 코드에서 다루기 위한 타입입니다.
+- `kite/api/proto`: 이전 gRPC 설계 초안입니다. 현재 설계에서는 사용하지 않으며, API 서버와 controller 사이의 기본 흐름은 CRD 기반 reconcile입니다.
+
+### `kite/internal`
+
+- `kite/internal/kube`: in-cluster config와 local kubeconfig fallback을 포함한 Kubernetes client 생성 코드입니다.
+- `kite/internal/store`: API 서버가 `KiteUser`, `KiteVirtualMachine` CRD를 읽고 쓰기 위한 dynamic client 기반 store입니다.
+- `kite/internal/render`: controller가 Namespace, DataVolume, KubeVirt VM, Service, Ingress, Secret, NetworkPolicy, QuotaPolicy 등을 만들 때 사용하는 YAML renderer입니다.
+- `kite/internal/account`, `kite/internal/auth`, `kite/internal/vm`: API 요청을 CRD spec으로 변환하고 인증, 권한, VM 요청 처리를 담당하는 service layer입니다.
+- `kite/internal/platform`: base domain, TLS Secret, runtime config 같은 platform 설정을 관리합니다.
+- `kite/internal/hostaccount`: host-agent가 node의 Linux 계정과 SSH proxy shell을 맞출 때 사용하는 host OS 작업 코드입니다.
+
+### Frontend
+
+- `kite-frontend`: Vite/React 기반 웹 UI입니다. 사용자 로그인, VM 목록/상세, 관리자 대시보드, 전역 설정 화면을 제공합니다.
+
+## Custom Resources
+
+Kite가 관리하는 Kubernetes API는 `build/kite/crds.yaml`에 정의되어 있습니다.
+
+| Kind | Scope | Resource | Purpose |
+| --- | --- | --- | --- |
+| `KiteUser` | Cluster | `kiteusers.anacnu.com` | Kite 사용자, 권한, 사용자 namespace desired state |
+| `KiteVirtualMachine` | Namespaced | `kitevirtualmachines.anacnu.com` | 사용자별 VM spec, 전원 의도, 디스크/접속 정보, VM status |
+
+`KiteUser`는 cluster-scoped 리소스이므로 namespace 없이 생성됩니다. `KiteVirtualMachine`은 사용자 namespace에 생성되고, controller가 같은 namespace에 VM 관련 리소스를 만듭니다.
+
+## Repository Layout
+
+```text
+.
+├── build/
+│   ├── kite/              # Kite application 공통 Kubernetes manifests
+│   ├── kite-storage/      # Longhorn StorageClass, cleanup, golden image manifests
+│   ├── dev/               # local Docker build + current cluster deploy scripts
+│   ├── deploy/            # k3s production-oriented install scripts
+│   └── examples/          # KiteUser, KiteVirtualMachine example resources
+├── docs/                  # project conventions
+├── kite/
+│   ├── cmd/               # kite-api, kite-controller, kite-host-agent entrypoints
+│   ├── api/               # CRD Go types and retired proto draft
+│   └── internal/          # Kubernetes clients, stores, renderers, services
+├── kite-frontend/         # web frontend
+├── test                   # smoke test wrapper
+└── test.sh                # cluster smoke test script
 ```
 
-이미지 빌드 방식은 `BUILD_STRATEGY=auto`가 기본입니다. QEMU/qemu2 드라이버에서는 `/Users` 같은 macOS host path를 Minikube VM이 직접 읽지 못하는 경우가 있어, `build/dev/dev.sh`가 자동으로 `docker-env` 빌드 방식을 사용합니다.
+## Kubernetes Manifests
 
-필요하면 빌드 방식을 직접 고정할 수 있습니다.
+- `build/kite`: Kite runtime manifests shared by development and production installs. It includes namespace, CRDs, ServiceAccount, RBAC, API deployment, controller deployment, frontend deployment, and host-agent DaemonSet.
+- `build/kite-storage/longhorn/storageclass.yaml`: Kite VM disks use `kite-vm-storage`, backed by Longhorn with `diskSelector: "kite"`.
+- `build/kite-storage/golden-images/ubuntu-22.04.yaml`: Ubuntu golden image DataVolume imported by CDI.
+- `build/kite-storage/longhorn-cleanup`: optional cleanup DaemonSet for Kite-owned Longhorn host data.
+- `build/examples`: example custom resources for manual CRD testing.
+
+## Development Install
+
+`build/dev/dev.sh` builds local Docker images and deploys them to the selected Kubernetes cluster.
 
 ```sh
-BUILD_STRATEGY=docker-env build/dev/dev.sh
-BUILD_STRATEGY=local-load build/dev/dev.sh
-BUILD_STRATEGY=minikube build/dev/dev.sh
+KITE_CLUSTER=k3s build/dev/dev.sh
 ```
 
-사용 가능한 값:
+Supported `KITE_CLUSTER` values are `minikube`, `k3s`, `k3d`, `kind`, `k8s`, `kubernetes`, and `current`.
 
-- `auto`: 드라이버를 보고 자동 선택합니다.
-- `docker-env`: Docker CLI를 Minikube Docker daemon에 연결해서 빌드합니다.
-- `local-load`: 로컬 Docker에서 빌드한 뒤 `minikube image load`로 적재합니다.
-- `minikube`: `minikube image build`를 강제로 사용합니다.
+For local clusters, the script builds these images and loads or imports them into the cluster runtime when needed:
 
-`build/dev/dev.sh`는 `KITE_CLUSTER=minikube`, `k3s`, `k3d`, `kind`, `k8s`,
-`kubernetes`, `current`를 지원합니다. 일반 Kubernetes 클러스터가 registry에서
-이미지를 pull해야 하면 `PUSH_IMAGES=true`와 `IMAGE_REGISTRY`를 함께 지정합니다.
+- `anacnu.com/kite-api:<tag>`
+- `anacnu.com/kite-controller:<tag>`
+- `anacnu.com/kite-host-agent:<tag>`
+- `anacnu.com/kite-frontend:<tag>`
 
-프론트엔드 빌드는 `.env.*` 파일을 사용하지 않습니다. Vite 설정은 현재 shell
-session의 환경변수나 Docker build arg로 주입합니다. 개발 배포 스크립트에서는
-아래 값을 사용할 수 있고, 기본값은 운영 배포 기준인 `production`, `/api/v1`,
-`false`입니다.
+Generic Kubernetes clusters usually need a registry push:
 
 ```sh
-FRONTEND_VITE_BUILD_MODE=staging \
-FRONTEND_VITE_API_BASE_URL=http://localhost:8080/api/v1 \
-FRONTEND_VITE_USE_MOCK=false \
-build/dev/dev.sh
+PUSH_IMAGES=true IMAGE_REGISTRY=registry.example.com/kite KITE_CLUSTER=k8s build/dev/dev.sh
 ```
 
-## k3s 운영 설치 흐름
-
-`build/deploy/`에는 k3s에 Kite를 운영 형태로 설치하기 위한 매니페스트와 스크립트가 있습니다.
-VM 디스크와 golden image는 Longhorn 기반 `kite-vm-storage` StorageClass를 사용하고,
-CDI DataVolume이 Ubuntu golden image import와 VM별 디스크 clone을 담당합니다.
+Development cleanup:
 
 ```sh
+KITE_CLUSTER=k3s build/dev/clear.sh
+```
+
+Longhorn cleanup is opt-in because it can remove VM disk infrastructure:
+
+```sh
+CLEAR_LONGHORN=true KITE_CLUSTER=k3s build/dev/clear.sh
+CLEAR_LONGHORN_DATA=true CLEAR_LONGHORN_DATA_CONFIRM=true KITE_CLUSTER=k3s build/dev/clear.sh
+```
+
+More details are in `build/dev/README.md`.
+
+## Production-Oriented k3s Install
+
+`build/deploy` contains an install flow for k3s clusters. Longhorn, KubeVirt, and CDI are required for VM disk provisioning and VM runtime.
+
+```sh
+kubectl get nodes
 INSTALL_LONGHORN=true build/deploy/scripts/install-all.sh
 build/deploy/scripts/verify.sh
 ```
 
-Longhorn이 이미 설치된 클러스터에서는 `INSTALL_LONGHORN=true`를 생략할 수 있습니다.
+If Longhorn is already installed and ready:
 
-## 구현해야 할 큰 흐름
+```sh
+build/deploy/scripts/install-all.sh
+```
 
-### 1. 사용자 관리
+Expected storage flow:
 
-- KiteUser CRD 생성 흐름을 확정합니다.
-- 사용자가 생성되면 사용자 전용 네임스페이스를 만듭니다.
-- 사용자 네임스페이스에 quota, network policy, 기본 secret/config를 적용합니다.
-- 사용자가 삭제되면 연결된 네임스페이스와 VM 리소스를 어떻게 정리할지 정책을 정합니다.
-- 비밀번호 저장 방식, 프로필 이미지 저장 방식, 접근 권한 단계를 확정합니다.
+```text
+kite/ubuntu-22.04 DataVolume
+  -> PVC using StorageClass kite-vm-storage
 
-### 2. VM 관리
+user namespace VM DataVolume
+  -> clone source pvc kite/ubuntu-22.04
+  -> PVC using StorageClass kite-vm-storage
+```
 
-- KiteVirtualMachine CRD 생성 흐름을 확정합니다.
-- VM 요청이 들어오면 KubeVirt VirtualMachine, DataVolume, Service, Ingress를 생성합니다.
-- VM 시작/중지 요청을 `spec.powerState` 중심으로 정리합니다.
-- 실제 KubeVirt 상태를 읽어 `status.phase`, `status.currentPowerState`, `status.conditions`에 반영합니다.
-- VM 삭제 시 연결된 스토리지와 네트워크 리소스를 함께 정리합니다.
+Uninstall Kite resources:
 
-### 3. API 서버
+```sh
+build/deploy/scripts/uninstall-kite.sh
+```
 
-- 임시 관리자 로그인 방식을 실제 사용자 인증 흐름으로 바꿉니다.
-- 사용자 생성, 조회, 수정, 삭제 API를 구현합니다.
-- VM 생성, 조회, 수정, 삭제, 시작, 중지 API를 구현합니다.
-- API 서버는 컨트롤러에 직접 명령하지 않고 Kite CRD만 생성/수정/삭제합니다.
-- 에러 응답 형식과 권한 검사를 일관되게 만듭니다.
+More details are in `build/deploy/README.md`.
 
-### 4. 컨트롤러
+## Smoke Test
 
-- KiteUser reconcile을 구현합니다.
-- KiteVirtualMachine reconcile을 구현합니다.
-- API 서버가 기록한 CRD를 기준으로 실제 Kubernetes/KubeVirt 상태를 조정합니다.
-- 이미 존재하는 리소스, 잘못된 요청, Kubernetes API 오류를 명확하게 처리합니다.
-- 재시작해도 같은 리소스를 중복 생성하지 않도록 idempotent하게 만듭니다.
+After deployment, run:
 
-### 5. 프론트엔드
+```sh
+./test
+```
 
-- 로그인 화면을 만듭니다.
-- 관리자용 사용자 목록/생성/수정/삭제 화면을 만듭니다.
-- 사용자용 VM 목록/생성/상세/전원 제어 화면을 만듭니다.
-- VM 상태, 에러, 생성 진행 상황을 사람이 이해하기 쉽게 보여줍니다.
-- API 권한 단계에 따라 보이는 메뉴와 가능한 동작을 나눕니다.
+The smoke test checks the Kite namespace, CRDs, deployments, API health, signup/login flow, and basic `KiteUser` visibility.
 
-## 우선순위 TODO
+## Runtime Notes
 
-### 1차 목표: CRD 기반 최소 동작 완성
+- Kite runtime resources run in the `kite` namespace.
+- CRDs are cluster-wide API extensions and do not have a namespace.
+- `KiteUser` instances are cluster-scoped.
+- `KiteVirtualMachine` instances are namespaced.
+- In-cluster execution uses the mounted service account. Local kubeconfig fallback is for development.
+- VM disks use CDI DataVolume and Longhorn.
+- The controller writes observed state to CRD `status`; user intent belongs in CRD `spec`.
 
-- [ ] KiteUser 생성 시 네임스페이스를 자동 생성한다.
-- [ ] KiteUser 삭제 시 정리 정책을 정하고 구현한다.
-- [ ] KiteVirtualMachine 생성 시 KubeVirt VM 관련 리소스를 생성한다.
-- [ ] KiteVirtualMachine status를 실제 KubeVirt 상태와 동기화한다.
-- [ ] API 서버에서 사용자와 VM을 만들 수 있는 최소 API를 제공한다.
-- [ ] 컨트롤러가 재시작되어도 기존 CRD를 다시 읽고 상태를 맞춘다.
+## Related Docs
 
-### 2차 목표: API와 권한 정리
-
-- [ ] 임시 관리자 계정 기반 로그인을 실제 KiteUser 기반 로그인으로 바꾼다.
-- [ ] 사용자 권한 단계를 read-only, user, manager, admin 기준으로 정리한다.
-- [ ] 모든 API에 권한 검사를 적용한다.
-- [ ] API 응답 형식과 에러 메시지를 통일한다.
-- [ ] 폐기 예정인 gRPC/protobuf 초안과 관련 코드를 정리한다.
-
-### 3차 목표: 운영에 필요한 안정성
-
-- [ ] VM 생성 실패 시 어떤 단계에서 실패했는지 status에 남긴다.
-- [ ] 리소스 생성/삭제 작업을 재시도 가능하게 만든다.
-- [ ] 로그 형식을 정리한다.
-- [ ] 기본 테스트를 추가한다.
-- [ ] 배포용 매니페스트를 정리한다.
-
-### 4차 목표: 사용자 경험
-
-- [ ] 프론트엔드 프로젝트 구조를 만든다.
-- [ ] 로그인과 토큰 저장 흐름을 구현한다.
-- [ ] 관리자 화면과 사용자 화면을 나눈다.
-- [ ] VM 생성 폼에서 CPU, 메모리, 디스크, 이미지 선택을 지원한다.
-- [ ] VM 상태와 접속 정보를 화면에서 확인할 수 있게 한다.
-
-## 아직 결정해야 할 것
-
-- API 서버는 Kubernetes API server에 CRD를 직접 기록하고, 컨트롤러는 CRD watch/reconcile만 수행합니다.
-- 사용자와 VM 상태는 Kubernetes CRD를 통해 etcd에 저장합니다.
-- 사용자 삭제 시 VM과 디스크를 즉시 삭제할지, 보존 기간을 둘지 정해야 합니다.
-- VM 접속 방식이 SSH, VNC, 웹 콘솔 중 무엇을 우선할지 정해야 합니다.
-- 골든 이미지 관리 방식을 수동 YAML로 둘지, Kite API에서 관리할지 정해야 합니다.
-
-## 문서 작성 기준
-
-이 README는 세부 구현법보다 “무엇을 만들어야 하는지”를 정리하는 문서입니다. 실제 명령어, API 상세, 배포 방법은 각 하위 디렉터리 README에서 필요한 만큼만 관리합니다.
+- `kite/cmd/kite-api/Readme.md`
+- `kite/cmd/kite-controller/Readme.md`
+- `kite/cmd/kite-host-agent/Readme.md`
+- `build/dev/README.md`
+- `build/deploy/README.md`
+- `build/kite/README.md`
+- `build/kite-storage/README.md`
+- `build/examples/README.md`
