@@ -9,6 +9,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /out/kite-api ./cmd/kite-api
 
 FROM alpine:3.22
 
+LABEL org.opencontainers.image.source="https://github.com/Hy3ons/KiteVirtualMachines" \
+      org.opencontainers.image.description="Kite Gin HTTP API server for user, VM, and platform management" \
+      org.opencontainers.image.licenses="MIT"
+
 RUN addgroup -S kite && adduser -S kite -G kite
 USER kite
 

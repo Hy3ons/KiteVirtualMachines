@@ -9,6 +9,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /out/kite-controller ./cmd/kite-control
 
 FROM alpine:3.22
 
+LABEL org.opencontainers.image.source="https://github.com/Hy3ons/KiteVirtualMachines" \
+      org.opencontainers.image.description="Kite Kubernetes controller for CRD, KubeVirt, CDI, and VM resource reconciliation" \
+      org.opencontainers.image.licenses="MIT"
+
 RUN addgroup -S kite && adduser -S kite -G kite
 USER kite
 

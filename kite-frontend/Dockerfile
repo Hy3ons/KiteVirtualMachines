@@ -19,6 +19,10 @@ RUN npm run build -- --mode "${VITE_BUILD_MODE}"
 # Stage 2: Serve the static files with Nginx
 FROM nginx:alpine
 
+LABEL org.opencontainers.image.source="https://github.com/Hy3ons/KiteVirtualMachines" \
+      org.opencontainers.image.description="Kite React frontend served by Nginx" \
+      org.opencontainers.image.licenses="MIT"
+
 # Remove default nginx static assets
 RUN rm -rf /usr/share/nginx/html/*
 
