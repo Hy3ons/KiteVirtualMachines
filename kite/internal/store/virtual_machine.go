@@ -11,15 +11,15 @@ import (
 // KiteVirtualMachineSpec contains the spec fields stored in the KiteVirtualMachine CRD.
 // These values come from API VM requests and describe the desired VM state.
 type KiteVirtualMachineSpec struct {
-	CPU          int
-	Memory       string
-	Image        string
-	Disk         string
-	PowerState   string
-	DomainPrefix string
-	SSHID        string
-	SSHPassword  string
-	Delete       bool
+	CPU             int
+	Memory          string
+	Image           string
+	Disk            string
+	PowerState      string
+	DomainPrefix    string
+	SSHID           string
+	SSHPasswordHash string
+	Delete          bool
 }
 
 // KiteVirtualMachineRecord contains metadata and spec values for a namespaced KiteVirtualMachine CRD.
@@ -127,14 +127,14 @@ func newKiteVirtualMachineObject(record KiteVirtualMachineRecord) *unstructured.
 // The returned map is used for create and spec-only updates.
 func kiteVirtualMachineSpecMap(spec KiteVirtualMachineSpec) map[string]any {
 	return map[string]any{
-		"cpu":          int64(spec.CPU),
-		"memory":       spec.Memory,
-		"image":        spec.Image,
-		"disk":         spec.Disk,
-		"powerState":   spec.PowerState,
-		"domainPrefix": spec.DomainPrefix,
-		"sshId":        spec.SSHID,
-		"sshPassword":  spec.SSHPassword,
-		"delete":       spec.Delete,
+		"cpu":             int64(spec.CPU),
+		"memory":          spec.Memory,
+		"image":           spec.Image,
+		"disk":            spec.Disk,
+		"powerState":      spec.PowerState,
+		"domainPrefix":    spec.DomainPrefix,
+		"sshId":           spec.SSHID,
+		"sshPasswordHash": spec.SSHPasswordHash,
+		"delete":          spec.Delete,
 	}
 }

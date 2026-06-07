@@ -1,7 +1,7 @@
 # Kite Manifests
 
 `kustomization.yaml` applies Kite CRDs, namespace-scoped runtime resources,
-RBAC, and workloads.
+RBAC, API/controller/frontend workloads, and the `kite-gateway` SSH entrypoint.
 
 ```sh
 kubectl apply -k build/kite

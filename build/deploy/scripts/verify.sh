@@ -60,8 +60,9 @@ main() {
   log "checking Kite workloads"
   kubectl -n "${KITE_NAMESPACE}" rollout status deployment/kite-api --timeout=180s
   kubectl -n "${KITE_NAMESPACE}" rollout status deployment/kite-controller --timeout=180s
+  kubectl -n "${KITE_NAMESPACE}" rollout status deployment/kite-gateway --timeout=180s
   kubectl -n "${KITE_NAMESPACE}" rollout status deployment/kite-frontend --timeout=180s
-  kubectl -n "${KITE_NAMESPACE}" rollout status daemonset/kite-host-agent --timeout=180s
+  kubectl -n "${KITE_NAMESPACE}" get service kite-gateway
 
   log "checking golden image"
   kubectl -n "${KITE_NAMESPACE}" get datavolume ubuntu-22.04

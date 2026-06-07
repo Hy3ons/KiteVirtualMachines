@@ -1,6 +1,6 @@
 # Kite Development Install
 
-`dev.sh` builds the Kite API, controller, host-agent, and frontend images with
+`dev.sh` builds the Kite API, controller, gateway, and frontend images with
 local Docker, then applies the shared `build/kite` manifests to the selected
 cluster.
 
@@ -14,7 +14,7 @@ KITE_CLUSTER=k3s ./dev.sh
 
 `./dev.sh` calls `build/dev/all-in-one.sh`, and that script calls
 `build/dev/dev.sh` after the infrastructure is ready. The Kite API, controller,
-host-agent, and frontend are built from local source and deployed as Kubernetes
+gateway, and frontend are built from local source and deployed as Kubernetes
 workloads.
 
 Each phase can be skipped through environment flags:
@@ -67,11 +67,6 @@ and local Kite images through `build/dev/clear.sh`.
 KITE_CLUSTER=k3s ./clear.sh
 ```
 
-Host account cleanup is enabled by default. Before stopping `kite-host-agent`,
-the script removes Kite-managed Linux users and `/var/lib/kite/accounts/*.json`
-metadata by using the metadata files as the ownership source. Set
-`CLEAR_HOST_ACCOUNTS=false` to skip this host account cleanup.
-
 Longhorn cleanup is disabled by default because it deletes VM disk data.
 
 ```sh
@@ -88,3 +83,29 @@ script skips data deletion while Longhorn PVs still exist.
 ```sh
 CLEAR_LONGHORN_DATA=true CLEAR_LONGHORN_DATA_CONFIRM=true KITE_CLUSTER=k3s ./clear.sh
 ```
+
+## Gateway
+
+`dev.sh` also builds and deploys `kite-gateway`. The Service is a
+`LoadBalancer` that exposes external SSH on port `22` and forwards it to the
+pod's internal `2222` port.
+
+```sh
+ssh <sshId>@<node-ip>
+```
+
+The current implementation authenticates with `KiteVirtualMachine.spec.sshPasswordHash`
+and proxies to `vps-access-<vmName>.<namespace>.svc.cluster.local:22` with the
+VM SSH key Secret created by `kite-controller`.
+
+`dev.sh` creates `kite-gateway-host-key` automatically when it does not exist.
+That Secret stores the SSH server host key used by external clients, so gateway
+pod restarts do not change the host fingerprint.
+
+When the host is Linux with systemd OpenSSH, `dev.sh` asks before moving host
+sshd away from port `22`. If confirmed, it backs up `/etc/ssh/sshd_config` under
+`/etc/kite/host-sshd`, configures host sshd to listen on `2222`, and restarts
+the service so the gateway can own port `22`. `./clear.sh` asks before restoring
+that backup. Set `KITE_MANAGE_HOST_SSHD=true` or `KITE_RESTORE_HOST_SSHD=true`
+for non-interactive opt-in, and set `MANAGE_HOST_SSHD=false` or
+`RESTORE_HOST_SSHD=false` to skip these host changes.

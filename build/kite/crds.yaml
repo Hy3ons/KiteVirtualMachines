@@ -158,8 +158,9 @@ spec:
                   type: string
                 sshId:
                   type: string
-                sshPassword:
+                sshPasswordHash:
                   type: string
+                  description: "hashed gateway SSH password value"
                 delete:
                   type: boolean
             status:

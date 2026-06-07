@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kite-gateway
+  namespace: kite
+  labels:
+    app: kite-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kite-gateway
+  template:
+    metadata:
+      labels:
+        app: kite-gateway
+    spec:
+      serviceAccountName: kite-control-plane
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: kite-gateway
+          image: ghcr.io/hy3ons/kite-gateway:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+          env:
+            - name: KITE_GATEWAY_LISTEN_ADDRESS
+              value: ":2222"
+            - name: KITE_GATEWAY_HOST_KEY_PATH
+              value: "/etc/kite-gateway/ssh/ssh_host_rsa_key"
+            - name: KITE_GATEWAY_BACKEND_TIMEOUT_SECONDS
+              value: "90"
+            - name: KITE_GATEWAY_BACKEND_RETRY_SECONDS
+              value: "2"
+          ports:
+            - name: ssh
+              containerPort: 2222
+              protocol: TCP
+          volumeMounts:
+            - name: gateway-host-key
+              mountPath: /etc/kite-gateway/ssh
+              readOnly: true
+      volumes:
+        - name: gateway-host-key
+          secret:
+            secretName: kite-gateway-host-key
+            optional: true
+            defaultMode: 0440
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kite-gateway
+  namespace: kite
+  labels:
+    app: kite-gateway
+spec:
+  type: LoadBalancer
+  selector:
+    app: kite-gateway
+  ports:
+    - name: ssh
+      port: 22
+      targetPort: ssh
+      protocol: TCP

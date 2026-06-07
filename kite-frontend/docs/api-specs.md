@@ -36,7 +36,7 @@
 
 ### 2-2. 가상머신 생성 (`POST /api/v1/vms`)
 - **Request Body**: `{ "name": "...", "domainPrefix": "...", "sshId": "...", "sshPassword": "...", "disk": 25 }`
-- **Description**: 백엔드는 디스크 용량이 Quota 내에 있는지 검증 후 CR을 배포합니다.
+- **Description**: 백엔드는 디스크 용량과 `sshId`를 검증한 뒤 CR을 배포합니다. 요청의 `sshPassword`는 CRD에 평문 저장하지 않고 `spec.sshPasswordHash`로 저장합니다.
 
 ### 2-3. 가상머신 상태 제어 (`PATCH /api/v1/vms/:name/power`)
 - **Request Body**: `{ "powerState": "On" | "Off" }`

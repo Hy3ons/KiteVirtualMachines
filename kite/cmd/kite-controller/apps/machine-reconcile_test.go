@@ -359,7 +359,7 @@ func newMachineReconcileKiteVirtualMachineSpec(namespace string, name string) *u
 				"disk":        "25Gi",
 				"powerState":  "Off",
 				"sshId":       "ubuntu",
-				"sshPassword": "password",
+				"sshPasswordHash": "hashed-password",
 			},
 		},
 	}

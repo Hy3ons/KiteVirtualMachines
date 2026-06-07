@@ -59,11 +59,6 @@ build/deploy/scripts/uninstall-kite.sh
 Set `DELETE_GOLDEN_IMAGE=true` to explicitly delete the imported golden image
 DataVolume and PVC before removing the namespace.
 
-Host account cleanup is enabled by default. Before deleting the Kite manifests,
-the script removes Kite-managed Linux users and `/var/lib/kite/accounts/*.json`
-metadata by using the metadata files as the ownership source. Set
-`DELETE_HOST_ACCOUNTS=false` to skip this host account cleanup.
-
 Longhorn removal is opt-in because it deletes VM disk infrastructure:
 
 ```sh
@@ -80,3 +75,30 @@ script skips data deletion while Longhorn PVs still exist.
 ```sh
 DELETE_LONGHORN_DATA=true DELETE_LONGHORN_DATA_CONFIRM=true build/deploy/scripts/uninstall-kite.sh
 ```
+
+## Gateway
+
+Kite installs `kite-gateway` as a Kubernetes Deployment and exposes it with
+the `kite-gateway` LoadBalancer Service. External SSH uses port `22` and is
+forwarded to the pod's internal `2222` port.
+
+```sh
+ssh <sshId>@<node-ip>
+```
+
+The host OS does not need Kite-managed Linux users for this path. The gateway
+authenticates from Kite VM state, reads the VM SSH key Secret, and proxies the
+SSH session to the VM access Service inside the cluster.
+
+`install.sh` creates `kite-gateway-host-key` automatically when it does not
+exist. That Secret stores the SSH server host key used by external clients, so
+gateway pod restarts do not change the host fingerprint.
+
+When the host is Linux with systemd OpenSSH, `install.sh` asks before moving
+host sshd away from port `22`. If confirmed, it backs up
+`/etc/ssh/sshd_config` under `/etc/kite/host-sshd`, configures host sshd to
+listen on `2222`, and restarts the service so the gateway can own port `22`.
+`build/deploy/scripts/uninstall-kite.sh` asks before restoring that backup. Set
+`KITE_MANAGE_HOST_SSHD=true` or `KITE_RESTORE_HOST_SSHD=true` for
+non-interactive opt-in, and set `MANAGE_HOST_SSHD=false` or
+`RESTORE_HOST_SSHD=false` to skip these host changes.

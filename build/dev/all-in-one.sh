@@ -15,6 +15,7 @@ APPLY_STORAGECLASS="${APPLY_STORAGECLASS:-true}"
 APPLY_GOLDEN_IMAGE="${APPLY_GOLDEN_IMAGE:-true}"
 DEPLOY_KITE="${DEPLOY_KITE:-true}"
 RUN_VERIFY="${RUN_VERIFY:-true}"
+MANAGE_HOST_SSHD="${MANAGE_HOST_SSHD:-true}"
 
 log() {
   echo "[kite-all-in-one] $*"
@@ -52,6 +53,7 @@ main() {
 
   log "checking Kubernetes connectivity"
   kubectl get nodes >/dev/null
+  run_step "${MANAGE_HOST_SSHD}" "checking host sshd handoff for Kite gateway" "${ROOT_DIR}/build/deploy/scripts/manage-host-sshd.sh" ensure
 
   run_step "${INSTALL_LONGHORN}" "installing Longhorn" "${ROOT_DIR}/build/deploy/scripts/install-longhorn.sh"
   run_step "${CONFIGURE_LONGHORN}" "waiting for Longhorn" "${ROOT_DIR}/build/deploy/scripts/wait-longhorn.sh"

@@ -304,7 +304,7 @@ func currentUser(c *gin.Context, deps Dependencies) (account.PublicUser, bool) {
 // deps provides the dynamic Kubernetes client.
 // The returned service reads and writes KiteVirtualMachine CRDs.
 func vmServiceFromDependencies(deps Dependencies) *vmservice.Service {
-	return vmservice.NewService(deps.DynamicClient)
+	return vmservice.NewService(deps.DynamicClient, deps.Config.PasswordSalt)
 }
 
 // normalizeOptionalDisk converts PATCH disk input to an optional string pointer.

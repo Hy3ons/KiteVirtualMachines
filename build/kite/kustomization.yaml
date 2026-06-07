@@ -7,4 +7,4 @@ resources:
   - frontend.yaml
   - api.yaml
   - controller.yaml
-  - host-agent.yaml
+  - gateway.yaml

@@ -5,12 +5,11 @@ import (
 	"testing"
 )
 
-func TestUbuntu2204CloudInitSetsPasswordThroughBase64Script(t *testing.T) {
+func TestUbuntu2204CloudInitUsesKeyOnlySSHAccess(t *testing.T) {
 	obj, err := (&Ubuntu2204CloudInit{
 		VmName:       "vm-a",
 		Namespace:    "tenant-a",
 		Id:           "asdf",
-		Password:     "asdf",
 		SSHPublicKey: "ssh-rsa test",
 	}).Render()
 	if err != nil {
@@ -26,13 +25,13 @@ func TestUbuntu2204CloudInitSetsPasswordThroughBase64Script(t *testing.T) {
 		t.Fatalf("expected stringData.userdata to be a string")
 	}
 
-	if strings.Contains(userdata, "asdf: asdf") {
-		t.Fatalf("cloud-init userdata should not render chpasswd with a space after colon:\n%s", userdata)
+	if strings.Contains(userdata, "chpasswd") || strings.Contains(userdata, "kite-set-password") {
+		t.Fatalf("cloud-init userdata should not set VM passwords:\n%s", userdata)
 	}
-	if !strings.Contains(userdata, "password=\"$(printf '%s' 'YXNkZg==' | base64 -d)\"") {
-		t.Fatalf("cloud-init userdata should decode password from base64:\n%s", userdata)
+	if !strings.Contains(userdata, "PasswordAuthentication no") {
+		t.Fatalf("cloud-init userdata should disable VM password SSH:\n%s", userdata)
 	}
-	if !strings.Contains(userdata, "printf 'root:%s\\nasdf:%s\\n'") {
-		t.Fatalf("cloud-init userdata should set root and VM user passwords through chpasswd:\n%s", userdata)
+	if !strings.Contains(userdata, "ssh-rsa test") {
+		t.Fatalf("cloud-init userdata should include Kite-managed SSH public key:\n%s", userdata)
 	}
 }

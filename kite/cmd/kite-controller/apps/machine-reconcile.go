@@ -331,9 +331,6 @@ func validateKiteVirtualMachineSpec(vm *kite.KiteVirtualMachine) error {
 	if strings.TrimSpace(vm.Spec.SSHID) == "" {
 		missing = append(missing, "spec.sshId")
 	}
-	if strings.TrimSpace(vm.Spec.SSHPassword) == "" {
-		missing = append(missing, "spec.sshPassword")
-	}
 	if powerState := strings.TrimSpace(vm.Spec.PowerState); powerState != "" && powerState != "On" && powerState != "Off" {
 		return fmt.Errorf("spec.powerState must be On or Off")
 	}
@@ -366,7 +363,6 @@ func kiteVirtualMachineDesiredObjects(vm *kite.KiteVirtualMachine, domain string
 		VmName:       vm.Name,
 		Namespace:    vm.Namespace,
 		Id:           vm.Spec.SSHID,
-		Password:     vm.Spec.SSHPassword,
 		SSHPublicKey: publicKey,
 	}).Render()
 	if err != nil {
@@ -443,7 +439,7 @@ func currentPowerStateFromVM(vm *kite.KiteVirtualMachine) string {
 // ensureKiteVirtualMachineSSHKeySecret returns the stable VM SSH key pair Secret.
 // ctx controls Kubernetes API calls.
 // dynamicClient reads or creates the core/v1 Secret in the KiteVirtualMachine namespace.
-// vm identifies the VM whose cloud-init public key and host-agent private key must match.
+// vm identifies the VM whose cloud-init public key and gateway private key must match.
 func ensureKiteVirtualMachineSSHKeySecret(ctx context.Context, dynamicClient dynamic.Interface, vm *kite.KiteVirtualMachine) (sshkey.KeyPair, error) {
 	name := sshKeySecretName(vm.Name)
 	current, err := dynamicClient.Resource(secretGVR).Namespace(vm.Namespace).Get(ctx, name, metav1.GetOptions{})
@@ -470,7 +466,7 @@ func ensureKiteVirtualMachineSSHKeySecret(ctx context.Context, dynamicClient dyn
 
 // keyPairFromSecret decodes the VM SSH key Secret managed by kite-controller.
 // secret is a core/v1 Secret with data.id_rsa and data.id_rsa.pub.
-// The returned pair is used by cloud-init rendering and host-agent account reconcile.
+// The returned pair is used by cloud-init rendering and gateway SSH proxying.
 func keyPairFromSecret(secret *unstructured.Unstructured) (sshkey.KeyPair, error) {
 	data, _, _ := unstructured.NestedStringMap(secret.Object, "data")
 	privateKey, err := base64.StdEncoding.DecodeString(data[vmSSHPrivateKeyName])
@@ -494,7 +490,7 @@ func keyPairFromSecret(secret *unstructured.Unstructured) (sshkey.KeyPair, error
 
 // newKiteVirtualMachineSSHKeySecret renders the Secret that stores one VM SSH key pair.
 // vm identifies the owning KiteVirtualMachine.
-// keyPair contains the private key for kite-host-agent and the public key for cloud-init.
+// keyPair contains the private key for kite-gateway and the public key for cloud-init.
 func newKiteVirtualMachineSSHKeySecret(vm *kite.KiteVirtualMachine, keyPair sshkey.KeyPair) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
 		Object: map[string]any{
@@ -1036,7 +1032,7 @@ func kiteVirtualMachineResourceNames(vmName string) map[string]string {
 
 // sshKeySecretName returns the stable Secret name for a VM SSH key pair.
 // vmName is metadata.name from the KiteVirtualMachine.
-// The returned name is used by kite-controller and kite-host-agent.
+// The returned name is used by kite-controller and kite-gateway.
 func sshKeySecretName(vmName string) string {
 	return vmName + "-ssh-key"
 }

@@ -27,8 +27,7 @@ CLEAR_LONGHORN_DATA="${CLEAR_LONGHORN_DATA:-false}"
 CLEAR_LONGHORN_DATA_CONFIRM="${CLEAR_LONGHORN_DATA_CONFIRM:-false}"
 KITE_LONGHORN_DISK_NAME="${KITE_LONGHORN_DISK_NAME:-kite-longhorn}"
 KITE_LONGHORN_DISK_TAG="${KITE_LONGHORN_DISK_TAG:-kite}"
-CLEAR_HOST_DNS="${CLEAR_HOST_DNS:-true}"
-CLEAR_HOST_ACCOUNTS="${CLEAR_HOST_ACCOUNTS:-true}"
+RESTORE_HOST_SSHD="${RESTORE_HOST_SSHD:-true}"
 
 log() {
   echo "[kite] $*"
@@ -82,11 +81,8 @@ delete_kite_resources() {
   kubectl delete -f "${ROOT_DIR}/build/kite-storage/longhorn" --ignore-not-found=true || true
   remove_kite_longhorn_disks
 
-  reset_kite_host_dns
-  clear_kite_host_accounts
-
   log "stopping Kite workloads"
-  kubectl delete -f "${ROOT_DIR}/build/kite/host-agent.yaml" --ignore-not-found=true --wait=false || true
+  kubectl delete -f "${ROOT_DIR}/build/kite/gateway.yaml" --ignore-not-found=true --wait=false || true
   kubectl delete -f "${ROOT_DIR}/build/kite/controller.yaml" --ignore-not-found=true --wait=false || true
   kubectl delete -f "${ROOT_DIR}/build/kite/api.yaml" --ignore-not-found=true --wait=false || true
   kubectl delete -f "${ROOT_DIR}/build/kite/frontend.yaml" --ignore-not-found=true --wait=false || true
@@ -106,65 +102,6 @@ delete_kite_resources() {
   kubectl delete -f "${ROOT_DIR}/build/kite/crds.yaml" --ignore-not-found=true --wait=false || true
   kubectl delete clusterrole kite-control-plane-role --ignore-not-found=true --wait=false || true
   kubectl delete clusterrolebinding kite-control-plane-binding --ignore-not-found=true --wait=false || true
-}
-
-reset_kite_host_dns() {
-  if [[ "${CLEAR_HOST_DNS}" != "true" ]]; then
-    log "skipping host DNS cleanup because CLEAR_HOST_DNS=${CLEAR_HOST_DNS}"
-    return
-  fi
-  if ! kubectl -n "${KITE_NAMESPACE}" get pods -l app=kite-host-agent >/dev/null 2>&1; then
-    return
-  fi
-
-  log "removing Kite cluster.local host DNS routing"
-  kubectl -n "${KITE_NAMESPACE}" get pods -l app=kite-host-agent -o name 2>/dev/null \
-    | while read -r pod; do
-        [[ -z "${pod}" ]] && continue
-        kubectl -n "${KITE_NAMESPACE}" exec "${pod}" -- nsenter -t 1 -m -u -i -n -p -- sh -c '
-          if command -v resolvectl >/dev/null 2>&1; then
-            iface="$(ip route show default 2>/dev/null | awk "{print \$5; exit}")"
-            if [ -n "$iface" ]; then
-              resolvectl revert "$iface" >/dev/null 2>&1 || true
-            fi
-          fi
-        ' >/dev/null 2>&1 || true
-      done
-}
-
-clear_kite_host_accounts() {
-  if [[ "${CLEAR_HOST_ACCOUNTS}" != "true" ]]; then
-    log "skipping host account cleanup because CLEAR_HOST_ACCOUNTS=${CLEAR_HOST_ACCOUNTS}"
-    return
-  fi
-  if ! kubectl -n "${KITE_NAMESPACE}" get pods -l app=kite-host-agent >/dev/null 2>&1; then
-    return
-  fi
-
-  log "removing Kite-managed host accounts and metadata"
-  kubectl -n "${KITE_NAMESPACE}" get pods -l app=kite-host-agent -o name 2>/dev/null \
-    | while read -r pod; do
-        [[ -z "${pod}" ]] && continue
-        kubectl -n "${KITE_NAMESPACE}" exec "${pod}" -- nsenter -t 1 -m -u -i -n -p -- sh -c '
-          account_root="/var/lib/kite/accounts"
-          [ -d "$account_root" ] || exit 0
-
-          for metadata in "$account_root"/*.json; do
-            [ -e "$metadata" ] || continue
-            username="${metadata##*/}"
-            username="${username%.json}"
-            if ! printf "%s\n" "$username" | grep -Eq "^[a-z_][a-z0-9_-]{0,31}$"; then
-              continue
-            fi
-
-            pkill -KILL -u "$username" >/dev/null 2>&1 || true
-            userdel -r "$username" >/dev/null 2>&1 || true
-            rm -f "$metadata"
-          done
-
-          rmdir "$account_root" /var/lib/kite 2>/dev/null || true
-        ' >/dev/null 2>&1 || true
-      done
 }
 
 delete_kite_custom_resources() {
@@ -293,7 +230,7 @@ delete_local_docker_images() {
 
   log "removing local Docker Kite images"
   docker image ls --format '{{.Repository}}:{{.Tag}}' \
-    | grep -E '(^|/)kite-(api|controller|host-agent|frontend):' \
+    | grep -E '(^|/)kite-(api|controller|gateway|frontend):' \
     | xargs -r docker rmi -f
 }
 
@@ -305,7 +242,7 @@ delete_k3s_images() {
 
   log "removing k3s containerd Kite images"
   ${K3S_CTR_CMD} images ls -q \
-    | grep -E '(^|/)kite-(api|controller|host-agent|frontend):' \
+    | grep -E '(^|/)kite-(api|controller|gateway|frontend):' \
     | xargs -r -n 1 ${K3S_CTR_CMD} images rm || true
 }
 
@@ -351,6 +288,12 @@ main() {
       exit 1
       ;;
   esac
+
+  if [[ "${RESTORE_HOST_SSHD}" == "true" ]]; then
+    "${ROOT_DIR}/build/deploy/scripts/manage-host-sshd.sh" restore
+  else
+    log "skipping host sshd restore because RESTORE_HOST_SSHD=${RESTORE_HOST_SSHD}"
+  fi
 
   log "clear complete"
 }

@@ -174,7 +174,7 @@ Response `200`:
 }
 ```
 
-`vps-access-<vmName>` SSH Service는 ClusterIP이며, `kite-host-agent`가 VM SSH key Secret을 읽어 host Linux 계정의 proxy shell을 구성한다.
+`vps-access-<vmName>` SSH Service는 ClusterIP이며, `kite-gateway`가 VM SSH key Secret을 읽어 Kubernetes 내부에서 VM SSH 세션으로 프록시한다.
 
 ### `POST /api/v1/vms`
 
@@ -191,6 +191,10 @@ Request:
   "disk": 25
 }
 ```
+
+`sshPassword`는 HTTP 요청에서만 사용한다. API는 이 값을 즉시 hash하여
+`KiteVirtualMachine.spec.sshPasswordHash`에 저장하고, 응답과 VM 목록에는
+password 계열 값을 포함하지 않는다.
 
 선택 필드:
 

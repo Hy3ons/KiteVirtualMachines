@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/dynamic"
 
+	"kite/internal/auth"
 	"kite/internal/store"
 )
 
@@ -107,15 +108,18 @@ type VirtualMachine struct {
 // vmStore reads and writes namespaced KiteVirtualMachine resources.
 // This service is used by kite-api VM handlers before kite-controller reconciles real resources.
 type Service struct {
-	vmStore *store.VirtualMachineStore
+	vmStore      *store.VirtualMachineStore
+	passwordSalt string
 }
 
 // NewService creates a VM service backed by a dynamic Kubernetes client.
 // dynamicClient is used by the underlying store for KiteVirtualMachine CRD operations.
+// passwordSalt hashes gateway SSH passwords before they are stored in KiteVirtualMachine spec.
 // The returned service is request-scoped by API handlers.
-func NewService(dynamicClient dynamic.Interface) *Service {
+func NewService(dynamicClient dynamic.Interface, passwordSalt string) *Service {
 	return &Service{
-		vmStore: store.NewVirtualMachineStore(dynamicClient),
+		vmStore:      store.NewVirtualMachineStore(dynamicClient),
+		passwordSalt: passwordSalt,
 	}
 }
 
@@ -124,10 +128,14 @@ func NewService(dynamicClient dynamic.Interface) *Service {
 // req contains normalized desired VM fields from the HTTP handler.
 // The returned VM is converted from the created CRD object.
 func (s *Service) Create(ctx context.Context, req CreateRequest) (VirtualMachine, error) {
+	if s.passwordSalt == "" {
+		return VirtualMachine{}, invalid("password salt is required")
+	}
 	record, err := createRecord(req)
 	if err != nil {
 		return VirtualMachine{}, err
 	}
+	record.Spec.SSHPasswordHash = auth.HashPassword(req.SSHPassword, s.passwordSalt)
 	if err := s.ensureUniqueSSHID(ctx, record.Spec.SSHID, "", ""); err != nil {
 		return VirtualMachine{}, err
 	}
@@ -183,6 +191,9 @@ func (s *Service) Get(ctx context.Context, namespace string, name string) (Virtu
 // namespace and name identify the KiteVirtualMachine CRD.
 // req contains optional spec fields; nil fields preserve the current CRD value.
 func (s *Service) Update(ctx context.Context, namespace string, name string, req UpdateRequest) (VirtualMachine, error) {
+	if s.passwordSalt == "" {
+		return VirtualMachine{}, invalid("password salt is required")
+	}
 	current, err := s.vmStore.Get(ctx, namespace, name)
 	if err != nil {
 		return VirtualMachine{}, err
@@ -195,6 +206,9 @@ func (s *Service) Update(ctx context.Context, namespace string, name string, req
 
 	if err := applyUpdate(&record, req); err != nil {
 		return VirtualMachine{}, err
+	}
+	if req.SSHPassword != nil {
+		record.Spec.SSHPasswordHash = auth.HashPassword(*req.SSHPassword, s.passwordSalt)
 	}
 	if req.SSHID != nil {
 		if err := s.ensureUniqueSSHID(ctx, record.Spec.SSHID, namespace, name); err != nil {
@@ -210,9 +224,9 @@ func (s *Service) Update(ctx context.Context, namespace string, name string, req
 	return vmFromObject(updated), nil
 }
 
-// ensureUniqueSSHID checks that no other KiteVirtualMachine uses the same host login id.
+// ensureUniqueSSHID checks that no other KiteVirtualMachine uses the same SSH login id.
 // ctx controls the cluster-wide KiteVirtualMachine list request.
-// sshID is the desired spec.sshId value that maps to one Linux account on the single-node host.
+// sshID is the desired spec.sshId value that maps one external SSH username to one VM route.
 // currentNamespace and currentName identify the VM being updated and are empty during create.
 // This function is used by create and sshId update flows before writing the KiteVirtualMachine CRD.
 func (s *Service) ensureUniqueSSHID(ctx context.Context, sshID string, currentNamespace string, currentName string) error {
@@ -311,7 +325,6 @@ func createRecord(req CreateRequest) (store.KiteVirtualMachineRecord, error) {
 			PowerState:   req.PowerState,
 			DomainPrefix: req.DomainPrefix,
 			SSHID:        req.SSHID,
-			SSHPassword:  req.SSHPassword,
 		},
 	}, nil
 }
@@ -329,15 +342,15 @@ func recordFromObject(obj *unstructured.Unstructured) (store.KiteVirtualMachineR
 		Name:      obj.GetName(),
 		Namespace: obj.GetNamespace(),
 		Spec: store.KiteVirtualMachineSpec{
-			CPU:          int(intValue(spec, "cpu")),
-			Memory:       stringValue(spec, "memory"),
-			Image:        stringValue(spec, "image"),
-			Disk:         stringValue(spec, "disk"),
-			PowerState:   stringValue(spec, "powerState"),
-			DomainPrefix: stringValue(spec, "domainPrefix"),
-			SSHID:        stringValue(spec, "sshId"),
-			SSHPassword:  stringValue(spec, "sshPassword"),
-			Delete:       boolValue(spec, "delete"),
+			CPU:             int(intValue(spec, "cpu")),
+			Memory:          stringValue(spec, "memory"),
+			Image:           stringValue(spec, "image"),
+			Disk:            stringValue(spec, "disk"),
+			PowerState:      stringValue(spec, "powerState"),
+			DomainPrefix:    stringValue(spec, "domainPrefix"),
+			SSHID:           stringValue(spec, "sshId"),
+			SSHPasswordHash: stringValue(spec, "sshPasswordHash"),
+			Delete:          boolValue(spec, "delete"),
 		},
 	}, nil
 }
@@ -378,7 +391,6 @@ func applyUpdate(record *store.KiteVirtualMachineRecord, req UpdateRequest) erro
 		if err := validateSSHPassword(*req.SSHPassword); err != nil {
 			return err
 		}
-		record.Spec.SSHPassword = *req.SSHPassword
 	}
 	if req.PowerState != nil {
 		powerState := strings.TrimSpace(*req.PowerState)
@@ -410,10 +422,10 @@ func validateDisk(disk string) error {
 	return nil
 }
 
-// validateSSHPassword rejects values that break chpasswd or hide user mistakes.
-// password is stored as KiteVirtualMachine spec.sshPassword and later passed to VM and host chpasswd.
-// A nil error means the value can be safely carried through YAML/base64 rendering and chpasswd stdin.
-// This function is used by create and update request validation.
+// validateSSHPassword rejects unsafe or likely mistaken gateway SSH passwords.
+// password is the plain request value and is never stored directly.
+// A nil error means the value can be hashed into spec.sshPasswordHash for gateway authentication.
+// This function is used by create and update request validation before hashing.
 func validateSSHPassword(password string) error {
 	if password == "" {
 		return invalid("sshPassword is required")

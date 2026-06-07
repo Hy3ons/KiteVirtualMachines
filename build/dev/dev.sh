@@ -45,6 +45,7 @@ K3D_CLUSTER_NAME="${K3D_CLUSTER_NAME:-}"
 K3D_LOAD_IMAGES="${K3D_LOAD_IMAGES:-true}"
 KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-}"
 KIND_LOAD_IMAGES="${KIND_LOAD_IMAGES:-true}"
+KITE_GATEWAY_HOST_KEY_SECRET="${KITE_GATEWAY_HOST_KEY_SECRET:-kite-gateway-host-key}"
 
 cleanup() {
   rm -rf "${KUSTOMIZE_OVERLAY_DIR}"
@@ -335,8 +336,8 @@ images:
   - name: ghcr.io/hy3ons/kite-controller
     newName: ${IMAGE_REGISTRY}/kite-controller
     newTag: ${IMAGE_TAG}
-  - name: ghcr.io/hy3ons/kite-host-agent
-    newName: ${IMAGE_REGISTRY}/kite-host-agent
+  - name: ghcr.io/hy3ons/kite-gateway
+    newName: ${IMAGE_REGISTRY}/kite-gateway
     newTag: ${IMAGE_TAG}
   - name: ghcr.io/hy3ons/kite-frontend
     newName: ${IMAGE_REGISTRY}/kite-frontend
@@ -378,18 +379,18 @@ patches:
   - target:
       group: apps
       version: v1
-      kind: DaemonSet
-      name: kite-host-agent
+      kind: Deployment
+      name: kite-gateway
     patch: |-
       apiVersion: apps/v1
-      kind: DaemonSet
+      kind: Deployment
       metadata:
-        name: kite-host-agent
+        name: kite-gateway
       spec:
         template:
           spec:
             containers:
-              - name: kite-host-agent
+              - name: kite-gateway
                 imagePullPolicy: ${pull_policy}
   - target:
       group: apps
@@ -412,8 +413,26 @@ EOF
 }
 
 apply_manifest() {
+  ensure_gateway_host_key_secret
+
   log "applying ${RENDERED_MANIFEST}"
   kubectl apply -f "${RENDERED_MANIFEST}"
+}
+
+ensure_gateway_host_key_secret() {
+  local tmpdir
+
+  kubectl apply -f "${KITE_MANIFEST_DIR}/namespace.yaml"
+  if kubectl -n "${KITE_NAMESPACE}" get secret "${KITE_GATEWAY_HOST_KEY_SECRET}" >/dev/null 2>&1; then
+    return
+  fi
+
+  require_command ssh-keygen
+  tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/kite-gateway-host-key.XXXXXX")"
+  ssh-keygen -q -t rsa -b 4096 -N "" -f "${tmpdir}/ssh_host_rsa_key"
+  kubectl -n "${KITE_NAMESPACE}" create secret generic "${KITE_GATEWAY_HOST_KEY_SECRET}" \
+    --from-file=ssh_host_rsa_key="${tmpdir}/ssh_host_rsa_key"
+  rm -rf "${tmpdir}"
 }
 
 show_debug() {
@@ -432,27 +451,17 @@ wait_for_deployment() {
   fi
 }
 
-wait_for_daemonset() {
-  local daemonset="$1"
-
-  log "waiting for daemonset/${daemonset}"
-  if ! kubectl -n "${KITE_NAMESPACE}" rollout status "daemonset/${daemonset}" --timeout=180s; then
-    show_debug
-    exit 1
-  fi
-}
-
 build_images_for_cluster() {
   local cluster="$1"
   local api_image
   local controller_image
-  local host_agent_image
+  local gateway_image
   local frontend_image
   local -a frontend_build_args
 
   api_image="$(image_name kite-api)"
   controller_image="$(image_name kite-controller)"
-  host_agent_image="$(image_name kite-host-agent)"
+  gateway_image="$(image_name kite-gateway)"
   frontend_image="$(image_name kite-frontend)"
   frontend_build_args=(
     --build-arg "VITE_BUILD_MODE=${FRONTEND_VITE_BUILD_MODE}"
@@ -464,47 +473,47 @@ build_images_for_cluster() {
     minikube)
       build_minikube_image "${api_image}" "${ROOT_DIR}/kite/Dockerfile.api" "${ROOT_DIR}/kite"
       build_minikube_image "${controller_image}" "${ROOT_DIR}/kite/Dockerfile.controller" "${ROOT_DIR}/kite"
-      build_minikube_image "${host_agent_image}" "${ROOT_DIR}/kite/Dockerfile.host-agent" "${ROOT_DIR}/kite"
+      build_minikube_image "${gateway_image}" "${ROOT_DIR}/kite/Dockerfile.gateway" "${ROOT_DIR}/kite"
       build_minikube_image "${frontend_image}" "${ROOT_DIR}/kite-frontend/Dockerfile" "${ROOT_DIR}/kite-frontend" "${frontend_build_args[@]}"
       ;;
     k3s)
       build_local_image "${api_image}" "${ROOT_DIR}/kite/Dockerfile.api" "${ROOT_DIR}/kite"
       build_local_image "${controller_image}" "${ROOT_DIR}/kite/Dockerfile.controller" "${ROOT_DIR}/kite"
-      build_local_image "${host_agent_image}" "${ROOT_DIR}/kite/Dockerfile.host-agent" "${ROOT_DIR}/kite"
+      build_local_image "${gateway_image}" "${ROOT_DIR}/kite/Dockerfile.gateway" "${ROOT_DIR}/kite"
       build_local_image "${frontend_image}" "${ROOT_DIR}/kite-frontend/Dockerfile" "${ROOT_DIR}/kite-frontend" "${frontend_build_args[@]}"
       load_image_into_k3s "${api_image}"
       load_image_into_k3s "${controller_image}"
-      load_image_into_k3s "${host_agent_image}"
+      load_image_into_k3s "${gateway_image}"
       load_image_into_k3s "${frontend_image}"
       ;;
     k3d)
       build_local_image "${api_image}" "${ROOT_DIR}/kite/Dockerfile.api" "${ROOT_DIR}/kite"
       build_local_image "${controller_image}" "${ROOT_DIR}/kite/Dockerfile.controller" "${ROOT_DIR}/kite"
-      build_local_image "${host_agent_image}" "${ROOT_DIR}/kite/Dockerfile.host-agent" "${ROOT_DIR}/kite"
+      build_local_image "${gateway_image}" "${ROOT_DIR}/kite/Dockerfile.gateway" "${ROOT_DIR}/kite"
       build_local_image "${frontend_image}" "${ROOT_DIR}/kite-frontend/Dockerfile" "${ROOT_DIR}/kite-frontend" "${frontend_build_args[@]}"
       load_image_into_k3d "${api_image}"
       load_image_into_k3d "${controller_image}"
-      load_image_into_k3d "${host_agent_image}"
+      load_image_into_k3d "${gateway_image}"
       load_image_into_k3d "${frontend_image}"
       ;;
     kind)
       build_local_image "${api_image}" "${ROOT_DIR}/kite/Dockerfile.api" "${ROOT_DIR}/kite"
       build_local_image "${controller_image}" "${ROOT_DIR}/kite/Dockerfile.controller" "${ROOT_DIR}/kite"
-      build_local_image "${host_agent_image}" "${ROOT_DIR}/kite/Dockerfile.host-agent" "${ROOT_DIR}/kite"
+      build_local_image "${gateway_image}" "${ROOT_DIR}/kite/Dockerfile.gateway" "${ROOT_DIR}/kite"
       build_local_image "${frontend_image}" "${ROOT_DIR}/kite-frontend/Dockerfile" "${ROOT_DIR}/kite-frontend" "${frontend_build_args[@]}"
       load_image_into_kind "${api_image}"
       load_image_into_kind "${controller_image}"
-      load_image_into_kind "${host_agent_image}"
+      load_image_into_kind "${gateway_image}"
       load_image_into_kind "${frontend_image}"
       ;;
     current|k8s|kubernetes)
       build_local_image "${api_image}" "${ROOT_DIR}/kite/Dockerfile.api" "${ROOT_DIR}/kite"
       build_local_image "${controller_image}" "${ROOT_DIR}/kite/Dockerfile.controller" "${ROOT_DIR}/kite"
-      build_local_image "${host_agent_image}" "${ROOT_DIR}/kite/Dockerfile.host-agent" "${ROOT_DIR}/kite"
+      build_local_image "${gateway_image}" "${ROOT_DIR}/kite/Dockerfile.gateway" "${ROOT_DIR}/kite"
       build_local_image "${frontend_image}" "${ROOT_DIR}/kite-frontend/Dockerfile" "${ROOT_DIR}/kite-frontend" "${frontend_build_args[@]}"
       push_local_image "${api_image}"
       push_local_image "${controller_image}"
-      push_local_image "${host_agent_image}"
+      push_local_image "${gateway_image}"
       push_local_image "${frontend_image}"
       if [[ "${PUSH_IMAGES}" != "true" ]]; then
         log "using locally built images only; this works for local Docker-backed clusters or preloaded image names"
@@ -531,6 +540,9 @@ print_summary() {
   echo "  Frontend:"
   echo "    kubectl -n ${KITE_NAMESPACE} port-forward svc/kite-frontend 8081:80"
   echo "    open http://127.0.0.1:8081"
+  echo
+  echo "  gateway:"
+  echo "    ssh <sshId>@<node-ip>"
 }
 
 main() {
@@ -551,7 +563,7 @@ main() {
 
   wait_for_deployment kite-api
   wait_for_deployment kite-controller
-  wait_for_daemonset kite-host-agent
+  wait_for_deployment kite-gateway
   wait_for_deployment kite-frontend
 
   print_summary "${cluster}"

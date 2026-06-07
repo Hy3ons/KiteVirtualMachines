@@ -61,15 +61,15 @@ type KiteVirtualMachine struct {
 // KiteVirtualMachineSpec contains the user-provided spec fields defined by
 // build/kite/crds.yaml.
 type KiteVirtualMachineSpec struct {
-	CPU          int    `json:"cpu,omitempty"`
-	Memory       string `json:"memory"`
-	Image        string `json:"image,omitempty"`
-	Disk         string `json:"disk,omitempty"`
-	PowerState   string `json:"powerState,omitempty"`
-	DomainPrefix string `json:"domainPrefix,omitempty"`
-	SSHID        string `json:"sshId,omitempty"`
-	SSHPassword  string `json:"sshPassword,omitempty"`
-	Delete       bool   `json:"delete,omitempty"`
+	CPU             int    `json:"cpu,omitempty"`
+	Memory          string `json:"memory"`
+	Image           string `json:"image,omitempty"`
+	Disk            string `json:"disk,omitempty"`
+	PowerState      string `json:"powerState,omitempty"`
+	DomainPrefix    string `json:"domainPrefix,omitempty"`
+	SSHID           string `json:"sshId,omitempty"`
+	SSHPasswordHash string `json:"sshPasswordHash,omitempty"`
+	Delete          bool   `json:"delete,omitempty"`
 }
 
 // KiteVirtualMachineStatus contains the controller-managed status fields
