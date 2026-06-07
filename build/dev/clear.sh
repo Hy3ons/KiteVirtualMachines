@@ -79,16 +79,44 @@ delete_kite_resources() {
   kubectl delete -f "${ROOT_DIR}/build/kite-storage/longhorn" --ignore-not-found=true || true
   remove_kite_longhorn_disks
 
-  log "deleting Kite manifests"
-  kubectl delete -k "${ROOT_DIR}/build/kite" --ignore-not-found=true || true
+  log "stopping Kite workloads"
+  kubectl delete -f "${ROOT_DIR}/build/kite/host-agent.yaml" --ignore-not-found=true --wait=false || true
+  kubectl delete -f "${ROOT_DIR}/build/kite/controller.yaml" --ignore-not-found=true --wait=false || true
+  kubectl delete -f "${ROOT_DIR}/build/kite/api.yaml" --ignore-not-found=true --wait=false || true
+  kubectl delete -f "${ROOT_DIR}/build/kite/frontend.yaml" --ignore-not-found=true --wait=false || true
+
+  log "deleting Kite custom resources"
+  delete_kite_custom_resources
+
+  log "deleting Kite shared manifests"
+  kubectl delete -f "${ROOT_DIR}/build/kite/config.yaml" --ignore-not-found=true --wait=false || true
+  kubectl delete -f "${ROOT_DIR}/build/kite/rbac.yaml" --ignore-not-found=true --wait=false || true
+  kubectl delete -f "${ROOT_DIR}/build/kite/serviceaccount.yaml" --ignore-not-found=true --wait=false || true
 
   log "deleting Kite namespace-scoped resources from namespace/${KITE_NAMESPACE}"
-  kubectl delete namespace "${KITE_NAMESPACE}" --ignore-not-found=true
+  kubectl delete namespace "${KITE_NAMESPACE}" --ignore-not-found=true --wait=false || true
 
   log "deleting remaining Kite cluster-scoped resources"
-  kubectl delete crd kiteusers.hy3ons.github.io kitevirtualmachines.hy3ons.github.io --ignore-not-found=true
-  kubectl delete clusterrole kite-control-plane-role --ignore-not-found=true
-  kubectl delete clusterrolebinding kite-control-plane-binding --ignore-not-found=true
+  kubectl delete -f "${ROOT_DIR}/build/kite/crds.yaml" --ignore-not-found=true --wait=false || true
+  kubectl delete clusterrole kite-control-plane-role --ignore-not-found=true --wait=false || true
+  kubectl delete clusterrolebinding kite-control-plane-binding --ignore-not-found=true --wait=false || true
+}
+
+delete_kite_custom_resources() {
+  if kubectl get crd kitevirtualmachines.hy3ons.github.io >/dev/null 2>&1; then
+    kubectl get kitevirtualmachines.hy3ons.github.io -A -o jsonpath='{range .items[*]}{.metadata.namespace}{" "}{.metadata.name}{"\n"}{end}' 2>/dev/null \
+      | while read -r namespace name; do
+          [[ -z "${namespace}" || -z "${name}" ]] && continue
+          kubectl -n "${namespace}" patch kitevirtualmachines.hy3ons.github.io "${name}" --type=merge -p '{"metadata":{"finalizers":[]}}' || true
+        done
+    kubectl delete kitevirtualmachines.hy3ons.github.io -A --all --ignore-not-found=true --wait=false || true
+  fi
+
+  if kubectl get crd kiteusers.hy3ons.github.io >/dev/null 2>&1; then
+    kubectl get kiteusers.hy3ons.github.io -o name 2>/dev/null \
+      | xargs -r -n 1 kubectl patch --type=merge -p '{"metadata":{"finalizers":[]}}' || true
+    kubectl delete kiteusers.hy3ons.github.io --all --ignore-not-found=true --wait=false || true
+  fi
 }
 
 remove_kite_longhorn_disks() {
