@@ -2,8 +2,6 @@
 set -euo pipefail
 
 KITE_NAMESPACE="${KITE_NAMESPACE:-kite}"
-KITE_LONGHORN_DISK_NAME="${KITE_LONGHORN_DISK_NAME:-kite-longhorn}"
-KITE_LONGHORN_DISK_PATH="${KITE_LONGHORN_DISK_PATH:-/mnt/kite-longhorn}"
 KITE_LONGHORN_DISK_TAG="${KITE_LONGHORN_DISK_TAG:-kite}"
 
 log() {
@@ -12,28 +10,27 @@ log() {
 
 require_kite_longhorn_disk() {
   local node="$1"
-  local disk
-  local path
+  local disks
+  local found
+  local name
   local allow_scheduling
   local tags
+  local ready
+  local schedulable
 
-  disk="$(kubectl -n longhorn-system get "nodes.longhorn.io/${node}" -o "go-template={{ with index .spec.disks \"${KITE_LONGHORN_DISK_NAME}\" }}{{ .path }}|{{ .allowScheduling }}|{{ range .tags }}{{ . }} {{ end }}{{ end }}")"
-  if [[ -z "${disk}" ]]; then
-    echo "[kite-deploy] missing Longhorn disk ${KITE_LONGHORN_DISK_NAME} on node/${node}" >&2
-    exit 1
-  fi
+  disks="$(kubectl -n longhorn-system get "nodes.longhorn.io/${node}" -o 'go-template={{ range $name, $disk := .spec.disks }}{{ $status := index $.status.diskStatus $name }}{{ $name }}|{{ $disk.allowScheduling }}|{{ range $disk.tags }}{{ . }} {{ end }}|{{ if $status }}{{ range $status.conditions }}{{ if eq .type "Ready" }}{{ .status }}{{ end }}{{ end }}{{ end }}|{{ if $status }}{{ range $status.conditions }}{{ if eq .type "Schedulable" }}{{ .status }}{{ end }}{{ end }}{{ end }}{{ "\n" }}{{ end }}')"
 
-  IFS="|" read -r path allow_scheduling tags <<< "${disk}"
-  if [[ "${path}" != "${KITE_LONGHORN_DISK_PATH}" ]]; then
-    echo "[kite-deploy] Longhorn disk ${KITE_LONGHORN_DISK_NAME} on node/${node} uses path ${path}, expected ${KITE_LONGHORN_DISK_PATH}" >&2
-    exit 1
-  fi
-  if [[ "${allow_scheduling}" != "true" ]]; then
-    echo "[kite-deploy] Longhorn disk ${KITE_LONGHORN_DISK_NAME} on node/${node} does not allow scheduling" >&2
-    exit 1
-  fi
-  if [[ " ${tags} " != *" ${KITE_LONGHORN_DISK_TAG} "* ]]; then
-    echo "[kite-deploy] Longhorn disk ${KITE_LONGHORN_DISK_NAME} on node/${node} is missing tag ${KITE_LONGHORN_DISK_TAG}" >&2
+  found="false"
+  while IFS="|" read -r name allow_scheduling tags ready schedulable; do
+    [[ -z "${name}" ]] && continue
+    if [[ "${allow_scheduling}" == "true" && " ${tags} " == *" ${KITE_LONGHORN_DISK_TAG} "* && "${ready}" == "True" && "${schedulable}" == "True" ]]; then
+      found="true"
+      break
+    fi
+  done <<< "${disks}"
+
+  if [[ "${found}" != "true" ]]; then
+    echo "[kite-deploy] node/${node} has no Ready/Schedulable Longhorn disk tagged ${KITE_LONGHORN_DISK_TAG}" >&2
     exit 1
   fi
 }

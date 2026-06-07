@@ -9,6 +9,7 @@ DELETE_LONGHORN_FORCE="${DELETE_LONGHORN_FORCE:-false}"
 DELETE_LONGHORN_DATA="${DELETE_LONGHORN_DATA:-false}"
 DELETE_LONGHORN_DATA_CONFIRM="${DELETE_LONGHORN_DATA_CONFIRM:-false}"
 KITE_LONGHORN_DISK_NAME="${KITE_LONGHORN_DISK_NAME:-kite-longhorn}"
+KITE_LONGHORN_DISK_TAG="${KITE_LONGHORN_DISK_TAG:-kite}"
 
 log() {
   echo "[kite-deploy] $*"
@@ -19,12 +20,32 @@ remove_kite_longhorn_disks() {
     return
   fi
 
-  log "removing Kite Longhorn disk entries from Longhorn node resources"
+  log "removing Kite Longhorn disk entries and tags from Longhorn node resources"
   kubectl -n longhorn-system get nodes.longhorn.io -o name 2>/dev/null \
     | while read -r node; do
         [[ -z "${node}" ]] && continue
         kubectl -n longhorn-system patch "${node}" --type=json -p "[{\"op\":\"remove\",\"path\":\"/spec/disks/${KITE_LONGHORN_DISK_NAME}\"}]" 2>/dev/null || true
+        remove_kite_longhorn_disk_tags "${node}"
       done
+}
+
+remove_kite_longhorn_disk_tags() {
+  local node="$1"
+  local disks
+  local disk
+  local tags
+  local next_tags
+
+  disks="$(kubectl -n longhorn-system get "${node}" -o 'go-template={{ range $name, $disk := .spec.disks }}{{ $name }}|{{ range $disk.tags }}{{ . }} {{ end }}{{ "\n" }}{{ end }}' 2>/dev/null || true)"
+  while IFS="|" read -r disk tags; do
+    [[ -z "${disk}" ]] && continue
+    if [[ " ${tags} " != *" ${KITE_LONGHORN_DISK_TAG} "* ]]; then
+      continue
+    fi
+
+    next_tags="$(printf '%s\n' "${tags}" | xargs -n 1 | awk -v tag="${KITE_LONGHORN_DISK_TAG}" '$0 != tag && NF && !seen[$0]++ { printf "%s\"%s\"", sep, $0; sep=", " }')"
+    kubectl -n longhorn-system patch "${node}" --type=json -p "[{\"op\":\"replace\",\"path\":\"/spec/disks/${disk}/tags\",\"value\":[${next_tags}]}]" 2>/dev/null || true
+  done <<< "${disks}"
 }
 
 longhorn_pv_count() {
