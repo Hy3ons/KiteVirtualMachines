@@ -5,8 +5,7 @@ package kite.resource.v1;
 option go_package = "kite/api/proto/resource;resourcepb";
 
 // KiteResourceService is used by the kite controller gRPC server to create the
-// two custom resources defined in custom/kite-user-crd.yaml and
-// custom/kite-machine-crd.yaml.
+// two custom resources defined in build/kite/crds.yaml.
 service KiteResourceService {
   rpc CreateKiteUser(CreateKiteUserRequest) returns (CreateResourceResponse);
   rpc CreateKiteVirtualMachine(CreateKiteVirtualMachineRequest) returns (CreateResourceResponse);

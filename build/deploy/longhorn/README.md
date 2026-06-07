@@ -15,7 +15,7 @@ uses `diskSelector: "kite"` so Kite VM disks stay on Kite-owned Longhorn disks.
 build/deploy/scripts/install-longhorn.sh
 build/deploy/scripts/wait-longhorn.sh
 build/deploy/scripts/configure-longhorn-kite-disk.sh
-kubectl apply -f build/kite-storage/longhorn
+kubectl apply -f build/kite-storage/longhorn/storageclass.yaml
 ```
 
 Set `LONGHORN_VERSION` or `LONGHORN_MANIFEST_URL` to pin an exact production

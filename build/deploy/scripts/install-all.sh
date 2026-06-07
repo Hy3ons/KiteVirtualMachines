@@ -31,7 +31,7 @@ main() {
   fi
   "${ROOT_DIR}/build/deploy/scripts/wait-longhorn.sh"
   "${ROOT_DIR}/build/deploy/scripts/configure-longhorn-kite-disk.sh"
-  kubectl apply -f "${ROOT_DIR}/build/kite-storage/longhorn"
+  kubectl apply -f "${ROOT_DIR}/build/kite-storage/longhorn/storageclass.yaml"
 
   if [[ "${INSTALL_KUBEVIRT}" == "true" ]]; then
     "${ROOT_DIR}/build/deploy/scripts/install-kubevirt.sh"

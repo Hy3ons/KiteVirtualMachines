@@ -10,7 +10,8 @@ This repository contains the Kite Kubernetes control plane prototype.
 - `kite/api/v1`: Go structs for Kite custom resources.
 - `kite/internal/kube`: Kubernetes client helpers.
 - `kite/internal/render`: YAML template renderers that return `unstructured.Unstructured`.
-- `custom`: Kite CRD definitions and example custom resources.
+- `build/kite`: Kite CRD definitions and shared install manifests.
+- `build/examples`: example Kite custom resources for manual testing.
 
 ## Coding Rules
 
@@ -61,12 +62,12 @@ CRD `status`.
 Current custom resources:
 
 - `KiteUser`
-  - CRD file: `custom/kite-user-crd.yaml`
+  - CRD file: `build/kite/crds.yaml`
   - scope: `Cluster`
   - resource: `kiteusers`
   - group/version: `anacnu.com/v1`
 - `KiteVirtualMachine`
-  - CRD file: `custom/kite-machine-crd.yaml`
+  - CRD file: `build/kite/crds.yaml`
   - scope: `Namespaced`
   - resource: `kitevirtualmachines`
   - group/version: `anacnu.com/v1`

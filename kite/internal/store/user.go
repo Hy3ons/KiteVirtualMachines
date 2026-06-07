@@ -9,7 +9,7 @@ import (
 )
 
 // KiteUserSpec contains the spec fields stored in the KiteUser CRD.
-// These values come from API user requests and are written to custom/kite-user-crd.yaml resources.
+// These values come from API user requests and are written to KiteUser custom resources.
 type KiteUserSpec struct {
 	Username     string
 	Email        string

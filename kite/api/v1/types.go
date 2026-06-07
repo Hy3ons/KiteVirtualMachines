@@ -5,7 +5,7 @@ import (
 )
 
 // KiteUser represents the cluster-scoped KiteUser custom resource.
-// This type maps to custom/kite-user-crd.yaml and is used when converting
+// This type maps to build/kite/crds.yaml and is used when converting
 // unstructured KiteUser objects into Go structs.
 type KiteUser struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -15,7 +15,7 @@ type KiteUser struct {
 	Status KiteUserStatus `json:"status,omitempty"`
 }
 
-// KiteUserSpec contains the spec fields defined by custom/kite-user-crd.yaml.
+// KiteUserSpec contains the KiteUser spec fields defined by build/kite/crds.yaml.
 type KiteUserSpec struct {
 	Username     string `json:"username,omitempty"`
 	Email        string `json:"email,omitempty"`
@@ -48,7 +48,7 @@ type KiteUserList struct {
 }
 
 // KiteVirtualMachine represents the namespaced KiteVirtualMachine custom resource.
-// This type maps to custom/kite-machine-crd.yaml and is used by the controller
+// This type maps to build/kite/crds.yaml and is used by the controller
 // when converting unstructured KiteVirtualMachine objects into Go structs.
 type KiteVirtualMachine struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -59,7 +59,7 @@ type KiteVirtualMachine struct {
 }
 
 // KiteVirtualMachineSpec contains the user-provided spec fields defined by
-// custom/kite-machine-crd.yaml.
+// build/kite/crds.yaml.
 type KiteVirtualMachineSpec struct {
 	CPU          int    `json:"cpu,omitempty"`
 	Memory       string `json:"memory"`
@@ -73,7 +73,7 @@ type KiteVirtualMachineSpec struct {
 }
 
 // KiteVirtualMachineStatus contains the controller-managed status fields
-// defined by custom/kite-machine-crd.yaml.
+// defined by build/kite/crds.yaml.
 type KiteVirtualMachineStatus struct {
 	Phase               string             `json:"phase,omitempty"`
 	CurrentPowerState   string             `json:"currentPowerState,omitempty"`

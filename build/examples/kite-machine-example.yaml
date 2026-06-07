@@ -1,0 +1,10 @@
+apiVersion: anacnu.com/v1
+kind: KiteVirtualMachine
+metadata:
+  name: test-kite-vm
+  namespace: test
+spec:
+  cpu: 2
+  memory: "4Gi"
+  image: "ubuntu-22.04"
+  disk: "4Gi"

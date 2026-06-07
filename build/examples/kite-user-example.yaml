@@ -1,9 +1,7 @@
 apiVersion: anacnu.com/v1
 kind: KiteUser
-
 metadata:
   name: example-user1
-
 spec:
   username: test
   email: test@gmail.com
