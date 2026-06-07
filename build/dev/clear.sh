@@ -87,6 +87,10 @@ delete_kite_resources() {
   kubectl delete -f "${ROOT_DIR}/build/kite/api.yaml" --ignore-not-found=true --wait=false || true
   kubectl delete -f "${ROOT_DIR}/build/kite/frontend.yaml" --ignore-not-found=true --wait=false || true
 
+  log "deleting Kite allocated resources from user namespaces"
+  delete_kite_allocated_resources
+  delete_kite_user_namespaces
+
   log "deleting Kite custom resources"
   delete_kite_custom_resources
 
@@ -102,6 +106,116 @@ delete_kite_resources() {
   kubectl delete -f "${ROOT_DIR}/build/kite/crds.yaml" --ignore-not-found=true --wait=false || true
   kubectl delete clusterrole kite-control-plane-role --ignore-not-found=true --wait=false || true
   kubectl delete clusterrolebinding kite-control-plane-binding --ignore-not-found=true --wait=false || true
+}
+
+resource_available() {
+  local resource="$1"
+
+  kubectl api-resources -o name 2>/dev/null | grep -qx "${resource}"
+}
+
+kite_user_namespaces() {
+  if kubectl get crd kiteusers.hy3ons.github.io >/dev/null 2>&1; then
+    kubectl get kiteusers.hy3ons.github.io -o jsonpath='{range .items[*]}{.spec.namespace}{"\n"}{end}' 2>/dev/null || true
+  fi
+
+  kubectl get namespace -l hy3ons.github.io/managed-by=kite-controller -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null || true
+}
+
+patch_finalizers_by_selector() {
+  local namespace="$1"
+  local resource="$2"
+  local selector="$3"
+
+  resource_available "${resource}" || return 0
+  kubectl -n "${namespace}" get "${resource}" -l "${selector}" -o name 2>/dev/null \
+    | xargs -r -n 1 kubectl -n "${namespace}" patch --type=merge -p '{"metadata":{"finalizers":[]}}' || true
+}
+
+delete_by_selector() {
+  local namespace="$1"
+  local resource="$2"
+  local selector="$3"
+
+  resource_available "${resource}" || return 0
+  if [[ -n "${selector}" ]]; then
+    kubectl -n "${namespace}" delete "${resource}" -l "${selector}" --ignore-not-found=true --wait=false 2>/dev/null || true
+  else
+    kubectl -n "${namespace}" delete "${resource}" --all --ignore-not-found=true --wait=false 2>/dev/null || true
+  fi
+}
+
+delete_by_name_prefix() {
+  local namespace="$1"
+  local resource="$2"
+  local prefix="$3"
+
+  resource_available "${resource}" || return 0
+  kubectl -n "${namespace}" get "${resource}" -o name 2>/dev/null \
+    | awk -F/ -v prefix="${prefix}" '$2 ~ "^" prefix { print }' \
+    | xargs -r -n 1 kubectl -n "${namespace}" delete --ignore-not-found=true --wait=false || true
+}
+
+delete_pvcs_for_kite_datavolumes() {
+  local namespace="$1"
+
+  resource_available datavolumes.cdi.kubevirt.io || return 0
+  kubectl -n "${namespace}" get datavolumes.cdi.kubevirt.io -l hy3ons.github.io/managed-by=kite-controller -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null \
+    | while read -r name; do
+        [[ -z "${name}" ]] && continue
+        kubectl -n "${namespace}" patch pvc "${name}" --type=merge -p '{"metadata":{"finalizers":[]}}' 2>/dev/null || true
+        kubectl -n "${namespace}" delete pvc "${name}" --ignore-not-found=true --wait=false 2>/dev/null || true
+      done
+}
+
+delete_kite_namespace_allocations() {
+  local namespace="$1"
+  local selector="hy3ons.github.io/managed-by=kite-controller"
+
+  [[ -z "${namespace}" || "${namespace}" == "${KITE_NAMESPACE}" ]] && return 0
+  if ! kubectl get namespace "${namespace}" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  log "deleting Kite allocations in namespace/${namespace}"
+  patch_finalizers_by_selector "${namespace}" virtualmachines.kubevirt.io "${selector}"
+  patch_finalizers_by_selector "${namespace}" virtualmachineinstances.kubevirt.io "${selector}"
+  patch_finalizers_by_selector "${namespace}" datavolumes.cdi.kubevirt.io "${selector}"
+  patch_finalizers_by_selector "${namespace}" persistentvolumeclaims "${selector}"
+
+  delete_pvcs_for_kite_datavolumes "${namespace}"
+  delete_by_selector "${namespace}" virtualmachines.kubevirt.io "${selector}"
+  delete_by_selector "${namespace}" virtualmachineinstances.kubevirt.io "${selector}"
+  delete_by_selector "${namespace}" datavolumes.cdi.kubevirt.io "${selector}"
+  delete_by_selector "${namespace}" persistentvolumeclaims "${selector}"
+  delete_by_selector "${namespace}" pods "${selector}"
+  delete_by_name_prefix "${namespace}" pods virt-launcher-
+  delete_by_selector "${namespace}" services "${selector}"
+  delete_by_selector "${namespace}" ingresses.networking.k8s.io "${selector}"
+  delete_by_selector "${namespace}" secrets "${selector}"
+  delete_by_selector "${namespace}" networkpolicies.networking.k8s.io ""
+  delete_by_selector "${namespace}" resourcequotas ""
+  delete_by_selector "${namespace}" limitranges ""
+}
+
+delete_kite_allocated_resources() {
+  kite_user_namespaces \
+    | sed '/^[[:space:]]*$/d' \
+    | sort -u \
+    | while read -r namespace; do
+        delete_kite_namespace_allocations "${namespace}"
+      done
+}
+
+delete_kite_user_namespaces() {
+  kite_user_namespaces \
+    | sed '/^[[:space:]]*$/d' \
+    | sort -u \
+    | while read -r namespace; do
+        [[ -z "${namespace}" || "${namespace}" == "${KITE_NAMESPACE}" ]] && continue
+        log "deleting Kite user namespace/${namespace}"
+        kubectl delete namespace "${namespace}" --ignore-not-found=true --wait=false || true
+      done
 }
 
 delete_kite_custom_resources() {

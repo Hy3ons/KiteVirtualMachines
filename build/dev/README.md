@@ -67,6 +67,11 @@ and local Kite images through `build/dev/clear.sh`.
 KITE_CLUSTER=k3s ./clear.sh
 ```
 
+The default cleanup removes Kite-owned application resources, Kite CRDs,
+KiteUser namespaces, and VM allocations inside those namespaces. It does not
+delete shared KubeVirt, CDI, or Longhorn installations, because those components
+may already be used by workloads outside Kite.
+
 Longhorn cleanup is disabled by default because it deletes VM disk data.
 
 ```sh
