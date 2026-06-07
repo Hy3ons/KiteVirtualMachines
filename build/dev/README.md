@@ -4,6 +4,30 @@
 local Docker, then applies the shared `build/kite` manifests to the selected
 cluster.
 
+For a full development install that also prepares Longhorn, KubeVirt, CDI, and
+the Ubuntu golden image before building and deploying Kite from local source, use
+the root wrapper:
+
+```sh
+KITE_CLUSTER=k3s ./dev.sh
+```
+
+`./dev.sh` calls `build/dev/all-in-one.sh`, and that script calls
+`build/dev/dev.sh` after the infrastructure is ready. The Kite API, controller,
+host-agent, and frontend are built from local source and deployed as Kubernetes
+workloads.
+
+Each phase can be skipped through environment flags:
+
+```sh
+INSTALL_LONGHORN=false \
+INSTALL_KUBEVIRT=false \
+INSTALL_CDI=false \
+APPLY_GOLDEN_IMAGE=false \
+KITE_CLUSTER=k3s \
+./dev.sh
+```
+
 ```sh
 KITE_CLUSTER=k3s build/dev/dev.sh
 ```

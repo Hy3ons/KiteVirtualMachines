@@ -21,13 +21,13 @@ must satisfy Longhorn prerequisites such as usable disks and required host
 packages.
 
 ```sh
-INSTALL_LONGHORN=true build/deploy/scripts/install-all.sh
+INSTALL_LONGHORN=true ./install.sh
 ```
 
 If Longhorn is already installed:
 
 ```sh
-build/deploy/scripts/install-all.sh
+./install.sh
 ```
 
 ## Verify
