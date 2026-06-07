@@ -143,6 +143,14 @@ Kite has two top-level install entrypoints:
   imports or loads those images into the selected local cluster before deploying
   Kite.
 
+Both install modes deploy `kite-gateway` as the SSH entrypoint. When the target
+host is Linux with systemd OpenSSH and the gateway external port is `22`, the
+install flow asks before moving the host's existing `sshd` listener to `2222`.
+The original config is backed up under `/etc/kite/host-sshd`, and
+`./clear.sh` or `build/deploy/scripts/uninstall-kite.sh` can restore it from
+that backup. Hosts without OpenSSH, systemd, Linux, or an active port `22`
+listener are skipped safely.
+
 ## Development Install
 
 `./dev.sh` builds local Docker images and deploys them to the selected Kubernetes cluster.
@@ -181,6 +189,15 @@ CLEAR_LONGHORN_DATA=true CLEAR_LONGHORN_DATA_CONFIRM=true KITE_CLUSTER=k3s ./cle
 
 More details are in `build/dev/README.md`.
 
+Host SSHD handoff can be controlled with environment variables:
+
+```sh
+KITE_MANAGE_HOST_SSHD=true KITE_CLUSTER=k3s ./dev.sh
+MANAGE_HOST_SSHD=false KITE_CLUSTER=k3s ./dev.sh
+KITE_RESTORE_HOST_SSHD=true KITE_CLUSTER=k3s ./clear.sh
+RESTORE_HOST_SSHD=false KITE_CLUSTER=k3s ./clear.sh
+```
+
 ## Production-Oriented k3s Install
 
 `./install.sh` contains a pull-based install flow for k3s clusters. Longhorn,
@@ -217,6 +234,9 @@ build/deploy/scripts/uninstall-kite.sh
 ```
 
 More details are in `build/deploy/README.md`.
+
+The same host SSHD handoff variables are supported by `./install.sh` and
+`build/deploy/scripts/uninstall-kite.sh`.
 
 ## Smoke Test
 

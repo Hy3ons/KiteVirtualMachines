@@ -35,6 +35,40 @@ SSH login username == KiteVirtualMachine.spec.sshId
 
 Duplicate live `sshId` values are rejected by the route table.
 
+## Authentication And VM Login
+
+External password authentication is checked against
+`KiteVirtualMachine.spec.sshPasswordHash`. The VM creation API accepts
+`sshPassword` only in the HTTP request body, hashes it with the runtime
+`passwordSalt`, and stores only the hash in the CRD.
+
+The gateway does not forward the external user's password to the VM. After the
+external user is authenticated, the gateway reads the VM SSH private key Secret
+named by `status.sshKeySecretName` and opens an internal SSH connection as
+`spec.sshId` to:
+
+```text
+vps-access-<vmName>.<namespace>.svc.cluster.local:22
+```
+
+The VM cloud-init creates the same `spec.sshId` Linux user with the matching
+public key and disables password SSH login inside the VM.
+
+## Host Port Handoff
+
+The gateway listens on container port `2222`, while the Kubernetes Service
+exposes external SSH on port `22`. On Linux hosts that already run OpenSSH on
+port `22`, `./dev.sh` and `./install.sh` can move the host sshd listener to
+`2222` after user confirmation.
+
+The handoff is handled by `build/deploy/scripts/manage-host-sshd.sh`:
+
+- non-Linux hosts are skipped,
+- hosts without systemd OpenSSH are skipped,
+- hosts whose sshd is already not using `22` are skipped,
+- confirmed changes are backed up under `/etc/kite/host-sshd`,
+- `./clear.sh` and `uninstall-kite.sh` can restore that backup.
+
 ## Environment
 
 - `KITE_GATEWAY_LISTEN_ADDRESS`: SSH server listen address. Default `:2222`.

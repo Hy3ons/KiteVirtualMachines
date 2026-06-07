@@ -1,18 +1,19 @@
-# Kite API Specifications (Draft)
+# Kite API Specifications
 
-프론트엔드와 백엔드(`kite-api`) 간의 통신을 위해 구현되어야 할 REST API 엔드포인트 명세서입니다.
-현재 프론트엔드의 Mock 데이터 로직은 실제 개발 시 이 명세서의 API들로 교체되어야 합니다.
+프론트엔드와 백엔드(`kite-api`) 간의 REST API 엔드포인트 명세서입니다.
+기본 경로는 `/api/v1`입니다.
 
 ## 1. 인증 및 사용자 (Auth & User)
 
 ### 1-1. 로그인 (`POST /api/v1/auth/login`)
-- **Request Body**: `{ "username": "admin", "password": "password123" }`
-- **Response**: JWT Token, 해당 유저의 `access_level` 및 `namespace` 반환.
+- **Request Body**: `{ "email": "admin@example.com", "password": "password123" }`
+- **Response**: JWT access token, token metadata, 해당 유저의 `accessLevel` 및 `namespace` 반환.
+- **Cookie**: `accessToken` HttpOnly/Secure cookie도 함께 설정합니다.
 
 ### 1-2. 회원가입 (`POST /api/v1/auth/signup`)
-- **Request Body**: `{ "username": "...", "email": "...", "password": "...", "profile_image": "data:image/png;base64,..." }`
-- **Description**: `profile_image`는 Base64 인코딩된 문자열을 받으며 필수가 아닙니다 (빈 값일 경우 기본 프로필 적용).
-- **Response**: `KiteUser` 리소스 생성 (기본 `access_level: 1` 할당).
+- **Request Body**: `{ "username": "...", "email": "...", "password": "..." }`
+- **Description**: 첫 가입자는 `access_level: 3`, 이후 가입자는 `access_level: 0`으로 `KiteUser` CRD를 생성합니다.
+- **Response**: password hash를 제외한 `KiteUser` public response를 반환합니다.
 
 ## 2. 사용자 대시보드 (User Dashboard)
 
@@ -36,37 +37,47 @@
 
 ### 2-2. 가상머신 생성 (`POST /api/v1/vms`)
 - **Request Body**: `{ "name": "...", "domainPrefix": "...", "sshId": "...", "sshPassword": "...", "disk": 25 }`
-- **Description**: 백엔드는 디스크 용량과 `sshId`를 검증한 뒤 CR을 배포합니다. 요청의 `sshPassword`는 CRD에 평문 저장하지 않고 `spec.sshPasswordHash`로 저장합니다.
+- **Description**: 백엔드는 디스크 용량과 전역 유일 `sshId`를 검증한 뒤 `KiteVirtualMachine` CRD를 생성합니다. 요청의 `sshPassword`는 CRD에 평문 저장하지 않고 `spec.sshPasswordHash`로 저장합니다.
 
-### 2-3. 가상머신 상태 제어 (`PATCH /api/v1/vms/:name/power`)
-- **Request Body**: `{ "powerState": "On" | "Off" }`
-- **Description**: `KiteVirtualMachine`의 spec.powerState를 수정하여 컨트롤러가 VM을 정지/시작하도록 유도합니다.
+### 2-3. 가상머신 수정 (`PATCH /api/v1/vms/:name`)
+- **Request Body**: `{ "domainPrefix": "...", "sshPassword": "...", "powerState": "On" | "Off" }`
+- **Description**: 전달된 필드만 `KiteVirtualMachine.spec`에 반영합니다. `sshPassword`는 전달된 경우 새 hash로 저장합니다.
 
-### 2-4. 가상머신 삭제 (`DELETE /api/v1/vms/:name`)
-- **Description**: 가상머신 CR을 영구 삭제합니다.
+### 2-4. 가상머신 시작 (`POST /api/v1/vms/:name/start`)
+- **Description**: `KiteVirtualMachine.spec.powerState`를 `On`으로 수정합니다.
+
+### 2-5. 가상머신 중지 (`POST /api/v1/vms/:name/stop`)
+- **Description**: `KiteVirtualMachine.spec.powerState`를 `Off`로 수정합니다.
+
+### 2-6. 가상머신 삭제 (`DELETE /api/v1/vms/:name`)
+- **Description**: `KiteVirtualMachine.spec.delete=true`를 설정합니다. 실제 KubeVirt VM, DataVolume, Service, Secret 정리는 controller finalizer 흐름이 처리합니다.
 
 ## 3. 관리자 대시보드 (Admin Dashboard)
 
 ### 3-1. 전역 도메인 설정 (`POST /api/v1/admin/domain`)
 - **Request Body**: `{ "baseDomain": "hy3ons.github.io" }`
-- **Description**: `etcd` 또는 K8s ConfigMap에 클러스터 베이스 도메인을 저장/수정합니다.
+- **Description**: `kite/kite-runtime-config` ConfigMap에 클러스터 베이스 도메인을 저장/수정합니다.
 
 ### 3-2. 와일드카드 인증서 갱신 (`POST /api/v1/admin/cert`)
 - **Request Body**: `{ "tlsCert": "...", "tlsKey": "..." }`
-- **Description**: 클러스터 내의 `global-secret` (TLS Secret)을 즉시 갱신합니다.
+- **Description**: `kube-system/global-tls-secret` TLS Secret을 즉시 생성/수정합니다.
 
 ### 3-3. 전체 사용자 조회 (`GET /api/v1/admin/users`)
 - **Description**: 전체 `KiteUser` 목록을 반환합니다.
 
-### 3-4. 사용자 권한 변경 (`PATCH /api/v1/admin/users/:username/level`)
-- **Request Body**: `{ "accessLevel": 3 }`
+### 3-4. 사용자 권한 변경 (`PATCH /api/v1/admin/users/:name/access-level`)
+- **Request Body**: `{ "access_level": 3 }`
 - **Description**: 유저의 레벨을 강등시키거나 관리자로 승급시킵니다.
 
-### 3-5. 사용자 영구 삭제 (`DELETE /api/v1/admin/users/:username`)
-- **Description**: 악성 유저의 네임스페이스와 모든 리소스(`KiteUser` 포함)를 완전히 날려버립니다.
+### 3-5. 사용자 영구 삭제 (`DELETE /api/v1/admin/users/:name`)
+- **Description**: 사용자의 namespace에 있는 `KiteVirtualMachine` CRD를 먼저 삭제한 뒤 `KiteUser` CRD를 삭제합니다.
 
 ### 3-6. 전체 가상머신 조회 (`GET /api/v1/admin/vms`)
 - **Description**: 네임스페이스 구분 없이 클러스터에 존재하는 모든 가상머신을 반환합니다. 소유자(Namespace) 정보가 포함되어야 합니다.
 
-### 3-7. 가상머신 강제 제어 (`PATCH & DELETE /api/v1/admin/vms/:namespace/:name`)
-- **Description**: 관리자 권한으로 타 유저 네임스페이스의 VM을 강제 종료(Force Stop)하거나 강제 삭제(Force Delete)합니다.
+### 3-7. 가상머신 전원 제어 (`PATCH /api/v1/admin/vms/:namespace/:name/power`)
+- **Request Body**: `{ "powerState": "On" | "Off" }`
+- **Description**: manager 이상 권한으로 타 유저 네임스페이스의 VM 전원 desired state를 수정합니다.
+
+### 3-8. 가상머신 삭제 (`DELETE /api/v1/admin/vms/:namespace/:name`)
+- **Description**: manager 이상 권한으로 타 유저 네임스페이스의 VM에 `spec.delete=true`를 설정합니다.
