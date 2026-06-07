@@ -156,6 +156,69 @@ func TestKiteVirtualMachineNeedsSameGenerationReconcileSkipsReadyPhase(t *testin
 	}
 }
 
+// TestUpdateKiteVirtualMachineStatusPreservesStableRuntimePhase verifies same-generation dependency updates.
+// t is the Go test handle used for assertions.
+// The test prevents desired, Service, or DataVolume reconcilers from moving a stopped VM back to Provisioning.
+func TestUpdateKiteVirtualMachineStatusPreservesStableRuntimePhase(t *testing.T) {
+	ctx := context.Background()
+	namespace := "user-a"
+	name := "vm-a"
+	vm := newMachineReconcileKiteVirtualMachineSpec(namespace, name)
+	setMachineReconcileStatus(t, vm, kiteVMPhaseStopped, "Off", 1, metav1.ConditionTrue, kiteVMReasonReconciled, "KubeVirt VirtualMachine is stopped")
+	client := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), machineReconcileListKinds(), vm)
+
+	typedVM, err := kiteVirtualMachineFromEventObject(vm)
+	if err != nil {
+		t.Fatalf("failed to convert test VM: %v", err)
+	}
+	if err := updateKiteVirtualMachineStatus(ctx, client, typedVM, kiteVMPhaseProvisioning, "Off", "", "", metav1.ConditionFalse, kiteVMReasonReconciled, "VM resources are applied and waiting for KubeVirt readiness"); err != nil {
+		t.Fatalf("updateKiteVirtualMachineStatus returned error: %v", err)
+	}
+
+	current, err := client.Resource(kiteVirtualMachineGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("failed to read updated VM: %v", err)
+	}
+	phase, _, _ := unstructured.NestedString(current.Object, "status", "phase")
+	message := firstStatusConditionMessage(current)
+	if phase != kiteVMPhaseStopped {
+		t.Fatalf("expected stable phase %q to be preserved, got %q", kiteVMPhaseStopped, phase)
+	}
+	if message != "KubeVirt VirtualMachine is stopped" {
+		t.Fatalf("expected stable condition message to be preserved, got %q", message)
+	}
+}
+
+// TestUpdateKiteVirtualMachineStatusAllowsProvisioningForNewGeneration verifies real spec changes can transition.
+// t is the Go test handle used for assertions.
+// The test keeps power-state changes from being hidden by the stable-phase preservation guard.
+func TestUpdateKiteVirtualMachineStatusAllowsProvisioningForNewGeneration(t *testing.T) {
+	ctx := context.Background()
+	namespace := "user-a"
+	name := "vm-a"
+	vm := newMachineReconcileKiteVirtualMachineSpec(namespace, name)
+	vm.Object["metadata"].(map[string]any)["generation"] = int64(2)
+	setMachineReconcileStatus(t, vm, kiteVMPhaseStopped, "Off", 1, metav1.ConditionTrue, kiteVMReasonReconciled, "KubeVirt VirtualMachine is stopped")
+	client := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), machineReconcileListKinds(), vm)
+
+	typedVM, err := kiteVirtualMachineFromEventObject(vm)
+	if err != nil {
+		t.Fatalf("failed to convert test VM: %v", err)
+	}
+	if err := updateKiteVirtualMachineStatus(ctx, client, typedVM, kiteVMPhaseProvisioning, "On", "", "", metav1.ConditionFalse, kiteVMReasonReconciled, "KubeVirt VirtualMachine is starting"); err != nil {
+		t.Fatalf("updateKiteVirtualMachineStatus returned error: %v", err)
+	}
+
+	current, err := client.Resource(kiteVirtualMachineGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("failed to read updated VM: %v", err)
+	}
+	phase, _, _ := unstructured.NestedString(current.Object, "status", "phase")
+	if phase != kiteVMPhaseProvisioning {
+		t.Fatalf("expected new generation to move to %q, got %q", kiteVMPhaseProvisioning, phase)
+	}
+}
+
 // TestKiteVirtualMachineStorageClassNameDefaultsWhenConfigMissing verifies the Longhorn default.
 // t is the Go test handle used for assertions.
 // The test is used by VM reconcile code when kite-runtime-config has not been created yet.
@@ -207,6 +270,27 @@ func firstStatusConditionMessage(obj *unstructured.Unstructured) string {
 
 	message, _ := condition["message"].(string)
 	return message
+}
+
+// setMachineReconcileStatus writes VM status fields used by reconcile tests.
+// t is the Go test handle used for assertion failures.
+// obj is the unstructured KiteVirtualMachine under test.
+// phase, powerState, observedGeneration, conditionStatus, reason, and message model controller status.
+func setMachineReconcileStatus(t *testing.T, obj *unstructured.Unstructured, phase string, powerState string, observedGeneration int64, conditionStatus metav1.ConditionStatus, reason string, message string) {
+	t.Helper()
+	if err := unstructured.SetNestedField(obj.Object, phase, "status", "phase"); err != nil {
+		t.Fatalf("failed to set status.phase: %v", err)
+	}
+	if err := unstructured.SetNestedField(obj.Object, powerState, "status", "currentPowerState"); err != nil {
+		t.Fatalf("failed to set status.currentPowerState: %v", err)
+	}
+	if err := unstructured.SetNestedField(obj.Object, observedGeneration, "status", "observedGeneration"); err != nil {
+		t.Fatalf("failed to set status.observedGeneration: %v", err)
+	}
+	conditions := []any{kiteVirtualMachineCondition(observedGeneration, conditionStatus, reason, message)}
+	if err := unstructured.SetNestedSlice(obj.Object, conditions, "status", "conditions"); err != nil {
+		t.Fatalf("failed to set status.conditions: %v", err)
+	}
 }
 
 // machineReconcileListKinds returns fake dynamic client list kind mappings.

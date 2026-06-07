@@ -207,7 +207,9 @@ func updateKiteVirtualMachineDataVolumeStatus(ctx context.Context, dynamicClient
 		}
 
 		observedGeneration := current.GetGeneration()
-		if kiteVirtualMachineDataVolumeStatusMatches(current, observedGeneration, dataVolumePhase, dataVolumeProgress, dataVolumeMessage, overallPhase, conditionStatus, reason) {
+		currentPhase, _, _ := unstructured.NestedString(current.Object, "status", "phase")
+		preserveRuntimeStatus := overallPhase != kiteVMPhaseFailed && kiteVMPhaseIsRuntimeStable(currentPhase)
+		if kiteVirtualMachineDataVolumeStatusMatches(current, observedGeneration, dataVolumePhase, dataVolumeProgress, dataVolumeMessage, overallPhase, conditionStatus, reason, preserveRuntimeStatus) {
 			return nil
 		}
 
@@ -229,17 +231,18 @@ func updateKiteVirtualMachineDataVolumeStatus(ctx context.Context, dynamicClient
 			return err
 		}
 
-		currentPhase, _, _ := unstructured.NestedString(next.Object, "status", "phase")
 		if overallPhase == kiteVMPhaseFailed || currentPhase == "" || currentPhase == kiteVMPhaseProvisioning {
 			if err := unstructured.SetNestedField(next.Object, overallPhase, "status", "phase"); err != nil {
 				return err
 			}
 		}
 
-		conditions, _, _ := unstructured.NestedSlice(next.Object, "status", "conditions")
-		conditions = replaceKiteVirtualMachineCondition(conditions, kiteVirtualMachineCondition(observedGeneration, conditionStatus, reason, dataVolumeMessage))
-		if err := unstructured.SetNestedSlice(next.Object, conditions, "status", "conditions"); err != nil {
-			return err
+		if !preserveRuntimeStatus {
+			conditions, _, _ := unstructured.NestedSlice(next.Object, "status", "conditions")
+			conditions = replaceKiteVirtualMachineCondition(conditions, kiteVirtualMachineCondition(observedGeneration, conditionStatus, reason, dataVolumeMessage))
+			if err := unstructured.SetNestedSlice(next.Object, conditions, "status", "conditions"); err != nil {
+				return err
+			}
 		}
 
 		_, err = dynamicClient.Resource(kiteVirtualMachineGVR).Namespace(vm.Namespace).UpdateStatus(ctx, next, metav1.UpdateOptions{
@@ -257,8 +260,9 @@ func updateKiteVirtualMachineDataVolumeStatus(ctx context.Context, dynamicClient
 // kiteVirtualMachineDataVolumeStatusMatches checks whether a DataVolume status update would be a no-op.
 // current is the latest KiteVirtualMachine object from the API server.
 // The remaining parameters are the status values the DataVolume watcher wants to write.
+// ignoreCondition keeps stable runtime conditions from being replaced by lower-priority disk progress.
 // A true return avoids noisy status updates.
-func kiteVirtualMachineDataVolumeStatusMatches(current *unstructured.Unstructured, observedGeneration int64, dataVolumePhase string, dataVolumeProgress string, dataVolumeMessage string, overallPhase string, conditionStatus metav1.ConditionStatus, reason string) bool {
+func kiteVirtualMachineDataVolumeStatusMatches(current *unstructured.Unstructured, observedGeneration int64, dataVolumePhase string, dataVolumeProgress string, dataVolumeMessage string, overallPhase string, conditionStatus metav1.ConditionStatus, reason string, ignoreCondition bool) bool {
 	currentObservedGeneration, _, _ := unstructured.NestedInt64(current.Object, "status", "observedGeneration")
 	currentDataVolumePhase, _, _ := unstructured.NestedString(current.Object, "status", "dataVolumePhase")
 	currentDataVolumeProgress, _, _ := unstructured.NestedString(current.Object, "status", "dataVolumeProgress")
@@ -271,11 +275,16 @@ func kiteVirtualMachineDataVolumeStatusMatches(current *unstructured.Unstructure
 		phaseMatches = true
 	}
 
-	return currentObservedGeneration == observedGeneration &&
+	metadataMatches := currentObservedGeneration == observedGeneration &&
 		currentDataVolumePhase == dataVolumePhase &&
 		currentDataVolumeProgress == dataVolumeProgress &&
 		currentDataVolumeMessage == dataVolumeMessage &&
-		phaseMatches &&
+		phaseMatches
+	if ignoreCondition {
+		return metadataMatches
+	}
+
+	return metadataMatches &&
 		machineStringValue(currentCondition["status"]) == string(conditionStatus) &&
 		machineStringValue(currentCondition["reason"]) == reason &&
 		machineStringValue(currentCondition["message"]) == dataVolumeMessage

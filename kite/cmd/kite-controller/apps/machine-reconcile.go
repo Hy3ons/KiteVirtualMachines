@@ -832,12 +832,20 @@ func updateKiteVirtualMachineStatus(ctx context.Context, dynamicClient dynamic.I
 		}
 
 		observedGeneration := current.GetGeneration()
-		if kiteVirtualMachineStatusMatches(current, observedGeneration, phase, powerState, domain, nodeName, conditionStatus, reason, message) {
+		currentPhase, _, _ := unstructured.NestedString(current.Object, "status", "phase")
+		currentObservedGeneration, _, _ := unstructured.NestedInt64(current.Object, "status", "observedGeneration")
+		preserveRuntimeStatus := shouldPreserveRuntimeStatus(currentPhase, currentObservedGeneration, observedGeneration, phase)
+		targetPhase := phase
+		if preserveRuntimeStatus {
+			targetPhase = currentPhase
+		}
+
+		if kiteVirtualMachineStatusMatches(current, observedGeneration, targetPhase, powerState, domain, nodeName, conditionStatus, reason, message, preserveRuntimeStatus) {
 			return nil
 		}
 
 		next := current.DeepCopy()
-		if err := unstructured.SetNestedField(next.Object, phase, "status", "phase"); err != nil {
+		if err := unstructured.SetNestedField(next.Object, targetPhase, "status", "phase"); err != nil {
 			return err
 		}
 		if err := unstructured.SetNestedField(next.Object, powerState, "status", "currentPowerState"); err != nil {
@@ -867,10 +875,12 @@ func updateKiteVirtualMachineStatus(ctx context.Context, dynamicClient dynamic.I
 			}
 		}
 
-		conditions, _, _ := unstructured.NestedSlice(next.Object, "status", "conditions")
-		conditions = replaceKiteVirtualMachineCondition(conditions, kiteVirtualMachineCondition(observedGeneration, conditionStatus, reason, message))
-		if err := unstructured.SetNestedSlice(next.Object, conditions, "status", "conditions"); err != nil {
-			return err
+		if !preserveRuntimeStatus {
+			conditions, _, _ := unstructured.NestedSlice(next.Object, "status", "conditions")
+			conditions = replaceKiteVirtualMachineCondition(conditions, kiteVirtualMachineCondition(observedGeneration, conditionStatus, reason, message))
+			if err := unstructured.SetNestedSlice(next.Object, conditions, "status", "conditions"); err != nil {
+				return err
+			}
 		}
 
 		_, err = dynamicClient.Resource(kiteVirtualMachineGVR).Namespace(vm.Namespace).UpdateStatus(ctx, next, metav1.UpdateOptions{
@@ -889,7 +899,7 @@ func updateKiteVirtualMachineStatus(ctx context.Context, dynamicClient dynamic.I
 // current is the latest KiteVirtualMachine object from the API server.
 // The remaining parameters are the status values the controller wants to write.
 // A true return lets reconcile avoid noisy status updates.
-func kiteVirtualMachineStatusMatches(current *unstructured.Unstructured, observedGeneration int64, phase string, powerState string, domain string, nodeName string, conditionStatus metav1.ConditionStatus, reason string, message string) bool {
+func kiteVirtualMachineStatusMatches(current *unstructured.Unstructured, observedGeneration int64, phase string, powerState string, domain string, nodeName string, conditionStatus metav1.ConditionStatus, reason string, message string, ignoreCondition bool) bool {
 	currentPhase, _, _ := unstructured.NestedString(current.Object, "status", "phase")
 	currentPowerState, _, _ := unstructured.NestedString(current.Object, "status", "currentPowerState")
 	currentObservedGeneration, _, _ := unstructured.NestedInt64(current.Object, "status", "observedGeneration")
@@ -903,14 +913,46 @@ func kiteVirtualMachineStatusMatches(current *unstructured.Unstructured, observe
 		}
 	}
 
-	return currentPhase == phase &&
+	metadataMatches := currentPhase == phase &&
 		currentPowerState == powerState &&
 		currentObservedGeneration == observedGeneration &&
 		currentDomain == domain &&
-		currentNodeName == nodeName &&
+		currentNodeName == nodeName
+	if ignoreCondition {
+		return metadataMatches
+	}
+
+	return metadataMatches &&
 		machineStringValue(currentCondition["status"]) == string(conditionStatus) &&
 		machineStringValue(currentCondition["reason"]) == reason &&
 		machineStringValue(currentCondition["message"]) == message
+}
+
+// shouldPreserveRuntimeStatus prevents dependency reconcilers from moving a stable VM back to Provisioning.
+// currentPhase is the phase already stored in KiteVirtualMachine status.
+// currentObservedGeneration and observedGeneration identify whether this update belongs to the same spec generation.
+// requestedPhase is the phase requested by the current reconcile path.
+// The returned value is true only for same-generation Provisioning writes after KubeVirt has reported a stable runtime phase.
+func shouldPreserveRuntimeStatus(currentPhase string, currentObservedGeneration int64, observedGeneration int64, requestedPhase string) bool {
+	if requestedPhase != kiteVMPhaseProvisioning {
+		return false
+	}
+	if currentObservedGeneration != observedGeneration {
+		return false
+	}
+	return kiteVMPhaseIsRuntimeStable(currentPhase)
+}
+
+// kiteVMPhaseIsRuntimeStable reports whether a phase came from observed KubeVirt runtime state.
+// phase is status.phase from KiteVirtualMachine.
+// Stable runtime phases should not be overwritten by lower-priority dependency progress events.
+func kiteVMPhaseIsRuntimeStable(phase string) bool {
+	switch phase {
+	case kiteVMPhaseRunning, kiteVMPhaseStopped, kiteVMPhaseReady:
+		return true
+	default:
+		return false
+	}
 }
 
 // kiteVirtualMachineCondition creates the Ready condition map used in KiteVirtualMachine status.

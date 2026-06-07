@@ -187,14 +187,58 @@ hostaccount.DesiredAccount{
 생성되는 shell은 host SSH 로그인 직후 VM의 ClusterIP Service DNS로 다시 SSH 접속합니다.
 
 ```bash
-#!/bin/bash
+#!/bin/sh
 PRIVATE_KEY="/home/<sshId>/.ssh/id_rsa"
 VM_TARGET="<sshId>@vps-access-<vmName>.<namespace>.svc.cluster.local"
+RETRY_SECONDS="${KITE_PROXY_RETRY_SECONDS:-90}"
+RETRY_INTERVAL_SECONDS="${KITE_PROXY_RETRY_INTERVAL_SECONDS:-2}"
+STARTING_MESSAGE="${KITE_PROXY_STARTING_MESSAGE:-VirtualMachine is starting sshd server.}"
 
 unset LC_ALL
 export LANG=C.UTF-8
 
+deadline="$(( $(date +%s) + RETRY_SECONDS ))"
+ready="false"
+message_printed="false"
+while ! ssh -i "$PRIVATE_KEY" \
+  -o BatchMode=yes \
+  -o ConnectTimeout=3 \
+  -o ConnectionAttempts=1 \
+  -o StrictHostKeyChecking=no \
+  -o UserKnownHostsFile=/dev/null \
+  -o LogLevel=ERROR \
+  "$VM_TARGET" true >/dev/null 2>&1; do
+  if [ "$(date +%s)" -ge "$deadline" ]; then
+    break
+  fi
+  if [ "$message_printed" != "true" ]; then
+    printf '%s\n' "$STARTING_MESSAGE"
+    message_printed="true"
+  fi
+  sleep "$RETRY_INTERVAL_SECONDS"
+done
+
+if ssh -i "$PRIVATE_KEY" \
+  -o BatchMode=yes \
+  -o ConnectTimeout=3 \
+  -o ConnectionAttempts=1 \
+  -o StrictHostKeyChecking=no \
+  -o UserKnownHostsFile=/dev/null \
+  -o LogLevel=ERROR \
+  "$VM_TARGET" true >/dev/null 2>&1; then
+  ready="true"
+fi
+
+if [ "$ready" != "true" ]; then
+  if [ "$message_printed" != "true" ]; then
+    printf '%s\n' "$STARTING_MESSAGE"
+  fi
+  exit 75
+fi
+
 exec ssh -i "$PRIVATE_KEY" \
+  -o ConnectTimeout=10 \
+  -o ConnectionAttempts=1 \
   -o StrictHostKeyChecking=no \
   -o UserKnownHostsFile=/dev/null \
   -o LogLevel=ERROR \
@@ -203,6 +247,8 @@ exec ssh -i "$PRIVATE_KEY" \
 
 `"$@"`를 유지하는 이유는 VS Code Remote SSH처럼 SSH 명령 뒤에 붙는 원격 command를 VM 내부 SSH로 그대로 전달하기 위해서입니다.
 host-agent는 `/home/<sshId>/.hushlogin`도 함께 생성해 호스트 Ubuntu MOTD와 lastlog 출력을 최대한 숨깁니다.
+proxy shell은 VM Service가 먼저 생기고 guest `sshd`가 늦게 뜨는 구간을 흡수하기 위해 최대 90초 동안 내부 SSH 준비 상태를 확인한 뒤 최종 세션으로 넘어갑니다.
+이 대기 중에는 `No route to host`, `Connection refused` 같은 내부 SSH 오류를 사용자에게 직접 노출하지 않고 `VirtualMachine is starting sshd server.` 메시지만 보여줍니다.
 
 ## Local GC Reconcile
 
