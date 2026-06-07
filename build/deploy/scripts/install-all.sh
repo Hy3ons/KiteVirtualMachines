@@ -7,7 +7,6 @@ INSTALL_LONGHORN="${INSTALL_LONGHORN:-false}"
 INSTALL_KUBEVIRT="${INSTALL_KUBEVIRT:-true}"
 INSTALL_CDI="${INSTALL_CDI:-true}"
 APPLY_GOLDEN_IMAGE="${APPLY_GOLDEN_IMAGE:-true}"
-KITE_GATEWAY_HOST_KEY_SECRET="${KITE_GATEWAY_HOST_KEY_SECRET:-kite-gateway-host-key}"
 MANAGE_HOST_SSHD="${MANAGE_HOST_SSHD:-true}"
 
 log() {
@@ -20,22 +19,6 @@ require_command() {
     echo "[kite-deploy] missing required command: ${name}" >&2
     exit 1
   fi
-}
-
-ensure_gateway_host_key_secret() {
-  local tmpdir
-
-  kubectl apply -f "${ROOT_DIR}/build/kite/namespace.yaml"
-  if kubectl -n "${KITE_NAMESPACE}" get secret "${KITE_GATEWAY_HOST_KEY_SECRET}" >/dev/null 2>&1; then
-    return
-  fi
-
-  require_command ssh-keygen
-  tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/kite-gateway-host-key.XXXXXX")"
-  ssh-keygen -q -t rsa -b 4096 -N "" -f "${tmpdir}/ssh_host_rsa_key"
-  kubectl -n "${KITE_NAMESPACE}" create secret generic "${KITE_GATEWAY_HOST_KEY_SECRET}" \
-    --from-file=ssh_host_rsa_key="${tmpdir}/ssh_host_rsa_key"
-  rm -rf "${tmpdir}"
 }
 
 main() {
@@ -68,7 +51,7 @@ main() {
   "${ROOT_DIR}/build/deploy/scripts/wait-cdi.sh"
 
   log "applying Kite manifests"
-  ensure_gateway_host_key_secret
+  "${ROOT_DIR}/build/deploy/scripts/ensure-gateway-host-key-secret.sh"
   kubectl apply -k "${ROOT_DIR}/build/kite"
 
   log "waiting for Kite workloads"

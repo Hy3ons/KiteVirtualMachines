@@ -45,7 +45,6 @@ K3D_CLUSTER_NAME="${K3D_CLUSTER_NAME:-}"
 K3D_LOAD_IMAGES="${K3D_LOAD_IMAGES:-true}"
 KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-}"
 KIND_LOAD_IMAGES="${KIND_LOAD_IMAGES:-true}"
-KITE_GATEWAY_HOST_KEY_SECRET="${KITE_GATEWAY_HOST_KEY_SECRET:-kite-gateway-host-key}"
 
 cleanup() {
   rm -rf "${KUSTOMIZE_OVERLAY_DIR}"
@@ -413,26 +412,10 @@ EOF
 }
 
 apply_manifest() {
-  ensure_gateway_host_key_secret
+  "${ROOT_DIR}/build/deploy/scripts/ensure-gateway-host-key-secret.sh"
 
   log "applying ${RENDERED_MANIFEST}"
   kubectl apply -f "${RENDERED_MANIFEST}"
-}
-
-ensure_gateway_host_key_secret() {
-  local tmpdir
-
-  kubectl apply -f "${KITE_MANIFEST_DIR}/namespace.yaml"
-  if kubectl -n "${KITE_NAMESPACE}" get secret "${KITE_GATEWAY_HOST_KEY_SECRET}" >/dev/null 2>&1; then
-    return
-  fi
-
-  require_command ssh-keygen
-  tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/kite-gateway-host-key.XXXXXX")"
-  ssh-keygen -q -t rsa -b 4096 -N "" -f "${tmpdir}/ssh_host_rsa_key"
-  kubectl -n "${KITE_NAMESPACE}" create secret generic "${KITE_GATEWAY_HOST_KEY_SECRET}" \
-    --from-file=ssh_host_rsa_key="${tmpdir}/ssh_host_rsa_key"
-  rm -rf "${tmpdir}"
 }
 
 show_debug() {

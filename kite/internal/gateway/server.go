@@ -23,6 +23,7 @@ const (
 	defaultListenAddress   = ":2222"
 	defaultBackendTimeout  = 90 * time.Second
 	defaultBackendInterval = 2 * time.Second
+	channelCloseGrace      = 2 * time.Second
 	startingMessage        = "VirtualMachine is starting sshd server.\n"
 )
 
@@ -248,28 +249,37 @@ func proxyChannel(frontendNewChannel ssh.NewChannel, backend *ssh.Client) error 
 	}
 	defer backendChannel.Close()
 
-	var wg sync.WaitGroup
-	wg.Add(4)
+	backendRequestsDone := make(chan struct{})
+
 	go func() {
-		defer wg.Done()
 		_, _ = io.Copy(backendChannel, frontend)
 		_ = backendChannel.CloseWrite()
 	}()
+
 	go func() {
-		defer wg.Done()
-		_, _ = io.Copy(frontend, backendChannel)
-		_ = frontend.CloseWrite()
-	}()
-	go func() {
-		defer wg.Done()
 		forwardRequests(frontendRequests, backendChannel)
 	}()
+
 	go func() {
-		defer wg.Done()
+		defer close(backendRequestsDone)
 		forwardRequests(backendRequests, frontend)
 	}()
-	wg.Wait()
+
+	_, _ = io.Copy(frontend, backendChannel)
+	_ = frontend.CloseWrite()
+	waitForChannelRequests(backendRequestsDone, channelCloseGrace)
 	return nil
+}
+
+// waitForChannelRequests gives backend requests such as exit-status a short time to reach the client.
+// done is closed by the backend request forwarding goroutine when the backend channel is finished.
+// timeout bounds session cleanup so a finished VM shell cannot leave the frontend SSH client hanging.
+// This function is used by proxyChannel during session teardown.
+func waitForChannelRequests(done <-chan struct{}, timeout time.Duration) {
+	select {
+	case <-done:
+	case <-time.After(timeout):
+	}
 }
 
 // forwardRequests forwards SSH channel requests from one side to the other.

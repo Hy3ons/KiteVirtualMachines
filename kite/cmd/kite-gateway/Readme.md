@@ -86,9 +86,15 @@ kubectl -n kite get secret kite-gateway-host-key
 ```
 
 The Secret stores `ssh_host_rsa_key`, which is the SSH server host key seen by
-external clients. Keeping it in a Secret prevents SSH host key warnings after
-gateway pod restarts. If someone applies `build/kite` manually without the
-Secret, the gateway still starts with an ephemeral key.
+external clients. The installer first tries to copy the existing Linux host
+OpenSSH key from `/etc/ssh/ssh_host_ed25519_key`, `ssh_host_ecdsa_key`, or
+`ssh_host_rsa_key` so the gateway can preserve the host fingerprint after taking
+over port `22`. If no host key is available, it generates a gateway key.
+
+Keeping the key in a Secret prevents SSH host key warnings after gateway pod
+restarts. Existing Secrets are not replaced unless
+`KITE_GATEWAY_HOST_KEY_REFRESH=true` is set. If someone applies `build/kite`
+manually without the Secret, the gateway still starts with an ephemeral key.
 
 ## Current Limits
 
