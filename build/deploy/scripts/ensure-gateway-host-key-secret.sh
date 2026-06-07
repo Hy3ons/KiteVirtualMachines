@@ -119,7 +119,7 @@ write_gateway_key() {
 }
 
 cleanup() {
-  if [[ -n "${GATEWAY_HOST_KEY_TMPDIR}" ]]; then
+  if [[ -n "${GATEWAY_HOST_KEY_TMPDIR:-}" ]]; then
     rm -rf "${GATEWAY_HOST_KEY_TMPDIR}"
   fi
 }

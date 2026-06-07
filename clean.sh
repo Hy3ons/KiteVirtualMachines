@@ -36,7 +36,7 @@ archive_url() {
 }
 
 cleanup() {
-  if [[ -n "${KITE_CLEAN_TMPDIR}" ]]; then
+  if [[ -n "${KITE_CLEAN_TMPDIR:-}" ]]; then
     rm -rf "${KITE_CLEAN_TMPDIR}"
   fi
 }

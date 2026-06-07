@@ -64,7 +64,7 @@ install_from_remote_archive() {
 }
 
 cleanup() {
-  if [[ -n "${KITE_INSTALL_TMPDIR}" ]]; then
+  if [[ -n "${KITE_INSTALL_TMPDIR:-}" ]]; then
     rm -rf "${KITE_INSTALL_TMPDIR}"
   fi
 }
