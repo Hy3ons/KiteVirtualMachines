@@ -27,7 +27,7 @@ spec:
             - -c
             - |
               rm -rf /host/mnt/kite-longhorn
-              sleep 360000
+              sleep 5
           securityContext:
             privileged: true
             runAsUser: 0

@@ -42,6 +42,7 @@ main() {
   log "creating host disk directories for Kite Longhorn storage"
   kubectl apply -f "${ROOT_DIR}/build/kite-storage/longhorn/disk-directory-daemonset.yaml"
   kubectl -n longhorn-system rollout status daemonset/kite-longhorn-disk-directory --timeout="${TIMEOUT_SECONDS}s"
+  kubectl delete -f "${ROOT_DIR}/build/kite-storage/longhorn/disk-directory-daemonset.yaml" --ignore-not-found=true
 
   kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' \
     | while read -r node; do

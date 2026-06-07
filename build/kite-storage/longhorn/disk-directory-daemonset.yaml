@@ -28,7 +28,7 @@ spec:
             - |
               mkdir -p /host/mnt/kite-longhorn
               chmod 700 /host/mnt/kite-longhorn
-              sleep 360000
+              sleep 5
           securityContext:
             privileged: true
             runAsUser: 0
