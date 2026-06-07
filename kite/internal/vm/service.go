@@ -28,6 +28,7 @@ const (
 	defaultImage      = "ubuntu-22.04"
 	defaultPowerState = "Off"
 	minDiskSize       = "20Gi"
+	maxSSHPasswordLen = 128
 )
 
 var minimumDiskQuantity = resource.MustParse(minDiskSize)
@@ -283,6 +284,9 @@ func createRecord(req CreateRequest) (store.KiteVirtualMachineRecord, error) {
 	if req.Disk == "" || req.SSHID == "" || req.SSHPassword == "" {
 		return store.KiteVirtualMachineRecord{}, invalid("disk, sshId, and sshPassword are required")
 	}
+	if err := validateSSHPassword(req.SSHPassword); err != nil {
+		return store.KiteVirtualMachineRecord{}, err
+	}
 	if err := validateDisk(req.Disk); err != nil {
 		return store.KiteVirtualMachineRecord{}, err
 	}
@@ -371,6 +375,9 @@ func applyUpdate(record *store.KiteVirtualMachineRecord, req UpdateRequest) erro
 		}
 	}
 	if req.SSHPassword != nil {
+		if err := validateSSHPassword(*req.SSHPassword); err != nil {
+			return err
+		}
 		record.Spec.SSHPassword = *req.SSHPassword
 	}
 	if req.PowerState != nil {
@@ -398,6 +405,32 @@ func validateDisk(disk string) error {
 	}
 	if quantity.Cmp(minimumDiskQuantity) < 0 {
 		return invalid("disk must be at least 20Gi")
+	}
+
+	return nil
+}
+
+// validateSSHPassword rejects values that break chpasswd or hide user mistakes.
+// password is stored as KiteVirtualMachine spec.sshPassword and later passed to VM and host chpasswd.
+// A nil error means the value can be safely carried through YAML/base64 rendering and chpasswd stdin.
+// This function is used by create and update request validation.
+func validateSSHPassword(password string) error {
+	if password == "" {
+		return invalid("sshPassword is required")
+	}
+	if password != strings.TrimSpace(password) {
+		return invalid("sshPassword must not start or end with whitespace")
+	}
+	if len(password) > maxSSHPasswordLen {
+		return invalid("sshPassword must be at most 128 bytes")
+	}
+	if strings.Contains(password, ":") {
+		return invalid("sshPassword must not contain colon")
+	}
+	for _, r := range password {
+		if r < 0x20 || r == 0x7f {
+			return invalid("sshPassword must not contain control characters")
+		}
 	}
 
 	return nil

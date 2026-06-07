@@ -2,6 +2,7 @@ package cloudinituserdata
 
 import (
 	_ "embed"
+	"encoding/base64"
 
 	"kite/internal/render"
 
@@ -19,11 +20,19 @@ type Ubuntu2204CloudInit struct {
 	SSHPublicKey string
 }
 
+type ubuntu2204CloudInitTemplateData struct {
+	*Ubuntu2204CloudInit
+	PasswordBase64 string
+}
+
 // Render creates a cloud-init Secret object for an Ubuntu 22.04 virtual machine.
 // The receiver provides VM name, namespace, login id, and password template values.
 // The returned object is applied by the KiteVirtualMachine reconcile flow.
 // This method uses an embedded template so the controller does not depend on source-tree files at runtime.
 func (s *Ubuntu2204CloudInit) Render() (*unstructured.Unstructured, error) {
 	renderer := render.NewRendererFromTemplate("ubuntu-22.04-init.yaml", ubuntu2204CloudInitTemplate)
-	return renderer.Render(s)
+	return renderer.Render(ubuntu2204CloudInitTemplateData{
+		Ubuntu2204CloudInit: s,
+		PasswordBase64:      base64.StdEncoding.EncodeToString([]byte(s.Password)),
+	})
 }

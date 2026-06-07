@@ -16,8 +16,9 @@ import (
 )
 
 const (
-	hostRootDefault = "/host"
-	HostAccountRoot = "/var/lib/kite/accounts"
+	hostRootDefault   = "/host"
+	HostAccountRoot   = "/var/lib/kite/accounts"
+	maxSSHPasswordLen = 128
 )
 
 var usernamePattern = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
@@ -91,6 +92,9 @@ func (m *Manager) Ensure(ctx context.Context, desired DesiredAccount) error {
 	if err := m.writePrivateKey(ctx, desired.Username, desired.PrivateKey); err != nil {
 		return err
 	}
+	if err := m.writeHushLogin(ctx, desired.Username); err != nil {
+		return err
+	}
 	if err := m.writeProxyShell(ctx, desired, shellPath); err != nil {
 		return err
 	}
@@ -152,12 +156,22 @@ func PrivateKeyPath(username string) string {
 	return filepath.Join("/home", username, ".ssh", "id_rsa")
 }
 
+// HushLoginPath returns the host-visible path that suppresses login banners for one Kite SSH user.
+// username is spec.sshId and maps to /home/<username>/.hushlogin.
+// The returned path is reconciled by kite-host-agent so the host SSH hop stays quiet before proxying to the VM.
+func HushLoginPath(username string) string {
+	return filepath.Join("/home", username, ".hushlogin")
+}
+
 func validateDesiredAccount(desired DesiredAccount) error {
 	if !usernamePattern.MatchString(strings.TrimSpace(desired.Username)) {
 		return fmt.Errorf("sshId must match %s", usernamePattern.String())
 	}
 	if strings.TrimSpace(desired.Password) == "" {
 		return errors.New("sshPassword is required")
+	}
+	if err := validateSSHPassword(desired.Password); err != nil {
+		return err
 	}
 	if strings.TrimSpace(desired.VMNamespace) == "" || strings.TrimSpace(desired.VMName) == "" {
 		return errors.New("VM namespace and name are required")
@@ -171,6 +185,25 @@ func validateDesiredAccount(desired DesiredAccount) error {
 	if strings.TrimSpace(desired.ServiceName) == "" || strings.TrimSpace(desired.ServiceNamespace) == "" {
 		return errors.New("SSH Service name and namespace are required")
 	}
+	return nil
+}
+
+func validateSSHPassword(password string) error {
+	if password != strings.TrimSpace(password) {
+		return errors.New("sshPassword must not start or end with whitespace")
+	}
+	if len(password) > maxSSHPasswordLen {
+		return errors.New("sshPassword must be at most 128 bytes")
+	}
+	if strings.Contains(password, ":") {
+		return errors.New("sshPassword must not contain colon")
+	}
+	for _, r := range password {
+		if r < 0x20 || r == 0x7f {
+			return errors.New("sshPassword must not contain control characters")
+		}
+	}
+
 	return nil
 }
 
@@ -267,6 +300,24 @@ func (m *Manager) fixSSHFileOwnership(ctx context.Context, username string) erro
 		return err
 	}
 	return m.runHost(ctx, "chown", "-R", username+":"+username, filepath.Join("/home", username, ".ssh"))
+}
+
+// writeHushLogin creates the per-user marker that asks OpenSSH/PAM login helpers to skip banners.
+// ctx controls the host chown command.
+// username is the Kite-managed host account that proxies into one VM.
+// This function is used by Ensure so recreated or modified accounts converge back to a quiet login hop.
+func (m *Manager) writeHushLogin(ctx context.Context, username string) error {
+	containerPath := m.hostPath(HushLoginPath(username))
+	if err := os.MkdirAll(filepath.Dir(containerPath), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(containerPath, nil, 0o644); err != nil {
+		return err
+	}
+	if err := os.Chmod(containerPath, 0o644); err != nil {
+		return err
+	}
+	return m.runHost(ctx, "chown", username+":"+username, HushLoginPath(username))
 }
 
 func (m *Manager) writeProxyShell(ctx context.Context, desired DesiredAccount, shellPath string) error {

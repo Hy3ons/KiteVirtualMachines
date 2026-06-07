@@ -191,10 +191,18 @@ hostaccount.DesiredAccount{
 PRIVATE_KEY="/home/<sshId>/.ssh/id_rsa"
 VM_TARGET="<sshId>@vps-access-<vmName>.<namespace>.svc.cluster.local"
 
-exec ssh -i "$PRIVATE_KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$VM_TARGET" "$@"
+unset LC_ALL
+export LANG=C.UTF-8
+
+exec ssh -i "$PRIVATE_KEY" \
+  -o StrictHostKeyChecking=no \
+  -o UserKnownHostsFile=/dev/null \
+  -o LogLevel=ERROR \
+  "$VM_TARGET" "$@"
 ```
 
 `"$@"`를 유지하는 이유는 VS Code Remote SSH처럼 SSH 명령 뒤에 붙는 원격 command를 VM 내부 SSH로 그대로 전달하기 위해서입니다.
+host-agent는 `/home/<sshId>/.hushlogin`도 함께 생성해 호스트 Ubuntu MOTD와 lastlog 출력을 최대한 숨깁니다.
 
 ## Local GC Reconcile
 
