@@ -23,7 +23,9 @@ const (
 	defaultListenAddress   = ":2222"
 	defaultBackendTimeout  = 90 * time.Second
 	defaultBackendInterval = 2 * time.Second
+	defaultHandshakeWait   = 15 * time.Second
 	channelCloseGrace      = 2 * time.Second
+	channelRejectGrace     = 1 * time.Second
 	startingMessage        = "VirtualMachine is starting sshd server.\n"
 )
 
@@ -32,11 +34,13 @@ const (
 // HostKeyPath optionally points to a PEM private key used as the SSH server host key.
 // BackendTimeout controls how long one authenticated connection waits for the VM sshd.
 // BackendRetryInterval controls the wait between VM sshd dial attempts.
+// HandshakeTimeout limits how long a raw TCP client may take to complete SSH handshake.
 type ServerConfig struct {
 	ListenAddress        string
 	HostKeyPath          string
 	BackendTimeout       time.Duration
 	BackendRetryInterval time.Duration
+	HandshakeTimeout     time.Duration
 }
 
 // Server terminates external SSH connections and proxies them to Kite VM SSH Services.
@@ -67,6 +71,9 @@ func NewServer(config ServerConfig, dynamicClient dynamic.Interface, routes *Rou
 	}
 	if config.BackendRetryInterval <= 0 {
 		config.BackendRetryInterval = defaultBackendInterval
+	}
+	if config.HandshakeTimeout <= 0 {
+		config.HandshakeTimeout = defaultHandshakeWait
 	}
 
 	signer, err := loadOrGenerateHostSigner(config.HostKeyPath)
@@ -137,12 +144,23 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 // This method is used per accepted SSH client connection.
 func (s *Server) handleConnection(ctx context.Context, tcpConn net.Conn) {
 	defer tcpConn.Close()
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = tcpConn.Close()
+		case <-done:
+		}
+	}()
+	defer close(done)
 
+	_ = tcpConn.SetDeadline(time.Now().Add(s.config.HandshakeTimeout))
 	serverConn, chans, reqs, err := ssh.NewServerConn(tcpConn, s.sshConfig)
 	if err != nil {
 		log.Printf("failed SSH handshake from %s: %v", tcpConn.RemoteAddr(), err)
 		return
 	}
+	_ = tcpConn.SetDeadline(time.Time{})
 	defer serverConn.Close()
 	go ssh.DiscardRequests(reqs)
 
@@ -304,16 +322,35 @@ func forwardRequests(requests <-chan *ssh.Request, target ssh.Channel) {
 // message explains why no VM backend is available.
 // This function is used when the VM route disappears or sshd is still starting.
 func rejectAllChannels(chans <-chan ssh.NewChannel, message string) {
-	for newChannel := range chans {
-		channel, requests, err := newChannel.Accept()
-		if err != nil {
-			_ = newChannel.Reject(ssh.ConnectionFailed, message)
-			continue
+	timer := time.NewTimer(channelRejectGrace)
+	defer timer.Stop()
+
+	for {
+		select {
+		case newChannel, ok := <-chans:
+			if !ok {
+				return
+			}
+			rejectChannel(newChannel, message)
+		case <-timer.C:
+			return
 		}
-		go ssh.DiscardRequests(requests)
-		_, _ = channel.Write([]byte(message))
-		_ = channel.Close()
 	}
+}
+
+// rejectChannel accepts one SSH channel long enough to write a user-facing error.
+// newChannel is a client-requested channel that cannot be backed by a VM session.
+// message explains why the gateway is closing the channel.
+// This function is used when a route is missing or a VM sshd is still starting.
+func rejectChannel(newChannel ssh.NewChannel, message string) {
+	channel, requests, err := newChannel.Accept()
+	if err != nil {
+		_ = newChannel.Reject(ssh.ConnectionFailed, message)
+		return
+	}
+	go ssh.DiscardRequests(requests)
+	_, _ = channel.Write([]byte(message))
+	_ = channel.Close()
 }
 
 // loadOrGenerateHostSigner returns the SSH server host key signer.
