@@ -6,6 +6,7 @@ KITE_LONGHORN_DISK_NAME="${KITE_LONGHORN_DISK_NAME:-kite-longhorn}"
 KITE_LONGHORN_DISK_PATH="${KITE_LONGHORN_DISK_PATH:-/mnt/kite-longhorn}"
 KITE_LONGHORN_DISK_TAG="${KITE_LONGHORN_DISK_TAG:-kite}"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-180}"
+PATCH_RETRY_INTERVAL_SECONDS="${PATCH_RETRY_INTERVAL_SECONDS:-5}"
 
 log() {
   echo "[kite-deploy] $*"
@@ -21,19 +22,42 @@ require_command() {
 
 patch_longhorn_node_disk() {
   local node="$1"
+  local deadline
+  local output
+
+  deadline=$((SECONDS + TIMEOUT_SECONDS))
 
   log "configuring Longhorn disk ${KITE_LONGHORN_DISK_NAME} on node/${node}"
-  kubectl -n longhorn-system patch "nodes.longhorn.io/${node}" --type=merge -p "{
-    \"spec\": {
-      \"disks\": {
-        \"${KITE_LONGHORN_DISK_NAME}\": {
-          \"path\": \"${KITE_LONGHORN_DISK_PATH}\",
-          \"allowScheduling\": true,
-          \"tags\": [\"${KITE_LONGHORN_DISK_TAG}\"]
+  while true; do
+    if output="$(kubectl -n longhorn-system patch "nodes.longhorn.io/${node}" --type=merge -p "{
+      \"spec\": {
+        \"disks\": {
+          \"${KITE_LONGHORN_DISK_NAME}\": {
+            \"path\": \"${KITE_LONGHORN_DISK_PATH}\",
+            \"allowScheduling\": true,
+            \"tags\": [\"${KITE_LONGHORN_DISK_TAG}\"]
+          }
         }
       }
-    }
-  }"
+    }" 2>&1)"; then
+      echo "${output}"
+      return
+    fi
+
+    if [[ "${output}" != *"being syncing"* && "${output}" != *"please retry later"* ]]; then
+      echo "${output}" >&2
+      return 1
+    fi
+
+    if (( SECONDS >= deadline )); then
+      echo "${output}" >&2
+      echo "[kite-deploy] timed out waiting for Longhorn node/${node} disk sync" >&2
+      return 1
+    fi
+
+    log "Longhorn node/${node} is still syncing disks; retrying in ${PATCH_RETRY_INTERVAL_SECONDS}s"
+    sleep "${PATCH_RETRY_INTERVAL_SECONDS}"
+  done
 }
 
 main() {

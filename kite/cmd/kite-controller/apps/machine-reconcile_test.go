@@ -128,6 +128,34 @@ func TestReconcileKiteVirtualMachineFailsClearlyWhenDataVolumeAPIMissing(t *test
 	}
 }
 
+// TestKiteVirtualMachineNeedsSameGenerationReconcileRetriesFailedPhase verifies dependency retry.
+// t is the Go test handle used for assertions.
+// The test keeps failed VM reconciliation retryable when KubeVirt, CDI, or golden images become ready later.
+func TestKiteVirtualMachineNeedsSameGenerationReconcileRetriesFailedPhase(t *testing.T) {
+	vm := newMachineReconcileKiteVirtualMachineSpec("user-a", "vm-a")
+	if err := unstructured.SetNestedField(vm.Object, kiteVMPhaseFailed, "status", "phase"); err != nil {
+		t.Fatalf("failed to set status.phase: %v", err)
+	}
+
+	if !kiteVirtualMachineNeedsSameGenerationReconcile(vm) {
+		t.Fatal("expected Failed phase to retry on same-generation resync")
+	}
+}
+
+// TestKiteVirtualMachineNeedsSameGenerationReconcileSkipsReadyPhase verifies stable VM updates.
+// t is the Go test handle used for assertions.
+// The test prevents stable Ready VMs from being re-applied on every informer resync.
+func TestKiteVirtualMachineNeedsSameGenerationReconcileSkipsReadyPhase(t *testing.T) {
+	vm := newMachineReconcileKiteVirtualMachineSpec("user-a", "vm-a")
+	if err := unstructured.SetNestedField(vm.Object, kiteVMPhaseReady, "status", "phase"); err != nil {
+		t.Fatalf("failed to set status.phase: %v", err)
+	}
+
+	if kiteVirtualMachineNeedsSameGenerationReconcile(vm) {
+		t.Fatal("expected Ready phase to skip same-generation resync")
+	}
+}
+
 // TestKiteVirtualMachineStorageClassNameDefaultsWhenConfigMissing verifies the Longhorn default.
 // t is the Go test handle used for assertions.
 // The test is used by VM reconcile code when kite-runtime-config has not been created yet.

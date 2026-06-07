@@ -709,7 +709,7 @@ func kiteVirtualMachineFromEventObject(eventObj interface{}) (*kite.KiteVirtualM
 
 // kiteVirtualMachineNeedsSameGenerationReconcile reports whether an update should run despite unchanged generation.
 // eventObj is the new KiteVirtualMachine object from an update or resync event.
-// A true result allows delete intent and deletionTimestamp updates to finish cleanup.
+// A true result allows delete cleanup and dependency/provisioning retries to run from informer resyncs.
 func kiteVirtualMachineNeedsSameGenerationReconcile(eventObj interface{}) bool {
 	vm, err := kiteVirtualMachineFromEventObject(eventObj)
 	if err != nil {
@@ -717,7 +717,16 @@ func kiteVirtualMachineNeedsSameGenerationReconcile(eventObj interface{}) bool {
 		return false
 	}
 
-	return vm.Spec.Delete || vm.DeletionTimestamp != nil
+	if vm.Spec.Delete || vm.DeletionTimestamp != nil {
+		return true
+	}
+
+	switch strings.TrimSpace(vm.Status.Phase) {
+	case "", kiteVMPhaseFailed, kiteVMPhaseProvisioning:
+		return true
+	default:
+		return false
+	}
 }
 
 // kubeVirtVirtualMachineExists checks whether the real KubeVirt VirtualMachine currently exists.
