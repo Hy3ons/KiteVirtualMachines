@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { seedDebugAuthSession } from '../config/debug';
 
 interface AuthState {
   token: string | null;
@@ -10,8 +11,8 @@ interface AuthState {
   logout: () => void;
 }
 
-// 렌더링 시점에 localStorage를 동기적으로 읽어와 초기값을 세팅합니다.
-// 이렇게 하면 JS가 실행되는 즉시 로그인 여부를 판단하여 Skeleton 또는 본 화면을 깜빡임 없이 보여줄 수 있습니다.
+seedDebugAuthSession(localStorage);
+
 const initialToken = localStorage.getItem('kite_token');
 const initialAccessLevel = localStorage.getItem('kite_access_level');
 const initialUsername = localStorage.getItem('kite_username');

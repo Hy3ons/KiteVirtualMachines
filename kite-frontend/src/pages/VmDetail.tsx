@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { SEO } from '../components/SEO';
 import { vmApi } from '../api';
-import { Layout, Typography, Space, Tag, Breadcrumb, Card, Tabs, Button, Descriptions, message, Popconfirm, Spin, Avatar, Alert } from 'antd';
+import { App as AntdApp, Layout, Typography, Space, Tag, Breadcrumb, Card, Tabs, Button, Descriptions, Popconfirm, Spin, Avatar, Alert } from 'antd';
 import { useParams, useNavigate } from 'react-router-dom';
 import { PoweroffOutlined, DeleteOutlined, CodeOutlined, DesktopOutlined, SafetyCertificateOutlined, ArrowLeftOutlined, CaretRightOutlined, CopyOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../store/useAuthStore';
@@ -23,6 +23,7 @@ interface VM {
 }
 
 export const VmDetail: React.FC = () => {
+  const { message } = AntdApp.useApp();
   const { vmName } = useParams<{ vmName: string }>();
   const navigate = useNavigate();
   const { username, namespace, accessLevel, logout, profileImage } = useAuthStore();
@@ -30,23 +31,23 @@ export const VmDetail: React.FC = () => {
   const [vm, setVm] = useState<VM | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchVmDetail = async () => {
+  const fetchVmDetail = useCallback(async () => {
     if (!vmName) return;
     try {
       setLoading(true);
       const data = await vmApi.getVm(vmName);
       setVm(data.vm);
-    } catch (error) {
+    } catch {
       message.error('VM 정보를 불러오지 못했습니다.');
       navigate('/dashboard');
     } finally {
       setLoading(false);
     }
-  };
+  }, [message, navigate, vmName]);
 
   useEffect(() => {
-    fetchVmDetail();
-  }, [vmName]);
+    void Promise.resolve().then(fetchVmDetail);
+  }, [fetchVmDetail]);
 
   const handleStart = async () => {
     if (!vmName) return;
@@ -55,7 +56,7 @@ export const VmDetail: React.FC = () => {
       await vmApi.startVm(vmName);
       message.success({ content: 'VM Start Requested', key: 'start' });
       fetchVmDetail();
-    } catch (error) {
+    } catch {
       message.error({ content: '시작 요청 실패', key: 'start' });
     }
   };
@@ -67,7 +68,7 @@ export const VmDetail: React.FC = () => {
       await vmApi.stopVm(vmName);
       message.success({ content: 'VM Stop Requested', key: 'stop' });
       fetchVmDetail();
-    } catch (error) {
+    } catch {
       message.error({ content: '종료 요청 실패', key: 'stop' });
     }
   };
@@ -85,7 +86,7 @@ export const VmDetail: React.FC = () => {
       await vmApi.deleteVm(vmName);
       message.success({ content: 'VM Delete Requested', key: 'delete' });
       navigate('/dashboard');
-    } catch (error) {
+    } catch {
       message.error({ content: '삭제 요청 실패', key: 'delete' });
     }
   };
@@ -121,20 +122,23 @@ export const VmDetail: React.FC = () => {
       />
       
       <Content style={{ padding: '40px', maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
-        <Breadcrumb style={{ marginBottom: 24 }}>
-          <Breadcrumb.Item><a onClick={() => navigate('/dashboard')}>Dashboard</a></Breadcrumb.Item>
-          <Breadcrumb.Item>Kite Machine</Breadcrumb.Item>
-          <Breadcrumb.Item>{vm.name}</Breadcrumb.Item>
-        </Breadcrumb>
+        <Breadcrumb
+          style={{ marginBottom: 24 }}
+          items={[
+            { title: <a onClick={() => navigate('/dashboard')}>Dashboard</a> },
+            { title: 'Kite Machine' },
+            { title: vm.name },
+          ]}
+        />
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
-          <Space align="center" size="middle">
+        <div className="vm-detail-heading">
+          <div className="vm-detail-title-group">
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/dashboard')} />
-            <Title level={2} style={{ margin: 0 }}>{vm.name}</Title>
+            <Title level={2} className="vm-detail-title">{vm.name}</Title>
             <Tag color={vm.phase === 'Running' ? 'success' : 'error'} style={{ fontSize: '14px', padding: '4px 8px' }}>
               {vm.phase}
             </Tag>
-          </Space>
+          </div>
           <Space>
             {vm.phase === 'Running' ? (
               <Button danger icon={<PoweroffOutlined />} onClick={handleStop}>Stop</Button>

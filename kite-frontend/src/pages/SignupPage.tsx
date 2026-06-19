@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import { SEO } from '../components/SEO';
 import { authApi } from '../api';
-import { Row, Col, Form, Input, Button, Typography, message, Upload, Layout } from 'antd';
+import { App as AntdApp, Row, Col, Form, Input, Button, Typography, Upload, Layout } from 'antd';
 import { UserOutlined, LockOutlined, MailOutlined, PlusOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { GlobalHeader } from '../components/GlobalHeader';
+import type { SignupPayload } from '../api/types';
 
 const { Title, Paragraph, Text } = Typography;
 const { Content } = Layout;
 
 export const SignupPage: React.FC = () => {
+  const { message } = AntdApp.useApp();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   
@@ -32,7 +34,7 @@ export const SignupPage: React.FC = () => {
     return false; // Prevent default upload action
   };
 
-  const onFinish = async (values: any) => {
+  const onFinish = async (values: Omit<SignupPayload, 'profile_image'> & { readonly confirm: string }) => {
     try {
       setLoading(true);
       const payload = {
@@ -45,8 +47,9 @@ export const SignupPage: React.FC = () => {
       
       message.success('회원가입이 완료되었습니다! 로그인해주세요.');
       navigate('/');
-    } catch (error: any) {
-      message.error(error.response?.data?.message || '회원가입에 실패했습니다.');
+    } catch (error) {
+      const fallbackMessage = error instanceof Error ? error.message : '회원가입에 실패했습니다.';
+      message.error(fallbackMessage);
     } finally {
       setLoading(false);
     }

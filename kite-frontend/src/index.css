@@ -14,6 +14,207 @@ html, body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+.full-width {
+  width: 100%;
+}
+
+.global-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  min-height: 65px;
+  height: auto;
+  padding: 0 40px;
+  border-bottom: 1px solid #EFE9E3;
+  background: #FFFFFF;
+  line-height: normal;
+}
+
+.global-header-brand {
+  display: inline-flex;
+  align-items: center;
+  min-width: 112px;
+  cursor: pointer;
+}
+
+.global-header-logo {
+  height: 64px;
+  object-fit: contain;
+  transform: scale(1.5);
+  transform-origin: left center;
+  margin-right: 28px;
+}
+
+.global-header-title {
+  font-size: 26px;
+  font-weight: 900;
+  color: #8B7355;
+  font-family: 'Pretendard Variable', Pretendard, system-ui, sans-serif;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.global-header-actions {
+  justify-content: flex-end;
+  min-width: 0;
+  row-gap: 8px;
+}
+
+.global-header-links.with-session {
+  border-right: 1px solid #EFE9E3;
+  padding-right: 16px;
+}
+
+.global-header-session {
+  min-width: 0;
+}
+
+.global-header-session .ant-space {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.dashboard-content {
+  padding: 40px;
+  max-width: 1300px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.dashboard-summary-row {
+  margin-bottom: 32px;
+}
+
+.dashboard-profile {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+}
+
+.dashboard-profile-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  min-width: 0;
+}
+
+.dashboard-profile-copy {
+  min-width: 0;
+}
+
+.dashboard-card-title,
+.modal-title {
+  margin: 0 !important;
+}
+
+.dashboard-profile-meta {
+  justify-content: flex-end;
+}
+
+.dashboard-meta-label {
+  display: block;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.dashboard-meta-value {
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-meta-accent {
+  color: #C9B59C;
+}
+
+.dashboard-quota-card {
+  margin-bottom: 24px;
+}
+
+.dashboard-quota-head,
+.dashboard-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.dashboard-toolbar {
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.vm-detail-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+}
+
+.vm-detail-title-group {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  flex: 1 1 420px;
+}
+
+.vm-detail-title {
+  margin: 0 !important;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.vm-create-form {
+  margin-top: 24px;
+}
+
+.form-alert {
+  margin-bottom: 16px;
+}
+
+.form-note {
+  background-color: #EFE9E3;
+  padding: 12px;
+  margin-bottom: 24px;
+  font-size: 13px;
+  color: #594E46;
+}
+
+.form-actions {
+  margin-bottom: 0;
+  text-align: right;
+}
+
+.form-actions .ant-form-item-control-input-content {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.drawer-title {
+  font-size: 18px;
+}
+
+.drawer-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.code-block {
+  background-color: #F9F8F6;
+  padding: 16px;
+  border-radius: 0;
+  overflow-x: auto;
+  border: 1px solid #D9CFC7;
+}
+
 #root {
   width: 100%;
   height: 100%;
@@ -41,6 +242,59 @@ html, body {
   padding: 24px;
 }
 
+.ant-table-cell {
+  word-break: keep-all;
+}
+
+.ant-table-cell .ant-btn {
+  white-space: nowrap;
+}
+
 .ant-table-row {
   transition: background-color 0.2s ease !important;
+}
+
+@media (max-width: 768px) {
+  .global-header {
+    align-items: flex-start;
+    padding: 12px 20px;
+    flex-direction: column;
+  }
+
+  .global-header-actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .global-header-links.with-session {
+    border-right: 0;
+    padding-right: 0;
+  }
+
+  .dashboard-content {
+    padding: 24px 16px;
+  }
+
+  .dashboard-profile {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .dashboard-profile-meta {
+    justify-content: flex-start;
+  }
+
+  .vm-detail-title-group {
+    align-items: flex-start;
+    flex: 1 1 100%;
+  }
+
+  .vm-detail-title {
+    font-size: 28px !important;
+    line-height: 1.2 !important;
+  }
+
+  .ant-table-wrapper {
+    padding: 12px;
+  }
 }

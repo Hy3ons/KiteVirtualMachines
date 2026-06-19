@@ -1,18 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { SEO } from '../components/SEO';
 import { adminApi } from '../api';
-import { Layout, Typography, Form, Input, Button, Card, Space, message, Avatar } from 'antd';
+import { App as AntdApp, Layout, Typography, Form, Input, Button, Card, Space, Avatar } from 'antd';
 import { GlobalOutlined, SafetyCertificateOutlined, LogoutOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../store/useAuthStore';
 import { useNavigate } from 'react-router-dom';
 import { GlobalHeader } from '../components/GlobalHeader';
 import { MOCK_ENV } from '../config/mockEnv';
 
+type DomainSettingsForm = {
+  readonly baseDomain: string;
+};
+
+type CertificateSettingsForm = {
+  readonly tlsCert: string;
+  readonly tlsKey: string;
+};
+
 const { Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
 
 export const AdminSettings: React.FC = () => {
+  const { message } = AntdApp.useApp();
   const { username, logout, profileImage } = useAuthStore();
   const navigate = useNavigate();
   
@@ -39,12 +49,12 @@ export const AdminSettings: React.FC = () => {
     });
   }, [domainForm]);
 
-  const handleSaveDomain = async (values: any) => {
+  const handleSaveDomain = async (values: DomainSettingsForm) => {
     try {
       setLoadingDomain(true);
       await adminApi.saveDomain(values.baseDomain);
       message.success('베이스 도메인이 저장되었습니다. 컨트롤러가 기존 VM들의 Ingress를 재조정(Reconcile)합니다.');
-    } catch (error) {
+    } catch {
       message.error('베이스 도메인 저장에 실패했습니다.');
     } finally {
       setLoadingDomain(false);
@@ -62,20 +72,20 @@ export const AdminSettings: React.FC = () => {
         });
       }
       message.success('런타임 secret이 새 값으로 저장되었습니다. 이 값은 kite-api 재시작 후 적용됩니다.');
-    } catch (error) {
+    } catch {
       message.error('런타임 secret 회전에 실패했습니다.');
     } finally {
       setLoadingRuntime(false);
     }
   };
 
-  const handleSaveCert = async (values: any) => {
+  const handleSaveCert = async (values: CertificateSettingsForm) => {
     try {
       setLoadingCert(true);
       await adminApi.saveCert({ tlsCert: values.tlsCert, tlsKey: values.tlsKey });
       message.success('HTTPS 인증서가 kube-system/global-tls-secret에 저장/갱신되었습니다.');
       certForm.resetFields();
-    } catch (error) {
+    } catch {
       message.error('인증서 저장에 실패했습니다.');
     } finally {
       setLoadingCert(false);
@@ -96,7 +106,7 @@ export const AdminSettings: React.FC = () => {
         }
       />
 
-      <Content style={{ padding: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <Content style={{ padding: '40px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <div style={{ maxWidth: '800px', width: '100%', marginBottom: '40px' }}>
           <Title level={2}>시스템 전역 설정</Title>
           <Text type="secondary">Kite 클러스터 전체에 적용되는 라우팅 및 보안 설정을 독립적으로 관리합니다.</Text>
