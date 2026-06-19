@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { SEO } from '../components/SEO';
 import { adminApi } from '../api';
-import { Layout, Typography, Table, Space, Tag, Button, Popconfirm, Tabs, Statistic, Row, Col, Card, message, Slider, Avatar } from 'antd';
+import { App as AntdApp, Layout, Typography, Table, Space, Tag, Button, Popconfirm, Tabs, Statistic, Row, Col, Card, Slider, Avatar } from 'antd';
+import type { TableColumnsType } from 'antd';
 import { PoweroffOutlined, DeleteOutlined, LogoutOutlined, TeamOutlined, CloudServerOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../store/useAuthStore';
 import { useNavigate } from 'react-router-dom';
@@ -30,6 +31,7 @@ interface GlobalVM {
 }
 
 export const AdminDashboard: React.FC = () => {
+  const { message } = AntdApp.useApp();
   const { username, logout, profileImage } = useAuthStore();
   const navigate = useNavigate();
   
@@ -38,7 +40,7 @@ export const AdminDashboard: React.FC = () => {
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [loadingVms, setLoadingVms] = useState(true);
 
-  const fetchAllData = async () => {
+  const fetchAllData = useCallback(async () => {
     try {
       setLoadingUsers(true);
       setLoadingVms(true);
@@ -48,17 +50,17 @@ export const AdminDashboard: React.FC = () => {
       ]);
       setUsers(usersRes.users || []);
       setVms(vmsRes.vms || []);
-    } catch (error) {
+    } catch {
       message.error('관리자 데이터를 불러오는데 실패했습니다.');
     } finally {
       setLoadingUsers(false);
       setLoadingVms(false);
     }
-  };
+  }, [message]);
 
   useEffect(() => {
-    fetchAllData();
-  }, []);
+    void Promise.resolve().then(fetchAllData);
+  }, [fetchAllData]);
 
   const handleChangeAccessLevel = async (targetUser: string, newLevel: number) => {
     try {
@@ -66,7 +68,7 @@ export const AdminDashboard: React.FC = () => {
       await adminApi.updateUserAccess(targetUser, newLevel);
       message.success({ content: '권한이 업데이트 되었습니다.', key: 'level' });
       fetchAllData();
-    } catch (error) {
+    } catch {
       message.error({ content: '권한 업데이트 실패', key: 'level' });
     }
   };
@@ -77,7 +79,7 @@ export const AdminDashboard: React.FC = () => {
       await adminApi.deleteUser(targetUser);
       message.success({ content: '유저 및 네임스페이스가 삭제되었습니다.', key: 'delete-user' });
       fetchAllData();
-    } catch (error) {
+    } catch {
       message.error({ content: '유저 삭제 실패', key: 'delete-user' });
     }
   };
@@ -88,7 +90,7 @@ export const AdminDashboard: React.FC = () => {
       await adminApi.forceStopVm(namespace, name);
       message.success({ content: '가상머신이 강제 종료 요청되었습니다.', key: 'stop-vm' });
       fetchAllData();
-    } catch (error) {
+    } catch {
       message.error({ content: '종료 요청 실패', key: 'stop-vm' });
     }
   };
@@ -99,12 +101,12 @@ export const AdminDashboard: React.FC = () => {
       await adminApi.deleteVm(namespace, name);
       message.success({ content: '가상머신이 강제 삭제 요청되었습니다.', key: 'delete-vm' });
       fetchAllData();
-    } catch (error) {
+    } catch {
       message.error({ content: '삭제 요청 실패', key: 'delete-vm' });
     }
   };
 
-  const userColumns = [
+  const userColumns: TableColumnsType<User> = [
     { title: 'Username', dataIndex: 'username', key: 'username', render: (t: string) => <Text strong>{t}</Text> },
     { title: 'Email', dataIndex: 'email', key: 'email' },
     { title: 'Namespace', dataIndex: 'namespace', key: 'namespace', render: (t: string) => <Tag>{t}</Tag> },
@@ -115,7 +117,7 @@ export const AdminDashboard: React.FC = () => {
       title: 'Access Level', 
       key: 'accessLevel',
       width: 250,
-      render: (_: any, record: User) => (
+      render: (_, record) => (
         <Slider
           min={0}
           max={3}
@@ -130,7 +132,7 @@ export const AdminDashboard: React.FC = () => {
     {
       title: 'Actions',
       key: 'actions',
-      render: (_: any, record: User) => (
+      render: (_, record) => (
         <Popconfirm title="정말 유저와 네임스페이스 전체를 삭제하시겠습니까?" onConfirm={() => handleDeleteUser(record.username)} disabled={record.username === 'admin'}>
           <Button type="text" danger icon={<DeleteOutlined />} disabled={record.username === 'admin'}>Delete</Button>
         </Popconfirm>
@@ -138,7 +140,7 @@ export const AdminDashboard: React.FC = () => {
     }
   ];
 
-  const vmColumns = [
+  const vmColumns: TableColumnsType<GlobalVM> = [
     { title: 'Owner (NS)', dataIndex: 'owner', key: 'owner', render: (t: string) => <Text strong style={{ color: '#C9B59C' }}>{t}</Text> },
     { title: 'VM Name', dataIndex: 'name', key: 'name', render: (t: string) => <Text strong>{t}</Text> },
     { title: 'Domain', dataIndex: 'domain', key: 'domain' },
@@ -148,11 +150,11 @@ export const AdminDashboard: React.FC = () => {
       if (phase === 'Stopped') color = 'error';
       return <Tag color={color}>{phase}</Tag>;
     }},
-    { title: 'CPU / Mem', key: 'spec', render: (_: any, record: GlobalVM) => `${record.cpu} / ${record.memory}` },
+    { title: 'CPU / Mem', key: 'spec', render: (_, record) => `${record.cpu} / ${record.memory}` },
     {
       title: 'Global Actions',
       key: 'actions',
-      render: (_: any, record: GlobalVM) => (
+      render: (_, record) => (
         <Space size="middle">
           {record.phase === 'Running' && (
             <Popconfirm title="관리자 권한으로 강제 종료하시겠습니까?" onConfirm={() => handleForceStopVm(record.namespace, record.name)}>
@@ -185,12 +187,12 @@ export const AdminDashboard: React.FC = () => {
         <Row gutter={24} style={{ marginBottom: 40 }}>
           <Col span={12}>
             <Card hoverable>
-              <Statistic title="총 등록 유저 수" value={users.length} prefix={<TeamOutlined />} valueStyle={{ color: '#C9B59C' }} />
+              <Statistic title="총 등록 유저 수" value={users.length} prefix={<TeamOutlined />} styles={{ content: { color: '#C9B59C' } }} />
             </Card>
           </Col>
           <Col span={12}>
             <Card hoverable>
-              <Statistic title="클러스터 전체 활성 VM 수" value={vms.length} prefix={<CloudServerOutlined />} valueStyle={{ color: '#333' }} />
+              <Statistic title="클러스터 전체 활성 VM 수" value={vms.length} prefix={<CloudServerOutlined />} styles={{ content: { color: '#333' } }} />
             </Card>
           </Col>
         </Row>
@@ -209,6 +211,7 @@ export const AdminDashboard: React.FC = () => {
                   rowKey="username" 
                   loading={loadingUsers}
                   pagination={false}
+                  scroll={{ x: 'max-content' }}
                 />
               )
             },
@@ -222,6 +225,7 @@ export const AdminDashboard: React.FC = () => {
                   rowKey="id" 
                   loading={loadingVms}
                   pagination={false}
+                  scroll={{ x: 'max-content' }}
                 />
               )
             }

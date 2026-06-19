@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { ConfigProvider } from 'antd';
+import { App as AntdApp, ConfigProvider } from 'antd';
 import { kiteTheme } from './theme';
 import { useAuthStore } from './store/useAuthStore';
 import { LandingPage } from './pages/LandingPage';
@@ -9,12 +9,13 @@ import { UserDashboard } from './pages/UserDashboard';
 import { VmDetail } from './pages/VmDetail';
 import { AdminSettings } from './pages/AdminSettings';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { DEBUG_DIRECT_ROUTES_ENABLED } from './config/debug';
 
 // 인증 가드 (로그인 안된 유저 튕겨내기)
 const RequireAuth = ({ children }: { children: ReactElement }) => {
   const token = useAuthStore((state) => state.token);
   const location = useLocation();
-  if (!token) return <Navigate to="/" state={{ requireLogin: true, path: location.pathname }} replace />;
+  if (!token && !DEBUG_DIRECT_ROUTES_ENABLED) return <Navigate to="/" state={{ requireLogin: true, path: location.pathname }} replace />;
   return children;
 };
 
@@ -24,46 +25,48 @@ const RequireAdmin = ({ children }: { children: ReactElement }) => {
   const accessLevel = useAuthStore((state) => state.accessLevel);
   const location = useLocation();
   
-  if (!token) return <Navigate to="/" state={{ requireLogin: true, path: location.pathname }} replace />;
-  if (accessLevel === null || accessLevel < 2) return <Navigate to="/dashboard" replace />;
+  if (!token && !DEBUG_DIRECT_ROUTES_ENABLED) return <Navigate to="/" state={{ requireLogin: true, path: location.pathname }} replace />;
+  if (!DEBUG_DIRECT_ROUTES_ENABLED && (accessLevel === null || accessLevel < 2)) return <Navigate to="/dashboard" replace />;
   return children;
 };
 
 function App() {
   return (
     <ConfigProvider theme={kiteTheme}>
-      <BrowserRouter>
-        <Routes>
-          {/* 랜딩 겸 로그인 페이지 */}
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/signup" element={<SignupPage />} />
-          <Route path="/login" element={<Navigate to="/" replace />} />
-          
-          {/* User Routes */}
-          <Route path="/dashboard" element={
-            <RequireAuth>
-              <UserDashboard />
-            </RequireAuth>
-          } />
-          <Route path="/dashboard/kite-machine/:vmName" element={
-            <RequireAuth>
-              <VmDetail />
-            </RequireAuth>
-          } />
+      <AntdApp>
+        <BrowserRouter>
+          <Routes>
+            {/* 랜딩 겸 로그인 페이지 */}
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/signup" element={<SignupPage />} />
+            <Route path="/login" element={<Navigate to="/" replace />} />
 
-          {/* Admin Routes */}
-          <Route path="/admin/settings" element={
-            <RequireAdmin>
-              <AdminSettings />
-            </RequireAdmin>
-          } />
-          <Route path="/admin/*" element={
-            <RequireAdmin>
-              <AdminDashboard />
-            </RequireAdmin>
-          } />
-        </Routes>
-      </BrowserRouter>
+            {/* User Routes */}
+            <Route path="/dashboard" element={
+              <RequireAuth>
+                <UserDashboard />
+              </RequireAuth>
+            } />
+            <Route path="/dashboard/kite-machine/:vmName" element={
+              <RequireAuth>
+                <VmDetail />
+              </RequireAuth>
+            } />
+
+            {/* Admin Routes */}
+            <Route path="/admin/settings" element={
+              <RequireAdmin>
+                <AdminSettings />
+              </RequireAdmin>
+            } />
+            <Route path="/admin/*" element={
+              <RequireAdmin>
+                <AdminDashboard />
+              </RequireAdmin>
+            } />
+          </Routes>
+        </BrowserRouter>
+      </AntdApp>
     </ConfigProvider>
   );
 }

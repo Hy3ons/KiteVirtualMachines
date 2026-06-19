@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { SEO } from '../components/SEO';
 import { authApi } from '../api';
-import { Row, Col, Form, Input, Button, Typography, message, Layout, notification } from 'antd';
+import { App as AntdApp, Row, Col, Form, Input, Button, Typography, Layout } from 'antd';
 import { UserOutlined, LockOutlined, CloudServerOutlined, SecurityScanOutlined, BuildOutlined, GithubOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../store/useAuthStore';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { GlobalHeader } from '../components/GlobalHeader';
+import type { LoginCredentials } from '../api/types';
 
 const { Title, Paragraph, Text } = Typography;
 const { Content } = Layout;
 
 export const LandingPage: React.FC = () => {
+  const { message, notification } = AntdApp.useApp();
   const { login, token, username, accessLevel, profileImage, logout } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
@@ -32,9 +34,9 @@ export const LandingPage: React.FC = () => {
       // 경고를 띄운 후에는 state를 초기화하여 새로고침 시 다시 뜨지 않도록 함
       window.history.replaceState({}, document.title);
     }
-  }, [location]);
+  }, [location, notification]);
 
-  const onFinish = async (values: any) => {
+  const onFinish = async (values: LoginCredentials & { readonly username: string }) => {
     try {
       setLoading(true);
       const data = await authApi.login({ email: values.username, password: values.password });
@@ -48,8 +50,9 @@ export const LandingPage: React.FC = () => {
       } else {
         navigate('/dashboard');
       }
-    } catch (error: any) {
-      message.error(error.response?.data?.message || '로그인에 실패했습니다.');
+    } catch (error) {
+      const fallbackMessage = error instanceof Error ? error.message : '로그인에 실패했습니다.';
+      message.error(fallbackMessage);
     } finally {
       setLoading(false);
     }
