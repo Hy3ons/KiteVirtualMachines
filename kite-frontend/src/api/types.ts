@@ -69,6 +69,11 @@ export type VmResponse = {
   readonly vm: UserVm;
 };
 
+export type ConsoleTicketResponse = {
+  readonly ticket: string;
+  readonly expiresAt: string;
+};
+
 export type CreateVmPayload = {
   readonly name: string;
   readonly domainPrefix?: string;

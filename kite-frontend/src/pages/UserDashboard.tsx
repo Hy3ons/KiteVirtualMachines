@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { SEO } from '../components/SEO';
 import { vmApi } from '../api';
-import { App as AntdApp, Layout, Typography, Button, Table, Space, Tag, Form, Popconfirm, Avatar, Empty, Tooltip } from 'antd';
-import { PlusOutlined, PoweroffOutlined, CaretRightOutlined, DeleteOutlined, LogoutOutlined, CodeOutlined, ReloadOutlined } from '@ant-design/icons';
+import { App as AntdApp, Layout, Typography, Button, Table, Space, Form, Avatar, Empty, Tooltip } from 'antd';
+import { PlusOutlined, LogoutOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../store/useAuthStore';
 import { useNavigate } from 'react-router-dom';
 import { GlobalHeader } from '../components/GlobalHeader';
 import { UserDashboardSummary } from './UserDashboardSummary';
 import { VmCreateModal } from './VmCreateModal';
 import { VmConnectionDrawer } from './VmConnectionDrawer';
+import { createUserDashboardColumns } from './UserDashboardColumns';
 import { LEVEL_1_FIXED_CPU, LEVEL_1_FIXED_DISK_GI, LEVEL_1_FIXED_MEMORY, LEVEL_1_VM_QUOTA, MIN_DISK_GI, getAccessLevelDescription } from './userDashboardAccess';
-import type { TableColumnsType } from 'antd';
 import type { DashboardVm, VmCreateFormValues } from './UserDashboardTypes';
 
 const { Content } = Layout;
@@ -122,55 +122,14 @@ export const UserDashboard: React.FC = () => {
     setIsDrawerVisible(true);
   };
 
-  const columns: TableColumnsType<DashboardVm> = [
-    { 
-      title: 'Name', 
-      dataIndex: 'name', 
-      key: 'name', 
-      width: 180,
-      ellipsis: true,
-      render: (text: string) => (
-        <a
-          href={`/dashboard/kite-machine/${text}`}
-          onClick={(event) => {
-            event.preventDefault();
-            navigate(`/dashboard/kite-machine/${text}`);
-          }}
-          style={{ fontWeight: 'bold', color: '#8B7355', textDecoration: 'underline' }}
-        >
-          {text}
-        </a>
-      ) 
-    },
-    { title: 'Domain', dataIndex: 'domain', key: 'domain', width: 260, ellipsis: true },
-    { title: 'SSH ID', dataIndex: 'sshId', key: 'sshId', width: 140, ellipsis: true },
-    { title: 'Status', dataIndex: 'phase', key: 'phase', render: (phase: string) => {
-      let color = 'default';
-      if (phase === 'Running') color = 'success';
-      if (phase === 'Stopped') color = 'error';
-      if (phase === 'Creating' || phase === 'Terminating') color = 'processing';
-      return <Tag color={color}>{phase}</Tag>;
-    }, width: 130 },
-    { title: 'CPU', dataIndex: 'cpu', key: 'cpu', width: 90 },
-    { title: 'Memory', dataIndex: 'memory', key: 'memory', width: 110 },
-    { title: 'Disk', dataIndex: 'disk', key: 'disk', width: 100 },
-    {
-      title: 'Actions',
-      key: 'actions',
-      fixed: 'right',
-      width: 260,
-      render: (_, record) => (
-        <Space size="small" wrap>
-          <Button type="text" icon={<CodeOutlined />} onClick={() => showConnectGuide(record)}>Connect</Button>
-          {record.phase !== 'Running' && <Button type="text" icon={<CaretRightOutlined style={{ color: '#52c41a' }} />} onClick={() => handleStart(record.name)} />}
-          {record.phase === 'Running' && <Button type="text" icon={<PoweroffOutlined style={{ color: '#d9363e' }} />} onClick={() => handleStop(record.name)}>Stop</Button>}
-          <Popconfirm title="정말 이 VM을 삭제하시겠습니까? 데이터가 모두 날아갑니다." onConfirm={() => handleDelete(record.name)}>
-            <Button type="text" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
-        </Space>
-      )
-    },
-  ];
+  const columns = createUserDashboardColumns({
+    onNavigateToDetail: (name) => navigate(`/dashboard/kite-machine/${name}`),
+    onConnect: showConnectGuide,
+    onOpenConsole: (name) => navigate(`/dashboard/kite-machine/${name}/console`),
+    onStart: handleStart,
+    onStop: handleStop,
+    onDelete: handleDelete
+  });
 
   return (
     <Layout style={{ minHeight: '100vh', backgroundColor: '#F9F8F6' }}>

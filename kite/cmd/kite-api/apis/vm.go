@@ -4,17 +4,9 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
-	"kite/internal/account"
 	"kite/internal/auth"
 	vmservice "kite/internal/vm"
-)
-
-const (
-	levelOneFixedCPU    = 2
-	levelOneFixedMemory = "4Gi"
-	levelOneFixedDisk   = "20Gi"
 )
 
 type vmCreateRequest struct {
@@ -58,6 +50,8 @@ func RegisterVirtualMachines(api *gin.RouterGroup, deps Dependencies) {
 	vms.DELETE("/:name", vmDeleteHandler(deps))
 	vms.POST("/:name/start", vmPowerHandler(deps, "On"))
 	vms.POST("/:name/stop", vmPowerHandler(deps, "Off"))
+	vms.POST("/:name/console-ticket", vmConsoleTicketHandler(deps))
+	vms.GET("/:name/console", vmConsoleHandler(deps))
 }
 
 // vmListHandler returns VMs in the authenticated user's namespace.
@@ -122,42 +116,6 @@ func vmCreateHandler(deps Dependencies) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusCreated, gin.H{"vm": created})
-	}
-}
-
-// applyAccessLevelCreateLimits enforces VM create-time resource limits from the authenticated user.
-// accessLevel is copied from the current KiteUser CRD.
-// req is the parsed HTTP create body and is modified before it reaches the VM service.
-// This function is used by vmCreateHandler to keep frontend limits authoritative on the API server.
-func applyAccessLevelCreateLimits(accessLevel int64, req *vmCreateRequest) {
-	if accessLevel != int64(auth.AccessLevelUser) {
-		return
-	}
-
-	req.CPU = levelOneFixedCPU
-	req.Memory = levelOneFixedMemory
-	req.Disk = levelOneFixedDisk
-}
-
-// applyAccessLevelUpdateLimits enforces fixed resource updates for level 1 users.
-// accessLevel is copied from the current KiteUser CRD.
-// req is the parsed PATCH body and is modified only when resource fields are present.
-// This function is used by vmUpdateHandler to prevent direct API calls from raising level 1 VM specs.
-func applyAccessLevelUpdateLimits(accessLevel int64, req *vmUpdateRequest) {
-	if accessLevel != int64(auth.AccessLevelUser) {
-		return
-	}
-
-	if req.CPU != nil {
-		cpu := levelOneFixedCPU
-		req.CPU = &cpu
-	}
-	if req.Memory != nil {
-		memory := levelOneFixedMemory
-		req.Memory = &memory
-	}
-	if req.Disk != nil {
-		req.Disk = levelOneFixedDisk
 	}
 }
 
@@ -263,84 +221,4 @@ func vmPowerHandler(deps Dependencies, powerState string) gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, gin.H{"vm": vm})
 	}
-}
-
-// currentUser returns the KiteUser matching the authenticated JWT subject.
-// c provides claims set by RequireAccessLevel.
-// deps provides Kubernetes access through account service.
-// The boolean return is false after an HTTP error response has been written.
-func currentUser(c *gin.Context, deps Dependencies) (account.PublicUser, bool) {
-	claims, ok := currentClaims(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "access token is required"})
-		return account.PublicUser{}, false
-	}
-
-	accountService, ok := accountServiceFromDependencies(c, deps)
-	if !ok {
-		return account.PublicUser{}, false
-	}
-
-	userObject, found, err := accountService.FindByUsername(c.Request.Context(), claims.Subject)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to read kite users"})
-		return account.PublicUser{}, false
-	}
-	if !found {
-		c.JSON(http.StatusNotFound, gin.H{"message": "current user was not found"})
-		return account.PublicUser{}, false
-	}
-
-	user, err := accountService.Get(c.Request.Context(), userObject.GetName())
-	if err != nil {
-		writeAccountError(c, err, "failed to read current user")
-		return account.PublicUser{}, false
-	}
-
-	return user, true
-}
-
-// vmServiceFromDependencies creates a VM service for one request.
-// deps provides the dynamic Kubernetes client.
-// The returned service reads and writes KiteVirtualMachine CRDs.
-func vmServiceFromDependencies(deps Dependencies) *vmservice.Service {
-	return vmservice.NewService(deps.DynamicClient, deps.Config.PasswordSalt)
-}
-
-// normalizeOptionalDisk converts PATCH disk input to an optional string pointer.
-// value is nil when the client omitted disk.
-// The returned pointer is nil when no update is requested.
-func normalizeOptionalDisk(value any) *string {
-	if value == nil {
-		return nil
-	}
-
-	normalized := vmservice.NormalizeDisk(value)
-	return &normalized
-}
-
-// writeVMError maps VM service and Kubernetes errors to HTTP responses.
-// c is the active Gin request context.
-// err is returned by internal/vm or Kubernetes store code.
-// fallbackMessage is used for unexpected internal errors.
-func writeVMError(c *gin.Context, err error, fallbackMessage string) {
-	if apierrors.IsNotFound(err) || vmservice.IsNotFound(err) {
-		c.JSON(http.StatusNotFound, gin.H{"message": "virtual machine was not found"})
-		return
-	}
-	if message := vmservice.ConflictMessage(err); message != "" {
-		c.JSON(http.StatusConflict, gin.H{"message": message})
-		return
-	}
-	if kind, ok := vmservice.RequestErrorKind(err); ok {
-		switch kind {
-		case vmservice.ErrorKindInvalid:
-			c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
-		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"message": fallbackMessage})
-		}
-		return
-	}
-
-	c.JSON(http.StatusInternalServerError, gin.H{"message": fallbackMessage})
 }

@@ -7,6 +7,7 @@ import { LandingPage } from './pages/LandingPage';
 import { SignupPage } from './pages/SignupPage';
 import { UserDashboard } from './pages/UserDashboard';
 import { VmDetail } from './pages/VmDetail';
+import { VmConsolePage } from './pages/VmConsolePage';
 import { AdminSettings } from './pages/AdminSettings';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { DEBUG_DIRECT_ROUTES_ENABLED } from './config/debug';
@@ -50,6 +51,11 @@ function App() {
             <Route path="/dashboard/kite-machine/:vmName" element={
               <RequireAuth>
                 <VmDetail />
+              </RequireAuth>
+            } />
+            <Route path="/dashboard/kite-machine/:vmName/console" element={
+              <RequireAuth>
+                <VmConsolePage />
               </RequireAuth>
             } />
 
