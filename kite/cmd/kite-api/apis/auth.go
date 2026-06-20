@@ -3,9 +3,11 @@ package apis
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
 
 	"kite/internal/account"
 	"kite/internal/auth"
@@ -13,9 +15,12 @@ import (
 )
 
 type Dependencies struct {
-	Config        config.Config
-	TokenService  *auth.TokenService
-	DynamicClient dynamic.Interface
+	Config           config.Config
+	TokenService     *auth.TokenService
+	DynamicClient    dynamic.Interface
+	RestConfig       *rest.Config
+	ConsoleTickets   *ConsoleTicketService
+	ConsoleConnector ConsoleConnector
 }
 
 type loginRequest struct {
@@ -44,6 +49,7 @@ func Register(api *gin.RouterGroup, deps Dependencies) {
 // deps provides shared Kubernetes, config, and auth dependencies.
 // This function is used by Register while legacy /api routes remain available.
 func RegisterV1(api *gin.RouterGroup, deps Dependencies) {
+	deps = withConsoleDefaults(deps)
 	api.GET("/config", configGetHandler(deps))
 	api.GET("/me", RequireAccessLevel(deps, auth.AccessLevelReadOnly), currentUserHandler(deps))
 
@@ -53,6 +59,20 @@ func RegisterV1(api *gin.RouterGroup, deps Dependencies) {
 
 	RegisterVirtualMachines(api, deps)
 	RegisterAdmin(api, deps)
+}
+
+// withConsoleDefaults fills optional console dependencies for production startup.
+// deps carries shared API dependencies from startup or tests.
+// The returned Dependencies has a signed ticket service and connector when enough Kubernetes config exists.
+// This function is used before route registration so handlers can stay small and deterministic.
+func withConsoleDefaults(deps Dependencies) Dependencies {
+	if deps.ConsoleTickets == nil {
+		deps.ConsoleTickets = NewConsoleTicketService(30*time.Second, deps.Config.JWTSecret)
+	}
+	if deps.ConsoleConnector == nil && deps.RestConfig != nil {
+		deps.ConsoleConnector = NewKubeVirtConsoleConnector(deps.RestConfig)
+	}
+	return deps
 }
 
 // loginHandler authenticates a KiteUser and issues an API access token.

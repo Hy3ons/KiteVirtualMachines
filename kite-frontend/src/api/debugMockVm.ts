@@ -1,5 +1,5 @@
 import { makeSyntheticVm, readDebugState, toDiskString, writeDebugState } from './debugMockState';
-import type { CreateVmPayload, UpdateVmPayload, UserVm, VmResponse, VmsResponse } from './types';
+import type { ConsoleTicketResponse, CreateVmPayload, UpdateVmPayload, UserVm, VmResponse, VmsResponse } from './types';
 
 const replaceVm = (vms: readonly UserVm[], name: string, vm: UserVm): readonly UserVm[] => [
   ...vms.filter((candidate) => candidate.name !== name),
@@ -88,4 +88,9 @@ export const debugVmApi = {
     writeDebugState({ ...state, vms: replaceVm(state.vms, name, deleted) });
     return { vm: deleted };
   },
+
+  createConsoleTicket: async (name: string): Promise<ConsoleTicketResponse> => ({
+    ticket: `debug-console-${name}`,
+    expiresAt: new Date(Date.now() + 30_000).toISOString(),
+  }),
 };

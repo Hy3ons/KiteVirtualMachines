@@ -109,6 +109,13 @@ export const vmApi = {
     const { data } = await apiClient.delete(`/vms/${name}`);
     return data;
   },
+  createConsoleTicket: async (name: string) => {
+    if (useMockApi) {
+      return debugMockApi.createConsoleTicket(name);
+    }
+    const { data } = await apiClient.post(`/vms/${name}/console-ticket`);
+    return data;
+  },
 };
 
 // ========================

@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
 
 	"kite/cmd/kite-api/apis"
 	"kite/internal/auth"
@@ -18,7 +19,12 @@ import (
 const defaultAPIListenAddress = ":8080"
 
 func main() {
-	dynamicClient, err := getDynamicClient()
+	restConfig, err := getClusterConfig()
+	if err != nil {
+		log.Fatalf("failed to load kubernetes config: %v", err)
+	}
+
+	dynamicClient, err := getDynamicClient(restConfig)
 	if err != nil {
 		log.Fatalf("failed to initialize kubernetes client: %v", err)
 	}
@@ -33,14 +39,14 @@ func main() {
 		log.Fatalf("failed to initialize token service: %v", err)
 	}
 
-	r := newRouter(cfg, tokenService, dynamicClient)
+	r := newRouter(cfg, tokenService, dynamicClient, restConfig)
 
 	if err := r.Run(defaultAPIListenAddress); err != nil {
 		log.Fatalf("Fail to start Server : %v\n", err)
 	}
 }
 
-func newRouter(cfg config.Config, tokenService *auth.TokenService, dynamicClient dynamic.Interface) *gin.Engine {
+func newRouter(cfg config.Config, tokenService *auth.TokenService, dynamicClient dynamic.Interface, restConfig *rest.Config) *gin.Engine {
 	r := gin.Default()
 	_ = r.SetTrustedProxies(nil)
 	r.Use(corsMiddleware())
@@ -69,6 +75,7 @@ func newRouter(cfg config.Config, tokenService *auth.TokenService, dynamicClient
 		Config:        cfg,
 		TokenService:  tokenService,
 		DynamicClient: dynamicClient,
+		RestConfig:    restConfig,
 	})
 
 	return r
