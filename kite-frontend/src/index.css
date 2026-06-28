@@ -143,6 +143,7 @@ html, body {
 
 .landing-login-panel {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 48px;
@@ -151,6 +152,7 @@ html, body {
 .landing-login-panel > div,
 .landing-login-panel > form {
   width: 100%;
+  max-width: 420px;
 }
 
 .global-header {
@@ -169,23 +171,51 @@ html, body {
 .global-header-brand {
   display: inline-flex;
   align-items: center;
-  min-width: 112px;
+  gap: 24px;
+  min-width: 0;
   cursor: pointer;
 }
 
 .global-header-logo {
-  height: 64px;
+  width: 52px;
+  height: 52px;
   object-fit: contain;
-  transform: scale(1.5);
-  transform-origin: left center;
-  margin-right: 28px;
+  transform: scale(1.9);
+  transform-origin: center;
+  flex: 0 0 auto;
+}
+
+.global-header-divider {
+  display: inline-block;
+  width: 1px;
+  height: 44px;
+  background: #D9CFC7;
+  flex: 0 0 auto;
+}
+
+.global-header-wordmark {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
 }
 
 .global-header-title {
-  font-size: 26px;
-  font-weight: 900;
+  font-size: 20px;
+  line-height: 1.05;
+  font-weight: 700;
   color: #8B7355;
   font-family: 'Pretendard Variable', Pretendard, system-ui, sans-serif;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.global-header-subtitle {
+  color: #594E46;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.25;
   letter-spacing: 0;
   white-space: nowrap;
 }
@@ -584,6 +614,19 @@ html, body {
     align-items: flex-start;
     padding: 12px 20px;
     flex-direction: column;
+  }
+
+  .global-header-brand {
+    gap: 22px;
+  }
+
+  .global-header-logo {
+    width: 44px;
+    height: 44px;
+  }
+
+  .global-header-divider {
+    height: 38px;
   }
 
   .global-header-actions {
