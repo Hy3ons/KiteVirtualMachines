@@ -60,6 +60,63 @@ KITE_CLUSTER=k3s build/dev/dev.sh
 
 Defaults are `production`, `/api/v1`, and `false`.
 
+## Component rebuilds
+
+Use the component scripts when only one Kite workload needs to be rebuilt and
+rolled out. They reuse the same image loading rules as `dev.sh`, but only touch
+the selected Deployment and its image.
+
+```sh
+KITE_CLUSTER=k3s build/dev/frontend.dev.sh
+```
+
+Equivalent generic form:
+
+```sh
+KITE_CLUSTER=k3s build/dev/component.dev.sh frontend
+```
+
+Available component scripts are:
+
+```sh
+build/dev/api.dev.sh
+build/dev/controller.dev.sh
+build/dev/gateway.dev.sh
+build/dev/frontend.dev.sh
+```
+
+The frontend script accepts the same Vite build environment as the full dev
+deploy:
+
+```sh
+FRONTEND_VITE_BUILD_MODE=production \
+FRONTEND_VITE_API_BASE_URL=/api/v1 \
+FRONTEND_VITE_USE_MOCK=false \
+IMAGE_TAG=frontend-qa \
+KITE_CLUSTER=k3s \
+build/dev/frontend.dev.sh
+```
+
+Use the component cleanup scripts when one workload should be removed before a
+fresh rebuild:
+
+```sh
+KITE_CLUSTER=k3s build/dev/clear-frontend.sh
+KITE_CLUSTER=k3s build/dev/frontend.dev.sh
+```
+
+Available cleanup scripts are:
+
+```sh
+build/dev/clear-api.sh
+build/dev/clear-controller.sh
+build/dev/clear-gateway.sh
+build/dev/clear-frontend.sh
+```
+
+Set `CLEAR_IMAGES=false` to keep local Docker and k3s images while deleting only
+the Kubernetes resources.
+
 `./clear.sh` is the root cleanup wrapper. It removes Kite development resources
 and local Kite images through `build/dev/clear.sh`.
 
