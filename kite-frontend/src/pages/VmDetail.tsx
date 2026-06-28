@@ -121,7 +121,7 @@ export const VmDetail: React.FC = () => {
         }
       />
       
-      <Content style={{ padding: '40px', maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
+      <Content className="app-main app-main--standard vm-detail-content">
         <Breadcrumb
           style={{ marginBottom: 24 }}
           items={[
