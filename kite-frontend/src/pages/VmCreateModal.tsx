@@ -40,7 +40,7 @@ export const VmCreateModal: React.FC<VmCreateModalProps> = ({
     <Form form={form} layout="vertical" onFinish={onCreate} className="vm-create-form">
       {accessLevel === 0 && (
         <Alert
-          message="VM 생성 권한 없음"
+          title="VM 생성 권한 없음"
           description="Level 0 계정은 VM을 생성할 수 없습니다. 관리자에게 권한을 요청하세요."
           type="warning"
           showIcon
@@ -49,7 +49,7 @@ export const VmCreateModal: React.FC<VmCreateModalProps> = ({
       )}
       {accessLevel === 1 && (
         <Alert
-          message="일반 계정 VM 스펙 고정"
+          title="일반 계정 VM 스펙 고정"
           description={`Level 1 계정은 CPU ${fixedCpu}, RAM ${fixedMemory}, Disk ${fixedDiskGi}Gi로 생성됩니다.`}
           type="info"
           showIcon

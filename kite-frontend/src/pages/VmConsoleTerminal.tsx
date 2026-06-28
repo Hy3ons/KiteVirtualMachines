@@ -150,7 +150,7 @@ export const VmConsoleTerminal: React.FC<VmConsoleTerminalProps> = ({ vmName, en
           Reconnect
         </Button>
       </div>
-      <Alert message={message} type={status === 'failed' ? 'error' : 'info'} showIcon className="console-status" />
+      <Alert title={message} type={status === 'failed' ? 'error' : 'info'} showIcon className="console-status" />
       <div ref={containerRef} className="console-terminal" />
     </div>
   );

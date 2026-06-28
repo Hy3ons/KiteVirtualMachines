@@ -22,7 +22,7 @@ export const VmConnectionDrawer: React.FC<VmConnectionDrawerProps> = ({ open, vm
     {vm && (
       <div className="drawer-stack">
         <Alert
-          message="SSH 접속 안내"
+          title="SSH 접속 안내"
           description="VM 생성 시 입력한 SSH User ID와 SSH Password로 서버에 접속하면 kite-gateway가 해당 VM SSH 서비스로 연결합니다."
           type="info"
           showIcon
