@@ -12,6 +12,20 @@ usage: build/dev/component.dev.sh <api|controller|gateway|frontend>
 examples:
   KITE_CLUSTER=k3s build/dev/component.dev.sh frontend
   IMAGE_TAG=qa-frontend KITE_CLUSTER=k3s build/dev/frontend.dev.sh
+
+options:
+  -h, --help    show this help
+
+environment:
+  KITE_CLUSTER                auto|minikube|k3s|k3d|kind|k8s|current
+  KITE_NAMESPACE              target namespace, default kite
+  IMAGE_REGISTRY              image registry, default ghcr.io/hy3ons
+  IMAGE_TAG                   image tag, default dev-<timestamp>
+  KITE_DEV_SHOW_PLAN          print plan table, default true
+  KITE_DEV_DRY_RUN            print steps without running commands, default false
+  FRONTEND_VITE_BUILD_MODE    frontend-only build mode, default production
+  FRONTEND_VITE_API_BASE_URL  frontend-only API base URL, default /api/v1
+  FRONTEND_VITE_USE_MOCK      frontend-only mock mode, default false
 EOF
 }
 
@@ -139,6 +153,74 @@ pull_policy_for_cluster() {
   esac
 }
 
+print_plan_row() {
+  local label="$1"
+  local value="$2"
+
+  printf '  %-16s %s\n' "${label}:" "${value}"
+}
+
+print_component_plan() {
+  local cluster="$1"
+  local component="$2"
+  local image
+
+  if [[ "${KITE_DEV_SHOW_PLAN:-true}" != "true" ]]; then
+    return
+  fi
+
+  image="$(image_name "$(component_image_component "${component}")")"
+
+  echo
+  echo "[kite] component deploy plan"
+  print_plan_row "component" "${component}"
+  print_plan_row "cluster" "${cluster}"
+  print_plan_row "namespace" "${KITE_NAMESPACE}"
+  print_plan_row "image" "${image}"
+  print_plan_row "manifest" "$(component_manifest "${component}")"
+  print_plan_row "dockerfile" "$(component_dockerfile "${component}")"
+  print_plan_row "context" "$(component_context "${component}")"
+  print_plan_row "dry run" "${KITE_DEV_DRY_RUN:-false}"
+
+  if [[ "${component}" == "frontend" ]]; then
+    print_plan_row "vite mode" "${FRONTEND_VITE_BUILD_MODE}"
+    print_plan_row "vite api" "${FRONTEND_VITE_API_BASE_URL}"
+    print_plan_row "vite mock" "${FRONTEND_VITE_USE_MOCK}"
+  fi
+  echo
+}
+
+step_total_for_cluster() {
+  if [[ "$1" == "minikube" ]]; then
+    echo 4
+    return
+  fi
+
+  echo 3
+}
+
+run_step() {
+  local title="$1"
+  shift
+
+  STEP_INDEX=$((STEP_INDEX + 1))
+  printf '[kite] [%d/%d] %s\n' "${STEP_INDEX}" "${STEP_TOTAL}" "${title}"
+  if [[ "${KITE_DEV_DRY_RUN:-false}" == "true" ]]; then
+    printf '[kite]       dry-run: %s\n' "$*"
+    return
+  fi
+  "$@"
+}
+
+print_done() {
+  local component="$1"
+
+  echo
+  log "${component} redeploy complete"
+  print_plan_row "namespace" "${KITE_NAMESPACE}"
+  print_plan_row "image tag" "${IMAGE_TAG}"
+}
+
 apply_component_manifest() {
   local cluster="$1"
   local component="$2"
@@ -180,28 +262,45 @@ main() {
   local component
   local cluster
 
+  if [[ "${component_arg}" == "-h" || "${component_arg}" == "--help" || "${2:-}" == "-h" || "${2:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+
   if [[ -z "${component_arg}" ]]; then
     usage
     exit 1
   fi
 
-  component="$(normalize_component "${component_arg}")"
-  cluster="$(detect_cluster)"
-  log "target cluster=${cluster}"
-  log "target component=${component}"
-
-  if [[ "${cluster}" == "minikube" ]]; then
-    require_command minikube
-    start_minikube
+  if [[ "$#" -gt 1 ]]; then
+    echo "[kite] unexpected argument: $2" >&2
+    usage
+    exit 1
   fi
 
-  build_component_for_cluster "${cluster}" "${component}"
-  apply_component_manifest "${cluster}" "${component}"
-  wait_for_deployment "$(component_deployment "${component}")"
+  if [[ "${KITE_DEV_DRY_RUN:-false}" != "true" ]]; then
+    require_command kubectl
+  fi
 
-  log "${component} redeploy complete"
-  echo "  namespace: ${KITE_NAMESPACE}"
-  echo "  image tag: ${IMAGE_TAG}"
+  component="$(normalize_component "${component_arg}")"
+  cluster="$(detect_cluster)"
+  STEP_INDEX=0
+  STEP_TOTAL="$(step_total_for_cluster "${cluster}")"
+
+  print_component_plan "${cluster}" "${component}"
+
+  if [[ "${cluster}" == "minikube" ]]; then
+    if [[ "${KITE_DEV_DRY_RUN:-false}" != "true" ]]; then
+      require_command minikube
+    fi
+    run_step "start minikube profile" start_minikube
+  fi
+
+  run_step "build and load $(component_image_component "${component}") image" build_component_for_cluster "${cluster}" "${component}"
+  run_step "apply $(component_deployment "${component}") manifest" apply_component_manifest "${cluster}" "${component}"
+  run_step "wait for $(component_deployment "${component}") rollout" wait_for_deployment "$(component_deployment "${component}")"
+
+  print_done "${component}"
 }
 
 main "$@"

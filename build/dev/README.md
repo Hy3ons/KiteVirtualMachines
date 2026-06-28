@@ -70,6 +70,20 @@ the selected Deployment and its image.
 KITE_CLUSTER=k3s build/dev/frontend.dev.sh
 ```
 
+The script prints a compact deploy plan before it starts, then shows numbered
+steps for image build/load, manifest apply, and rollout wait. Disable the plan
+table for quieter logs:
+
+```sh
+KITE_DEV_SHOW_PLAN=false KITE_CLUSTER=k3s build/dev/frontend.dev.sh
+```
+
+Preview the same flow without building images or touching the cluster:
+
+```sh
+KITE_DEV_DRY_RUN=true KITE_CLUSTER=k3s build/dev/frontend.dev.sh
+```
+
 Equivalent generic form:
 
 ```sh
