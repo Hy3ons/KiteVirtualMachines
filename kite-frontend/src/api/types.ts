@@ -18,8 +18,13 @@ export type KiteUser = {
 };
 
 export type AuthResponse = {
-  readonly accessToken: string;
+  readonly expiresIn: number;
+  readonly expiresAt: string;
   readonly user: KiteUser;
+};
+
+export type LogoutResponse = {
+  readonly message: string;
 };
 
 export type SignupResponse = {
@@ -32,6 +37,7 @@ export type SignupResponse = {
 export type ConfigResponse = {
   readonly config: {
     readonly baseDomain: string;
+    readonly forceHttps: boolean;
     readonly hasJWTSecret: boolean;
     readonly hasPasswordSalt: boolean;
     readonly hasTLSCertificate: boolean;
@@ -121,6 +127,10 @@ export type GlobalVmsResponse = {
 export type RuntimeSecretRotation = {
   readonly rotateJWTSecret?: boolean;
   readonly rotatePasswordSalt?: boolean;
+};
+
+export type HTTPSPolicyPayload = {
+  readonly forceHttps: boolean;
 };
 
 export type CertPayload = {

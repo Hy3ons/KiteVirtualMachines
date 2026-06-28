@@ -1,17 +1,15 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: kite-platform
+  name: kite-platform-http-redirect
   namespace: {{ .Namespace }}
   labels:
     hy3ons.github.io/managed-by: kite-controller
     hy3ons.github.io/platform-ingress: "true"
-  {{ if .ForceHTTPS }}
   annotations:
     kubernetes.io/ingress.class: traefik
-    traefik.ingress.kubernetes.io/router.entrypoints: websecure
-    traefik.ingress.kubernetes.io/router.tls: "true"
-  {{ end }}
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+    traefik.ingress.kubernetes.io/router.middlewares: {{ .Namespace }}-kite-platform-https-redirect@kubernetescrd
 
 spec:
   rules:

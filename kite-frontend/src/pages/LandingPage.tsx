@@ -4,6 +4,7 @@ import { authApi } from '../api';
 import { App as AntdApp, Row, Col, Form, Input, Button, Typography, Layout, Space, Tag } from 'antd';
 import { UserOutlined, LockOutlined, CloudServerOutlined, SecurityScanOutlined, BuildOutlined, GithubOutlined, DashboardOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../store/useAuthStore';
+import { useLogout } from '../hooks/useLogout';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { GlobalHeader } from '../components/GlobalHeader';
 import type { LoginCredentials } from '../api/types';
@@ -13,7 +14,8 @@ const { Content } = Layout;
 
 export const LandingPage: React.FC = () => {
   const { message, notification } = AntdApp.useApp();
-  const { login, token, username, accessLevel, profileImage, logout } = useAuthStore();
+  const { login, authenticated, username, accessLevel, profileImage } = useAuthStore();
+  const logout = useLogout();
   const navigate = useNavigate();
   const location = useLocation();
   const [loading, setLoading] = useState(false);
@@ -41,8 +43,8 @@ export const LandingPage: React.FC = () => {
       setLoading(true);
       const data = await authApi.login({ email: values.username, password: values.password });
       
-      const { accessToken, user } = data;
-      login(accessToken, user.access_level, user.username, user.namespace, user.profile_image || '');
+      const { user } = data;
+      login(user.access_level, user.username, user.namespace, user.profile_image || '');
       
       message.success('로그인 되었습니다.');
       navigate('/dashboard');
@@ -112,7 +114,7 @@ export const LandingPage: React.FC = () => {
 
             <Col xs={24} lg={10}>
               <section className="landing-login-panel">
-                {token ? (
+                {authenticated ? (
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ marginBottom: 24 }}>
                       {profileImage ? (

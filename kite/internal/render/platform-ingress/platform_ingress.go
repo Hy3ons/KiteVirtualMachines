@@ -14,10 +14,12 @@ var platformIngressTemplate string
 // PlatformIngressData contains values for the Kite platform Ingress template.
 // Namespace is where kite-api and kite-frontend Services live.
 // Host is optional; when empty the Ingress accepts requests without host matching.
+// ForceHTTPS controls whether Traefik redirects platform HTTP traffic to HTTPS.
 // This renderer is used by kite-controller to expose frontend and API through one Ingress.
 type PlatformIngressData struct {
-	Namespace string
-	Host      string
+	Namespace  string
+	Host       string
+	ForceHTTPS bool
 }
 
 // Render creates the Kite platform Ingress object.

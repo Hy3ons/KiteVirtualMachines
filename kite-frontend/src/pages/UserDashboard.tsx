@@ -4,6 +4,7 @@ import { vmApi } from '../api';
 import { App as AntdApp, Layout, Typography, Button, Table, Space, Form, Avatar, Empty, Tooltip } from 'antd';
 import { PlusOutlined, LogoutOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../store/useAuthStore';
+import { useLogout } from '../hooks/useLogout';
 import { useNavigate } from 'react-router-dom';
 import { GlobalHeader } from '../components/GlobalHeader';
 import { UserDashboardSummary } from './UserDashboardSummary';
@@ -18,7 +19,8 @@ const { Title, Text } = Typography;
 
 export const UserDashboard: React.FC = () => {
   const { message } = AntdApp.useApp();
-  const { username, namespace, accessLevel, logout, profileImage } = useAuthStore();
+  const { username, namespace, accessLevel, profileImage } = useAuthStore();
+  const logout = useLogout();
   const safeAccessLevel = accessLevel ?? 1;
   const navigate = useNavigate();
   const [vms, setVms] = useState<DashboardVm[]>([]);

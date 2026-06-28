@@ -25,6 +25,7 @@ const (
 	VMStorageClassNameKey        = "vmStorageClassName"
 	GoldenImageNamespaceKey      = "goldenImageNamespace"
 	DefaultVMImageKey            = "defaultVmImage"
+	ForceHTTPSConfigKey          = "forceHttps"
 	DefaultVMStorageClassName    = "kite-vm-storage"
 	DefaultGoldenImageNamespace  = "kite"
 	DefaultVMImage               = "ubuntu-22.04"
@@ -167,6 +168,7 @@ func defaultRuntimeData() map[string]string {
 		VMStorageClassNameKey:    DefaultVMStorageClassName,
 		GoldenImageNamespaceKey:  DefaultGoldenImageNamespace,
 		DefaultVMImageKey:        DefaultVMImage,
+		ForceHTTPSConfigKey:      strconv.FormatBool(false),
 	}
 }
 

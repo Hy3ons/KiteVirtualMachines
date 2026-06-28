@@ -27,6 +27,7 @@ func TestLoginIssuesAccessToken(t *testing.T) {
 		strings.NewReader(`{"email":"admin@example.com","password":"admin"}`),
 	)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Forwarded-Proto", "https")
 	rec := httptest.NewRecorder()
 
 	r.ServeHTTP(rec, req)
@@ -40,35 +41,100 @@ func TestLoginIssuesAccessToken(t *testing.T) {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 
-	if res.AccessToken == "" {
-		t.Fatal("expected accessToken")
-	}
-
 	if res.ExpiresIn != int64(time.Hour.Seconds()) {
 		t.Fatalf("expected 60 minute expiry, got %d seconds", res.ExpiresIn)
 	}
 
-	if res.TokenType != "Bearer" {
-		t.Fatalf("expected Bearer token type, got %q", res.TokenType)
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("failed to decode raw response: %v", err)
+	}
+	if _, ok := raw["accessToken"]; ok {
+		t.Fatal("login response must not expose accessToken")
 	}
 
-	claims, err := newTestTokenService(t).VerifyAccessToken(res.AccessToken)
-	if err != nil {
-		t.Fatalf("failed to verify access token: %v", err)
+	cookies := rec.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("expected one cookie, got %d", len(cookies))
 	}
 
-	if claims.AccessLevel != auth.AccessLevelAdmin {
-		t.Fatalf("expected admin access level, got %d", claims.AccessLevel)
-	}
-
-	cookie := rec.Result().Cookies()[0]
+	cookie := cookies[0]
 	if cookie.Name != "accessToken" {
 		t.Fatalf("expected accessToken cookie, got %q", cookie.Name)
 	}
-
 	if !strings.HasPrefix(cookie.Value, "Bearer ") {
 		t.Fatalf("expected Bearer cookie value, got %q", cookie.Value)
 	}
+	if !cookie.HttpOnly {
+		t.Fatal("expected accessToken cookie to be HTTP-only")
+	}
+	if !cookie.Secure {
+		t.Fatal("expected accessToken cookie to require Secure transport")
+	}
+	if cookie.SameSite != http.SameSiteLaxMode {
+		t.Fatalf("expected SameSite=Lax, got %v", cookie.SameSite)
+	}
+
+	claims, err := newTestTokenService(t).VerifyAccessToken(cookie.Value)
+	if err != nil {
+		t.Fatalf("failed to verify access token cookie: %v", err)
+	}
+	if claims.AccessLevel != auth.AccessLevelAdmin {
+		t.Fatalf("expected admin access level, got %d", claims.AccessLevel)
+	}
+}
+
+func TestLogoutClearsAccessTokenCookie(t *testing.T) {
+	r := newTestRouter(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+	req.Header.Set("X-Forwarded-Proto", "https")
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Result().Header.Get("Set-Cookie"), "accessToken=;") {
+		t.Fatalf("expected logout to clear accessToken cookie, got %q", rec.Result().Header.Get("Set-Cookie"))
+	}
+	if !strings.Contains(rec.Result().Header.Get("Set-Cookie"), "Max-Age=0") {
+		t.Fatalf("expected logout cookie Max-Age=0, got %q", rec.Result().Header.Get("Set-Cookie"))
+	}
+}
+
+func TestLoginOmitsSecureCookieOnPlainHTTP(t *testing.T) {
+	r := newTestRouter(t)
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/login",
+		strings.NewReader(`{"email":"admin@example.com","password":"admin"}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	cookies := rec.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("expected one cookie, got %d", len(cookies))
+	}
+	if cookies[0].Secure {
+		t.Fatal("plain HTTP dev and QA requests must receive a storable non-Secure cookie")
+	}
+}
+
+func addAccessTokenCookie(req *http.Request, token string) {
+	req.AddCookie(&http.Cookie{
+		Name:  "accessToken",
+		Value: "Bearer " + token,
+	})
 }
 
 func TestLoginRejectsInvalidCredentials(t *testing.T) {

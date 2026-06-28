@@ -60,6 +60,7 @@ export const defaultDebugState: DebugState = {
   ],
   config: {
     baseDomain: DEFAULT_DEBUG_DOMAIN,
+    forceHttps: false,
     hasJWTSecret: true,
     hasPasswordSalt: true,
     hasTLSCertificate: true,
