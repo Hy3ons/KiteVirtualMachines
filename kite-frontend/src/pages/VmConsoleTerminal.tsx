@@ -53,6 +53,7 @@ export const VmConsoleTerminal: React.FC<VmConsoleTerminalProps> = ({ vmName, en
       convertEol: true,
       fontFamily: '"SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace',
       fontSize: 13,
+      scrollback: 1000,
       theme: {
         background: '#111111',
         foreground: '#F4EFE8',
@@ -65,25 +66,44 @@ export const VmConsoleTerminal: React.FC<VmConsoleTerminalProps> = ({ vmName, en
     terminal.open(container);
     fitAddon.fit();
 
-    const resizeObserver = new ResizeObserver(() => fitAddon.fit());
-    resizeObserver.observe(container);
+    const writeToTerminal = (data: string | Uint8Array) => {
+      terminal.write(data);
+    };
+
+    const writeLineToTerminal = (data: string | Uint8Array) => {
+      terminal.writeln(data);
+    };
+
+    let fitFrame: number | null = null;
+    const scheduleFit = () => {
+      if (fitFrame !== null) return;
+      fitFrame = window.requestAnimationFrame(() => {
+        fitFrame = null;
+        fitAddon.fit();
+      });
+    };
+
+    window.addEventListener('resize', scheduleFit);
 
     if (mock) {
       queueMicrotask(() => updateConsoleState('connected', 'Debug console is connected.'));
-      terminal.writeln('Kite debug serial console');
-      terminal.writeln(`Connected to ${vmName}`);
-      terminal.write('$ ');
+      writeLineToTerminal('Kite debug serial console');
+      writeLineToTerminal(`Connected to ${vmName}`);
+      writeToTerminal('$ ');
       const input = terminal.onData((data) => {
         if (data === '\r') {
-          terminal.write('\r\n$ ');
+          writeToTerminal('\r\n$ ');
           return;
         }
-        terminal.write(data);
+        writeToTerminal(data);
       });
       return () => {
         active = false;
         input.dispose();
-        resizeObserver.disconnect();
+        if (fitFrame !== null) {
+          window.cancelAnimationFrame(fitFrame);
+        }
+        window.removeEventListener('resize', scheduleFit);
         terminal.dispose();
       };
     }
@@ -91,7 +111,7 @@ export const VmConsoleTerminal: React.FC<VmConsoleTerminalProps> = ({ vmName, en
     let socket: WebSocket | null = null;
     const decoder = new TextDecoder();
     queueMicrotask(() => updateConsoleState('connecting', 'Requesting console ticket...'));
-    terminal.writeln('Connecting to Kite VM serial console...');
+    writeLineToTerminal('Connecting to Kite VM serial console...');
 
     void vmApi.createConsoleTicket(vmName)
       .then((ticket) => {
@@ -100,15 +120,15 @@ export const VmConsoleTerminal: React.FC<VmConsoleTerminalProps> = ({ vmName, en
         socket.binaryType = 'arraybuffer';
         socket.onopen = () => {
           updateConsoleState('connected', 'Console is connected.');
-          terminal.writeln('Connected. Serial console output will appear below.');
+          writeLineToTerminal('Connected. Serial console output will appear below.');
         };
         socket.onmessage = (event) => {
           if (event.data instanceof ArrayBuffer) {
-            terminal.write(decoder.decode(event.data));
+            writeToTerminal(decoder.decode(event.data));
             return;
           }
           if (typeof event.data === 'string') {
-            terminal.write(event.data);
+            writeToTerminal(event.data);
           }
         };
         socket.onerror = () => {
@@ -133,7 +153,10 @@ export const VmConsoleTerminal: React.FC<VmConsoleTerminalProps> = ({ vmName, en
     return () => {
       active = false;
       input.dispose();
-      resizeObserver.disconnect();
+      if (fitFrame !== null) {
+        window.cancelAnimationFrame(fitFrame);
+      }
+      window.removeEventListener('resize', scheduleFit);
       socket?.close();
       terminal.dispose();
     };

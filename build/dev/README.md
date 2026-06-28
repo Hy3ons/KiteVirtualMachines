@@ -40,9 +40,11 @@ K3S_CTR_CMD="k3s ctr -n k8s.io" KITE_CLUSTER=k3s build/dev/dev.sh
 ```
 
 Supported cluster modes are `minikube`, `k3s`, `k3d`, `kind`, `k8s`,
-`kubernetes`, and `current`. `k3d` uses `k3d image import`, and `kind` uses
-`kind load docker-image`. Generic Kubernetes modes build local images and can
-push them when the cluster pulls from a registry:
+`kubernetes`, and `current`. The default image prefix is `kite-dev`, so dev
+deploys build local images such as `kite-dev/kite-api:<tag>` instead of pulling
+GHCR images. `k3d` uses `k3d image import`, and `kind` uses `kind load
+docker-image`. Generic Kubernetes modes build local images and can push them
+only when the cluster pulls from a registry:
 
 ```sh
 PUSH_IMAGES=true IMAGE_REGISTRY=registry.example.com/kite KITE_CLUSTER=k8s build/dev/dev.sh
@@ -71,8 +73,8 @@ KITE_CLUSTER=k3s build/dev/frontend.dev.sh
 ```
 
 The script prints a compact deploy plan before it starts, then shows numbered
-steps for image build/load, manifest apply, and rollout wait. Disable the plan
-table for quieter logs:
+steps for Docker build, local cluster image load, manifest apply, and rollout
+wait. Disable the plan table for quieter logs:
 
 ```sh
 KITE_DEV_SHOW_PLAN=false KITE_CLUSTER=k3s build/dev/frontend.dev.sh
