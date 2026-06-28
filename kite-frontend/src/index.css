@@ -37,7 +37,8 @@ html, body {
   width: min(calc(100% - 64px), 800px);
 }
 
-.landing-content {
+.landing-content,
+.signup-content {
   min-height: calc(100dvh - 65px);
   background:
     linear-gradient(90deg, rgba(239, 233, 227, 0.66), rgba(249, 248, 246, 0.9)),
@@ -440,11 +441,6 @@ html, body {
 
 .admin-settings-card:last-child {
   margin-bottom: 0;
-}
-
-.signup-content {
-  min-height: calc(100dvh - 65px);
-  background: #F9F8F6;
 }
 
 .signup-shell {
