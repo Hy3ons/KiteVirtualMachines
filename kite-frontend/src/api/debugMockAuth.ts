@@ -4,7 +4,8 @@ import type { AuthResponse, LoginCredentials, SignupPayload, SignupResponse } fr
 
 export const debugAuthApi = {
   login: async (credentials: LoginCredentials): Promise<AuthResponse> => ({
-    accessToken: DEBUG_ADMIN_SESSION.token,
+    expiresIn: 3600,
+    expiresAt: new Date(Date.now() + 3600_000).toISOString(),
     user: {
       access_level: DEBUG_ADMIN_SESSION.accessLevel,
       username: credentials.email === 'admin' ? 'admin' : credentials.email,
@@ -39,6 +40,10 @@ export const debugAuthApi = {
       },
     };
   },
+
+  logout: async (): Promise<{ readonly message: string }> => ({
+    message: 'debug session cleared',
+  }),
 
   getMe: async (): Promise<{ readonly user: AuthResponse['user'] }> => ({
     user: {

@@ -5,6 +5,7 @@ import { App as AntdApp, Layout, Typography, Space, Tag, Breadcrumb, Card, Tabs,
 import { useParams, useNavigate } from 'react-router-dom';
 import { PoweroffOutlined, DeleteOutlined, CodeOutlined, DesktopOutlined, SafetyCertificateOutlined, ArrowLeftOutlined, CaretRightOutlined, CopyOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../store/useAuthStore';
+import { useLogout } from '../hooks/useLogout';
 import { GlobalHeader } from '../components/GlobalHeader';
 import { MOCK_ENV } from '../config/mockEnv';
 
@@ -26,7 +27,8 @@ export const VmDetail: React.FC = () => {
   const { message } = AntdApp.useApp();
   const { vmName } = useParams<{ vmName: string }>();
   const navigate = useNavigate();
-  const { username, namespace, accessLevel, logout, profileImage } = useAuthStore();
+  const { username, namespace, accessLevel, profileImage } = useAuthStore();
+  const logout = useLogout();
   const safeAccessLevel = accessLevel ?? 1;
   const [vm, setVm] = useState<VM | null>(null);
   const [loading, setLoading] = useState(true);

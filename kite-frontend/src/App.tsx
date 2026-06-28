@@ -15,19 +15,19 @@ import { GlobalFooter } from './components/GlobalFooter';
 
 // 인증 가드 (로그인 안된 유저 튕겨내기)
 const RequireAuth = ({ children }: { children: ReactElement }) => {
-  const token = useAuthStore((state) => state.token);
+  const authenticated = useAuthStore((state) => state.authenticated);
   const location = useLocation();
-  if (!token && !DEBUG_DIRECT_ROUTES_ENABLED) return <Navigate to="/" state={{ requireLogin: true, path: location.pathname }} replace />;
+  if (!authenticated && !DEBUG_DIRECT_ROUTES_ENABLED) return <Navigate to="/" state={{ requireLogin: true, path: location.pathname }} replace />;
   return children;
 };
 
 // 관리자 가드 (레벨 2 이상만 접근)
 const RequireAdmin = ({ children }: { children: ReactElement }) => {
-  const token = useAuthStore((state) => state.token);
+  const authenticated = useAuthStore((state) => state.authenticated);
   const accessLevel = useAuthStore((state) => state.accessLevel);
   const location = useLocation();
   
-  if (!token && !DEBUG_DIRECT_ROUTES_ENABLED) return <Navigate to="/" state={{ requireLogin: true, path: location.pathname }} replace />;
+  if (!authenticated && !DEBUG_DIRECT_ROUTES_ENABLED) return <Navigate to="/" state={{ requireLogin: true, path: location.pathname }} replace />;
   if (!DEBUG_DIRECT_ROUTES_ENABLED && (accessLevel === null || accessLevel < 2)) return <Navigate to="/dashboard" replace />;
   return children;
 };

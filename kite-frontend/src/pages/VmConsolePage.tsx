@@ -7,6 +7,7 @@ import type { UserVm } from '../api/types';
 import { GlobalHeader } from '../components/GlobalHeader';
 import { SEO } from '../components/SEO';
 import { useAuthStore } from '../store/useAuthStore';
+import { useLogout } from '../hooks/useLogout';
 import { VmConsoleTerminal } from './VmConsoleTerminal';
 
 const { Content } = Layout;
@@ -23,7 +24,8 @@ export const VmConsolePage: React.FC = () => {
   const { message } = AntdApp.useApp();
   const { vmName } = useParams<{ vmName: string }>();
   const navigate = useNavigate();
-  const { username, namespace, accessLevel, logout, profileImage } = useAuthStore();
+  const { username, namespace, accessLevel, profileImage } = useAuthStore();
+  const logout = useLogout();
   const safeAccessLevel = accessLevel ?? 1;
   const [vm, setVm] = useState<UserVm | null>(null);
   const [loading, setLoading] = useState(true);

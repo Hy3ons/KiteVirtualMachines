@@ -8,21 +8,32 @@ import (
 	"strings"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/utils/ptr"
 
+	"kite/internal/config"
 	"kite/internal/kube"
+	platformhttpredirect "kite/internal/render/platform-http-redirect"
+	platformhttpsredirect "kite/internal/render/platform-https-redirect"
 	platformingress "kite/internal/render/platform-ingress"
 )
 
 const (
 	kitePlatformIngressApplyManager = "kite-controller-platform-ingress"
 )
+
+var traefikMiddlewareGVR = schema.GroupVersionResource{
+	Group:    "traefik.io",
+	Version:  "v1alpha1",
+	Resource: "middlewares",
+}
 
 // RunKitePlatformIngressReconciler watches kite-runtime-config and reconciles the platform Ingress.
 // clientManager provides the dynamic Kubernetes client.
@@ -87,13 +98,41 @@ func ReconcileKitePlatformIngressFromConfigMap(ctx context.Context, dynamicClien
 
 	host, _, _ := unstructured.NestedString(configMap.Object, "data", kiteGlobalBaseDomainKey)
 	host = strings.Trim(strings.TrimSpace(host), ".")
+	forceHTTPS, _, _ := unstructured.NestedString(configMap.Object, "data", config.ForceHTTPSConfigKey)
+	shouldForceHTTPS := strings.EqualFold(forceHTTPS, "true")
 
 	ingressObject, err := (&platformingress.PlatformIngressData{
-		Namespace: kiteGlobalConfigNamespace,
-		Host:      host,
+		Namespace:  kiteGlobalConfigNamespace,
+		Host:       host,
+		ForceHTTPS: shouldForceHTTPS,
 	}).Render()
 	if err != nil {
 		return fmt.Errorf("failed to render Kite platform Ingress: %w", err)
+	}
+
+	if shouldForceHTTPS {
+		redirectObject, err := (&platformhttpsredirect.PlatformHTTPSRedirectData{
+			Namespace: kiteGlobalConfigNamespace,
+		}).Render()
+		if err != nil {
+			return fmt.Errorf("failed to render Kite platform HTTPS redirect middleware: %w", err)
+		}
+		if err := applyKitePlatformHTTPSRedirect(ctx, dynamicClient, redirectObject); err != nil {
+			return err
+		}
+
+		redirectIngressObject, err := (&platformhttpredirect.PlatformHTTPRedirectData{
+			Namespace: kiteGlobalConfigNamespace,
+			Host:      host,
+		}).Render()
+		if err != nil {
+			return fmt.Errorf("failed to render Kite platform HTTP redirect Ingress: %w", err)
+		}
+		if err := applyKitePlatformIngress(ctx, dynamicClient, redirectIngressObject); err != nil {
+			return err
+		}
+	} else if err := deleteKitePlatformHTTPSRedirect(ctx, dynamicClient); err != nil {
+		return err
 	}
 
 	return applyKitePlatformIngress(ctx, dynamicClient, ingressObject)
@@ -134,6 +173,52 @@ func applyKitePlatformIngress(ctx context.Context, dynamicClient dynamic.Interfa
 	})
 	if err != nil {
 		return fmt.Errorf("failed to apply Kite platform Ingress %s/%s: %w", ingressObject.GetNamespace(), ingressObject.GetName(), err)
+	}
+
+	return nil
+}
+
+// applyKitePlatformHTTPSRedirect applies the Traefik redirect middleware with server-side apply.
+// ctx controls the Kubernetes API patch request.
+// dynamicClient writes the Middleware object in the kite namespace.
+// middlewareObject must be a traefik.io/v1alpha1 Middleware.
+func applyKitePlatformHTTPSRedirect(ctx context.Context, dynamicClient dynamic.Interface, middlewareObject *unstructured.Unstructured) error {
+	data, err := json.Marshal(middlewareObject.Object)
+	if err != nil {
+		return fmt.Errorf("failed to marshal Kite platform HTTPS redirect middleware: %w", err)
+	}
+
+	_, err = dynamicClient.Resource(traefikMiddlewareGVR).Namespace(middlewareObject.GetNamespace()).Patch(ctx, middlewareObject.GetName(), types.ApplyPatchType, data, metav1.PatchOptions{
+		FieldManager: kitePlatformIngressApplyManager,
+		Force:        ptr.To(true),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to apply Kite platform HTTPS redirect middleware %s/%s: %w", middlewareObject.GetNamespace(), middlewareObject.GetName(), err)
+	}
+
+	return nil
+}
+
+// ctx controls Kubernetes delete requests.
+// dynamicClient deletes the Traefik Middleware and HTTP redirect Ingress from the kite namespace.
+// Missing resources are ignored so repeated reconciles stay idempotent.
+func deleteKitePlatformHTTPSRedirect(ctx context.Context, dynamicClient dynamic.Interface) error {
+	resources := []struct {
+		gvr  schema.GroupVersionResource
+		name string
+	}{
+		{gvr: ingressGVR, name: "kite-platform-http-redirect"},
+		{gvr: traefikMiddlewareGVR, name: "kite-platform-https-redirect"},
+	}
+
+	for _, resource := range resources {
+		err := dynamicClient.Resource(resource.gvr).Namespace(kiteGlobalConfigNamespace).Delete(ctx, resource.name, metav1.DeleteOptions{})
+		if apierrors.IsNotFound(err) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("failed to delete Kite platform HTTPS redirect resource %s: %w", resource.name, err)
+		}
 	}
 
 	return nil

@@ -24,6 +24,10 @@ type certUpdateRequest struct {
 	TLSKey  string `json:"tlsKey" binding:"required"`
 }
 
+type httpsUpdateRequest struct {
+	ForceHTTPS bool `json:"forceHttps"`
+}
+
 type runtimeSecretRotateRequest struct {
 	RotateJWTSecret    bool `json:"rotateJWTSecret"`
 	RotatePasswordSalt bool `json:"rotatePasswordSalt"`
@@ -46,6 +50,7 @@ func RegisterAdmin(api *gin.RouterGroup, deps Dependencies) {
 
 	admin.GET("/settings", RequireAccessLevel(deps, auth.AccessLevelAdmin), adminSettingsGetHandler(deps))
 	admin.POST("/domain", RequireAccessLevel(deps, auth.AccessLevelAdmin), adminDomainUpdateHandler(deps))
+	admin.POST("/https", RequireAccessLevel(deps, auth.AccessLevelAdmin), adminHTTPSUpdateHandler(deps))
 	admin.POST("/runtime-secrets/rotate", RequireAccessLevel(deps, auth.AccessLevelAdmin), adminRuntimeSecretRotateHandler(deps))
 	admin.POST("/cert", RequireAccessLevel(deps, auth.AccessLevelAdmin), adminCertUpdateHandler(deps))
 }
@@ -215,6 +220,28 @@ func adminDomainUpdateHandler(deps Dependencies) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "base domain updated", "config": settings})
+	}
+}
+
+// adminHTTPSUpdateHandler updates the platform HTTPS redirect policy.
+// deps provides Kubernetes access through the platform settings service.
+// The body contains forceHttps and may explicitly set it to false.
+// This handler is used by the admin settings HTTPS enforcement toggle.
+func adminHTTPSUpdateHandler(deps Dependencies) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req httpsUpdateRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "invalid request body"})
+			return
+		}
+
+		settings, err := platform.NewService(deps.DynamicClient).UpdateForceHTTPS(c.Request.Context(), req.ForceHTTPS)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "HTTPS enforcement updated", "config": settings})
 	}
 }
 

@@ -4,7 +4,9 @@ import type {
   AdminUsersResponse,
   CertPayload,
   CreateVmPayload,
+  HTTPSPolicyPayload,
   LoginCredentials,
+  LogoutResponse,
   RuntimeSecretRotation,
   SignupPayload,
   UpdateVmPayload,
@@ -32,6 +34,13 @@ export const authApi = {
       return debugMockApi.signup(payload);
     }
     const { data } = await apiClient.post('/auth/signup', payload);
+    return data;
+  },
+  logout: async (): Promise<LogoutResponse> => {
+    if (useMockApi) {
+      return debugMockApi.logout();
+    }
+    const { data } = await apiClient.post<LogoutResponse>('/auth/logout');
     return data;
   },
   getMe: async () => {
@@ -182,6 +191,13 @@ export const adminApi = {
       return debugMockApi.saveDomain(baseDomain);
     }
     const { data } = await apiClient.post('/admin/domain', { baseDomain });
+    return data;
+  },
+  saveHTTPSPolicy: async (payload: HTTPSPolicyPayload) => {
+    if (useMockApi) {
+      return debugMockApi.saveHTTPSPolicy(payload);
+    }
+    const { data } = await apiClient.post('/admin/https', payload);
     return data;
   },
   rotateRuntimeSecrets: async (payload: RuntimeSecretRotation) => {

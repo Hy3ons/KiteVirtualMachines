@@ -5,6 +5,7 @@ import type {
   CertPayload,
   ConfigResponse,
   GlobalVmsResponse,
+  HTTPSPolicyPayload,
   RuntimeSecretRotation,
   UserVm,
   VmResponse,
@@ -73,6 +74,13 @@ export const debugAdminApi = {
     const config = { ...state.config, baseDomain };
     const vms = state.vms.map((vm) => ({ ...vm, domain: `${vm.domainPrefix}.${baseDomain}` }));
     writeDebugState({ ...state, config, vms });
+    return { config };
+  },
+
+  saveHTTPSPolicy: async (payload: HTTPSPolicyPayload): Promise<ConfigResponse> => {
+    const state = readDebugState();
+    const config = { ...state.config, forceHttps: payload.forceHttps };
+    writeDebugState({ ...state, config });
     return { config };
   },
 

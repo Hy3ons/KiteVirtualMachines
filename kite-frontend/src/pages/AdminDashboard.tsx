@@ -5,6 +5,7 @@ import { App as AntdApp, Layout, Typography, Table, Space, Tag, Button, Popconfi
 import type { TableColumnsType } from 'antd';
 import { PoweroffOutlined, DeleteOutlined, LogoutOutlined, TeamOutlined, CloudServerOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../store/useAuthStore';
+import { useLogout } from '../hooks/useLogout';
 import { useNavigate } from 'react-router-dom';
 import { GlobalHeader } from '../components/GlobalHeader';
 
@@ -32,7 +33,8 @@ interface GlobalVM {
 
 export const AdminDashboard: React.FC = () => {
   const { message } = AntdApp.useApp();
-  const { username, logout, profileImage } = useAuthStore();
+  const { username, profileImage } = useAuthStore();
+  const logout = useLogout();
   const navigate = useNavigate();
   
   const [users, setUsers] = useState<User[]>([]);

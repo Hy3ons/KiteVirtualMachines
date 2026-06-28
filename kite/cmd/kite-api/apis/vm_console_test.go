@@ -29,7 +29,7 @@ func TestConsoleTicketIssuedWhenVMRunning(t *testing.T) {
 	tickets := NewConsoleTicketService(time.Minute, "test-secret")
 	router := newConsoleTestRouter(t, tokenService, tickets, "Running", false)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/vms/vm-a/console-ticket", nil)
-	req.Header.Set("Authorization", "Bearer "+token)
+	addAccessTokenCookie(req, token)
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)
@@ -65,7 +65,7 @@ func TestConsoleTicketRejectedWhenVMStopped(t *testing.T) {
 
 	router := newConsoleTestRouter(t, tokenService, NewConsoleTicketService(time.Minute, "test-secret"), "Stopped", false)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/vms/vm-a/console-ticket", nil)
-	req.Header.Set("Authorization", "Bearer "+token)
+	addAccessTokenCookie(req, token)
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)
@@ -84,7 +84,7 @@ func TestConsoleTicketRejectedWhenVMDeleting(t *testing.T) {
 
 	router := newConsoleTestRouter(t, tokenService, NewConsoleTicketService(time.Minute, "test-secret"), "Running", true)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/vms/vm-a/console-ticket", nil)
-	req.Header.Set("Authorization", "Bearer "+token)
+	addAccessTokenCookie(req, token)
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)

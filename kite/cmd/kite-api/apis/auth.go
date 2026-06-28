@@ -3,6 +3,7 @@ package apis
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -29,15 +30,14 @@ type loginRequest struct {
 }
 
 type loginResponse struct {
-	AccessToken string `json:"accessToken"`
-	TokenType   string `json:"tokenType"`
-	ExpiresIn   int64  `json:"expiresIn"`
-	ExpiresAt   string `json:"expiresAt"`
-	User        any    `json:"user,omitempty"`
+	ExpiresIn int64  `json:"expiresIn"`
+	ExpiresAt string `json:"expiresAt"`
+	User      any    `json:"user,omitempty"`
 }
 
 func Register(api *gin.RouterGroup, deps Dependencies) {
 	api.POST("/login", loginHandler(deps))
+	api.POST("/logout", logoutHandler())
 	RegisterUsers(api, deps)
 
 	v1 := api.Group("/v1")
@@ -55,6 +55,7 @@ func RegisterV1(api *gin.RouterGroup, deps Dependencies) {
 
 	authGroup := api.Group("/auth")
 	authGroup.POST("/login", loginHandler(deps))
+	authGroup.POST("/logout", logoutHandler())
 	authGroup.POST("/signup", userSignUpHandler(deps))
 
 	RegisterVirtualMachines(api, deps)
@@ -78,7 +79,7 @@ func withConsoleDefaults(deps Dependencies) Dependencies {
 // loginHandler authenticates a KiteUser and issues an API access token.
 // deps provides the dynamic Kubernetes client, password salt, and token service from API startup.
 // The request email is matched against KiteUser spec.email and the password is verified against spec.password.
-// This handler is used by the frontend login page and stores the access token in both JSON and an HTTP-only cookie.
+// This handler is used by the frontend login page and stores the access token in an HTTP-only cookie.
 func loginHandler(deps Dependencies) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if deps.DynamicClient == nil {
@@ -126,22 +127,46 @@ func loginHandler(deps Dependencies) gin.HandlerFunc {
 			return
 		}
 
-		c.Writer.Header().Add("Set-Cookie", accessTokenCookie(accessToken, int(deps.Config.AccessTokenTTL.Seconds())))
+		c.Writer.Header().Add("Set-Cookie", accessTokenCookie(accessToken, int(deps.Config.AccessTokenTTL.Seconds()), requestUsesSecureCookie(c)))
 
 		c.JSON(http.StatusOK, loginResponse{
-			AccessToken: accessToken,
-			TokenType:   "Bearer",
-			ExpiresIn:   int64(deps.Config.AccessTokenTTL.Seconds()),
-			ExpiresAt:   expiresAt.Format("2006-01-02T15:04:05Z07:00"),
-			User:        user,
+			ExpiresIn: int64(deps.Config.AccessTokenTTL.Seconds()),
+			ExpiresAt: expiresAt.Format("2006-01-02T15:04:05Z07:00"),
+			User:      user,
 		})
+	}
+}
+
+func logoutHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Writer.Header().Add("Set-Cookie", clearAccessTokenCookie(requestUsesSecureCookie(c)))
+		c.JSON(http.StatusOK, gin.H{"message": "logged out"})
 	}
 }
 
 // accessTokenCookie builds the HTTP-only access token cookie value.
 // accessToken is the signed Bearer token issued by TokenService.
 // maxAge is the cookie lifetime in seconds.
+// secure controls whether the Secure attribute is emitted for HTTPS requests.
 // The returned string is added to Set-Cookie by loginHandler.
-func accessTokenCookie(accessToken string, maxAge int) string {
-	return "accessToken=\"Bearer " + accessToken + "\"; Path=/; Max-Age=" + strconv.Itoa(maxAge) + "; HttpOnly; Secure; SameSite=Lax"
+func accessTokenCookie(accessToken string, maxAge int, secure bool) string {
+	return "accessToken=\"Bearer " + accessToken + "\"; Path=/; Max-Age=" + strconv.Itoa(maxAge) + "; HttpOnly" + secureCookieAttribute(secure) + "; SameSite=Lax"
+}
+
+func clearAccessTokenCookie(secure bool) string {
+	return "accessToken=; Path=/; Max-Age=0; HttpOnly" + secureCookieAttribute(secure) + "; SameSite=Lax"
+}
+
+func secureCookieAttribute(secure bool) string {
+	if secure {
+		return "; Secure"
+	}
+	return ""
+}
+
+func requestUsesSecureCookie(c *gin.Context) bool {
+	if c.Request.TLS != nil {
+		return true
+	}
+	return strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https")
 }

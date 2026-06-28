@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { SEO } from '../components/SEO';
 import { adminApi } from '../api';
-import { App as AntdApp, Layout, Typography, Form, Input, Button, Card, Space, Avatar } from 'antd';
+import { App as AntdApp, Layout, Typography, Form, Input, Button, Card, Space, Avatar, Switch } from 'antd';
 import { GlobalOutlined, SafetyCertificateOutlined, LogoutOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../store/useAuthStore';
+import { useLogout } from '../hooks/useLogout';
 import { useNavigate } from 'react-router-dom';
 import { GlobalHeader } from '../components/GlobalHeader';
 import { MOCK_ENV } from '../config/mockEnv';
@@ -23,12 +24,15 @@ const { TextArea } = Input;
 
 export const AdminSettings: React.FC = () => {
   const { message } = AntdApp.useApp();
-  const { username, logout, profileImage } = useAuthStore();
+  const { username, profileImage } = useAuthStore();
+  const logout = useLogout();
   const navigate = useNavigate();
   
   const [loadingDomain, setLoadingDomain] = useState(false);
+  const [loadingHTTPS, setLoadingHTTPS] = useState(false);
   const [loadingRuntime, setLoadingRuntime] = useState(false);
   const [loadingCert, setLoadingCert] = useState(false);
+  const [forceHTTPS, setForceHTTPS] = useState(false);
   const [runtimeStatus, setRuntimeStatus] = useState<{ hasJWTSecret?: boolean; hasPasswordSalt?: boolean }>({});
   
   const [domainForm] = Form.useForm();
@@ -39,6 +43,7 @@ export const AdminSettings: React.FC = () => {
     adminApi.getSettings().then(data => {
       if (data.config) {
         domainForm.setFieldsValue({ baseDomain: data.config.baseDomain });
+        setForceHTTPS(Boolean(data.config.forceHttps));
         setRuntimeStatus({
           hasJWTSecret: data.config.hasJWTSecret,
           hasPasswordSalt: data.config.hasPasswordSalt,
@@ -58,6 +63,21 @@ export const AdminSettings: React.FC = () => {
       message.error('베이스 도메인 저장에 실패했습니다.');
     } finally {
       setLoadingDomain(false);
+    }
+  };
+
+  const handleToggleForceHTTPS = async (checked: boolean) => {
+    try {
+      setLoadingHTTPS(true);
+      const data = await adminApi.saveHTTPSPolicy({ forceHttps: checked });
+      if (data.config) {
+        setForceHTTPS(data.config.forceHttps);
+      }
+      message.success(checked ? '플랫폼 HTTPS 강제가 활성화되었습니다.' : '플랫폼 HTTPS 강제가 비활성화되었습니다.');
+    } catch {
+      message.error('HTTPS 강제 설정 변경에 실패했습니다.');
+    } finally {
+      setLoadingHTTPS(false);
     }
   };
 
@@ -127,6 +147,18 @@ export const AdminSettings: React.FC = () => {
               <Button type="primary" htmlType="submit" loading={loadingDomain}>도메인 변경 및 전체 적용</Button>
             </div>
           </Form>
+        </Card>
+
+        <Card hoverable className="admin-settings-card">
+          <Title level={4}><SafetyCertificateOutlined style={{ marginRight: 8 }} /> 플랫폼 HTTPS 강제</Title>
+          <Paragraph style={{ color: '#666' }}>
+            플랫폼 Ingress에 Traefik HTTPS redirect middleware를 연결합니다. 내부 80 포트 터널 QA가 필요할 때는 꺼두고,
+            공개 도메인을 HTTPS로 운영할 때 켜세요.
+          </Paragraph>
+          <Space align="center" size={16} wrap>
+            <Switch checked={forceHTTPS} loading={loadingHTTPS} onChange={handleToggleForceHTTPS} />
+            <Text strong>{forceHTTPS ? 'HTTP 요청을 HTTPS로 강제 전환' : 'HTTP 접속 허용'}</Text>
+          </Space>
         </Card>
 
         <Card hoverable className="admin-settings-card">
