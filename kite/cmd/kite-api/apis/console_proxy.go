@@ -24,6 +24,14 @@ type ConsoleSocket interface {
 	Close() error
 }
 
+type consoleMessageTypeMapper func(messageType int) int
+
+type consoleCopyDirection struct {
+	source            ConsoleSocket
+	target            ConsoleSocket
+	targetMessageType consoleMessageTypeMapper
+}
+
 type KubeVirtConsoleConnector struct {
 	config *rest.Config
 }
@@ -146,8 +154,16 @@ func consoleOriginAllowed(r *http.Request) bool {
 
 func bridgeConsole(ctx context.Context, browser ConsoleSocket, upstream ConsoleSocket) error {
 	errs := make(chan error, 2)
-	go copyConsoleMessages(ctx, upstream, browser, errs)
-	go copyConsoleMessages(ctx, browser, upstream, errs)
+	go copyConsoleMessages(ctx, consoleCopyDirection{
+		source:            upstream,
+		target:            browser,
+		targetMessageType: preserveConsoleMessageType,
+	}, errs)
+	go copyConsoleMessages(ctx, consoleCopyDirection{
+		source:            browser,
+		target:            upstream,
+		targetMessageType: kubeVirtInputMessageType,
+	}, errs)
 
 	err := <-errs
 	_ = browser.Close()
@@ -155,7 +171,11 @@ func bridgeConsole(ctx context.Context, browser ConsoleSocket, upstream ConsoleS
 	return err
 }
 
-func copyConsoleMessages(ctx context.Context, source ConsoleSocket, target ConsoleSocket, errs chan<- error) {
+// copyConsoleMessages copies one WebSocket direction until either peer closes.
+// ctx cancels the copy loop when the HTTP request is gone.
+// direction provides the source, target, and target frame type mapping.
+// errs receives the first read, write, or cancellation error for bridgeConsole.
+func copyConsoleMessages(ctx context.Context, direction consoleCopyDirection, errs chan<- error) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -164,7 +184,7 @@ func copyConsoleMessages(ctx context.Context, source ConsoleSocket, target Conso
 		default:
 		}
 
-		messageType, data, err := source.ReadMessage()
+		messageType, data, err := direction.source.ReadMessage()
 		if err != nil {
 			errs <- err
 			return
@@ -172,11 +192,22 @@ func copyConsoleMessages(ctx context.Context, source ConsoleSocket, target Conso
 		if messageType != websocket.TextMessage && messageType != websocket.BinaryMessage {
 			continue
 		}
-		if err := target.WriteMessage(messageType, data); err != nil {
+		if err := direction.target.WriteMessage(direction.targetMessageType(messageType), data); err != nil {
 			errs <- err
 			return
 		}
 	}
+}
+
+func preserveConsoleMessageType(messageType int) int {
+	return messageType
+}
+
+// kubeVirtInputMessageType returns the frame type KubeVirt reads as serial input.
+// Browser WebSocket string sends arrive as text frames, but KubeVirt's plain
+// stream reader consumes binary frames for data written into virt-serial0.
+func kubeVirtInputMessageType(_ int) int {
+	return websocket.BinaryMessage
 }
 
 var _ ConsoleSocket = (*websocket.Conn)(nil)
