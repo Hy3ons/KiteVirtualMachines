@@ -10,6 +10,7 @@ export default defineConfig({
   envDir: path.join(rootDir, '.vite-env-disabled'),
   plugins: [react()],
   build: {
+    chunkSizeWarningLimit: 1200,
     rolldownOptions: {
       output: {
         codeSplitting: {
@@ -23,7 +24,6 @@ export default defineConfig({
               name: 'antd',
               test: /node_modules[\\/](@ant-design|antd|rc-|@rc-component)[\\/]/,
               priority: 20,
-              maxSize: 450 * 1024,
             },
             {
               name: 'react',
