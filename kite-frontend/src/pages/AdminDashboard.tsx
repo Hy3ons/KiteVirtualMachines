@@ -185,13 +185,13 @@ export const AdminDashboard: React.FC = () => {
       />
 
       <Content className="app-main app-main--wide admin-content">
-        <Row gutter={24} style={{ marginBottom: 40 }}>
-          <Col span={12}>
+        <Row gutter={[24, 24]} style={{ marginBottom: 40 }}>
+          <Col xs={24} md={12}>
             <Card hoverable>
               <Statistic title="총 등록 유저 수" value={users.length} prefix={<TeamOutlined />} styles={{ content: { color: '#C9B59C' } }} />
             </Card>
           </Col>
-          <Col span={12}>
+          <Col xs={24} md={12}>
             <Card hoverable>
               <Statistic title="클러스터 전체 활성 VM 수" value={vms.length} prefix={<CloudServerOutlined />} styles={{ content: { color: '#333' } }} />
             </Card>
@@ -204,7 +204,7 @@ export const AdminDashboard: React.FC = () => {
           items={[
             {
               key: '1',
-              label: '유저 권한 관리 (User Management)',
+              label: 'Users',
               children: (
                 <Table 
                   columns={userColumns} 
@@ -218,7 +218,7 @@ export const AdminDashboard: React.FC = () => {
             },
             {
               key: '2',
-              label: '전역 가상머신 통제 (Global VM Control)',
+              label: 'VM Control',
               children: (
                 <Table 
                   columns={vmColumns} 

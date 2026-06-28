@@ -33,6 +33,10 @@ html, body {
   padding: 48px 0;
 }
 
+.app-main--narrow {
+  width: min(calc(100% - 64px), 800px);
+}
+
 .landing-content {
   min-height: calc(100dvh - 65px);
   background:
@@ -207,6 +211,8 @@ html, body {
 
 .dashboard-content {
   width: min(calc(100% - 64px), 1300px);
+  margin: 0 auto;
+  padding: 40px 0;
 }
 
 .dashboard-summary-row {
@@ -417,6 +423,61 @@ html, body {
   overflow: hidden;
 }
 
+.admin-settings-content {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.admin-settings-heading {
+  margin-bottom: 40px;
+}
+
+.admin-settings-card {
+  width: 100%;
+  margin-bottom: 24px;
+}
+
+.admin-settings-card:last-child {
+  margin-bottom: 0;
+}
+
+.signup-content {
+  min-height: calc(100dvh - 65px);
+  background: #F9F8F6;
+}
+
+.signup-shell {
+  min-height: 680px;
+}
+
+.signup-intro-panel,
+.signup-form-panel {
+  height: 100%;
+  border: 1px solid #D9CFC7;
+  background: #FFFFFF;
+}
+
+.signup-intro-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 48px;
+  background: #EFE9E3;
+}
+
+.signup-form-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.signup-form-inner {
+  width: 100%;
+  max-width: 360px;
+}
+
 #root {
   width: 100%;
   height: 100%;
@@ -444,6 +505,31 @@ html, body {
   padding: 24px;
 }
 
+.ant-table-wrapper .ant-table {
+  min-width: 0;
+}
+
+.ant-table-wrapper .ant-table-content {
+  overflow-x: auto !important;
+}
+
+.ant-tabs {
+  min-width: 0;
+}
+
+.ant-tabs-nav {
+  min-width: 0;
+}
+
+.ant-tabs-nav-wrap {
+  overflow-x: auto !important;
+  overflow-y: hidden;
+}
+
+.ant-tabs-nav-list {
+  min-width: max-content;
+}
+
 .ant-table-cell {
   word-break: keep-all;
 }
@@ -456,9 +542,10 @@ html, body {
   transition: background-color 0.2s ease !important;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 640px) {
   .app-main,
   .app-main--wide,
+  .app-main--narrow,
   .app-main--landing,
   .dashboard-content,
   .console-page {
@@ -486,6 +573,15 @@ html, body {
 
   .landing-subtitle {
     font-size: 16px;
+  }
+
+  .signup-shell {
+    min-height: 0;
+  }
+
+  .signup-intro-panel,
+  .signup-form-panel {
+    padding: 28px 24px;
   }
 
   .global-header {
@@ -548,6 +644,10 @@ html, body {
   .console-panel-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .ant-tabs-tab + .ant-tabs-tab {
+    margin-left: 16px !important;
   }
 
   .console-terminal {

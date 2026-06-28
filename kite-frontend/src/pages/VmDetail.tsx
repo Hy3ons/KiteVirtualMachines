@@ -183,7 +183,7 @@ export const VmDetail: React.FC = () => {
             },
             {
               key: '2',
-              label: <span><CodeOutlined /> SSH Connection</span>,
+              label: <span><CodeOutlined /> SSH</span>,
               children: (
                 <Card hoverable style={{ marginTop: 16 }}>
                   <Title level={4}>SSH 접속 방법</Title>
