@@ -12,13 +12,13 @@ set -euo pipefail
 #
 # minikube mode can start the profile and load images into the Minikube runtime.
 # k3s mode builds images with local Docker and imports them into k3s containerd.
-# current mode only builds local Docker images and applies Kubernetes manifests; use it when the
-# current cluster can already pull the configured image names from a registry.
+# current mode builds local Docker images and applies Kubernetes manifests. Set
+# PUSH_IMAGES=true with IMAGE_REGISTRY only when a remote cluster must pull from a registry.
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 KITE_NAMESPACE="${KITE_NAMESPACE:-kite}"
 KITE_CLUSTER="${KITE_CLUSTER:-auto}"
-IMAGE_REGISTRY="${IMAGE_REGISTRY:-ghcr.io/hy3ons}"
+IMAGE_REGISTRY="${IMAGE_REGISTRY:-kite-dev}"
 IMAGE_TAG="${IMAGE_TAG:-dev-$(date +%Y%m%d%H%M%S)}"
 KITE_MANIFEST_DIR="${ROOT_DIR}/build/kite"
 TMP_ROOT="${TMPDIR:-/tmp}"
@@ -317,10 +317,10 @@ load_image_into_kind() {
 }
 
 render_manifest() {
-  local pull_policy="IfNotPresent"
+  local pull_policy="Never"
 
-  if [[ "${1}" == "minikube" || "${1}" == "k3s" || "${1}" == "k3d" || "${1}" == "kind" ]]; then
-    pull_policy="Never"
+  if [[ "${PUSH_IMAGES}" == "true" ]]; then
+    pull_policy="IfNotPresent"
   fi
 
   log "rendering manifest with image tag ${IMAGE_TAG}"

@@ -19,7 +19,7 @@ options:
 environment:
   KITE_CLUSTER                auto|minikube|k3s|k3d|kind|k8s|current
   KITE_NAMESPACE              target namespace, default kite
-  IMAGE_REGISTRY              image registry, default ghcr.io/hy3ons
+  IMAGE_REGISTRY              image prefix, default kite-dev
   IMAGE_TAG                   image tag, default dev-<timestamp>
   KITE_DEV_SHOW_PLAN          print plan table, default true
   KITE_DEV_DRY_RUN            print steps without running commands, default false
@@ -143,14 +143,12 @@ build_component_for_cluster() {
 }
 
 pull_policy_for_cluster() {
-  case "$1" in
-    minikube|k3s|k3d|kind)
-      echo "Never"
-      ;;
-    *)
-      echo "IfNotPresent"
-      ;;
-  esac
+  if [[ "${PUSH_IMAGES}" == "true" ]]; then
+    echo "IfNotPresent"
+    return
+  fi
+
+  echo "Never"
 }
 
 print_plan_row() {
