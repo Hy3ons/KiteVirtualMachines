@@ -190,7 +190,7 @@ export const VmDetail: React.FC = () => {
                   <Paragraph>Kite가 설치된 서버에 VM 생성 시 입력한 계정으로 접속합니다.</Paragraph>
                   {vm.phase !== 'Running' && (
                     <Alert
-                      message="VM이 실행 중이 아닙니다."
+                      title="VM이 실행 중이 아닙니다."
                       description="SSH 접속은 VM이 Running 상태가 된 뒤에 사용할 수 있습니다."
                       type="warning"
                       showIcon

@@ -95,7 +95,7 @@ export const VmConsolePage: React.FC = () => {
 
         <div className="console-layout">
           <Card className="console-info-card">
-            <Space direction="vertical" size={16} className="full-width">
+            <Space orientation="vertical" size={16} className="full-width">
               <div>
                 <Text type="secondary">Kite machine console</Text>
                 <Title level={2} className="console-vm-title">{vm.name}</Title>

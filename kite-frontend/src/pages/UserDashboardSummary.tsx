@@ -86,7 +86,7 @@ export const UserDashboardSummary: React.FC<UserDashboardSummaryProps> = ({
 
       {accessLevel === 1 && (
         <Card className="dashboard-quota-card">
-          <Space direction="vertical" className="full-width" size={8}>
+          <Space orientation="vertical" className="full-width" size={8}>
             <div className="dashboard-quota-head">
               <Text strong>Level 1 VM quota</Text>
               <Text type="secondary">{vms.length} / {quotaLimit}</Text>
