@@ -494,7 +494,6 @@ html, body {
 
 .console-panel {
   min-width: 0;
-  min-height: 640px;
   display: flex;
   flex-direction: column;
   border: 1px solid #D9CFC7;
@@ -526,8 +525,9 @@ html, body {
 }
 
 .console-terminal {
-  flex: 1;
-  min-height: 520px;
+  flex: 0 0 auto;
+  height: 432px;
+  min-height: 0;
   padding: 12px;
   overflow: hidden;
 }
@@ -757,10 +757,6 @@ html, body {
     grid-template-columns: 1fr;
   }
 
-  .console-panel {
-    min-height: 560px;
-  }
-
   .console-panel-header {
     align-items: flex-start;
     flex-direction: column;
@@ -771,6 +767,6 @@ html, body {
   }
 
   .console-terminal {
-    min-height: 440px;
+    height: 384px;
   }
 }
