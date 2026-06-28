@@ -16,7 +16,11 @@ export const GlobalHeader: React.FC<GlobalHeaderProps> = ({ rightContent }) => {
     <Header className="global-header">
       <div className="global-header-brand" onClick={() => navigate('/')}>
         <img src="/favicon.png" alt="Kite Logo" className="global-header-logo" />
-        <span className="global-header-title">Kite</span>
+        <span className="global-header-divider" aria-hidden="true" />
+        <span className="global-header-wordmark">
+          <span className="global-header-title">Kite</span>
+          <span className="global-header-subtitle">OpenSource Private Cloud</span>
+        </span>
       </div>
 
       <Space size="large" wrap className="global-header-actions">
