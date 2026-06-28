@@ -131,11 +131,13 @@ func ReconcileKitePlatformIngressFromConfigMap(ctx context.Context, dynamicClien
 		if err := applyKitePlatformIngress(ctx, dynamicClient, redirectIngressObject); err != nil {
 			return err
 		}
-	} else if err := deleteKitePlatformHTTPSRedirect(ctx, dynamicClient); err != nil {
-		return err
+		return applyKitePlatformIngress(ctx, dynamicClient, ingressObject)
 	}
 
-	return applyKitePlatformIngress(ctx, dynamicClient, ingressObject)
+	if err := applyKitePlatformIngress(ctx, dynamicClient, ingressObject); err != nil {
+		return err
+	}
+	return deleteKitePlatformHTTPSRedirect(ctx, dynamicClient)
 }
 
 // reconcilePlatformIngressConfigEvent reconciles platform ingress for runtime config changes.
@@ -200,25 +202,17 @@ func applyKitePlatformHTTPSRedirect(ctx context.Context, dynamicClient dynamic.I
 }
 
 // ctx controls Kubernetes delete requests.
-// dynamicClient deletes the Traefik Middleware and HTTP redirect Ingress from the kite namespace.
-// Missing resources are ignored so repeated reconciles stay idempotent.
+// dynamicClient deletes the HTTP redirect Ingress and then best-effort deletes Traefik Middleware.
+// Missing resources are ignored, and Middleware cleanup errors are logged because the main HTTP Ingress must stay available for first-time setup.
 func deleteKitePlatformHTTPSRedirect(ctx context.Context, dynamicClient dynamic.Interface) error {
-	resources := []struct {
-		gvr  schema.GroupVersionResource
-		name string
-	}{
-		{gvr: ingressGVR, name: "kite-platform-http-redirect"},
-		{gvr: traefikMiddlewareGVR, name: "kite-platform-https-redirect"},
+	err := dynamicClient.Resource(ingressGVR).Namespace(kiteGlobalConfigNamespace).Delete(ctx, "kite-platform-http-redirect", metav1.DeleteOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("failed to delete Kite platform HTTPS redirect Ingress: %w", err)
 	}
 
-	for _, resource := range resources {
-		err := dynamicClient.Resource(resource.gvr).Namespace(kiteGlobalConfigNamespace).Delete(ctx, resource.name, metav1.DeleteOptions{})
-		if apierrors.IsNotFound(err) {
-			continue
-		}
-		if err != nil {
-			return fmt.Errorf("failed to delete Kite platform HTTPS redirect resource %s: %w", resource.name, err)
-		}
+	err = dynamicClient.Resource(traefikMiddlewareGVR).Namespace(kiteGlobalConfigNamespace).Delete(ctx, "kite-platform-https-redirect", metav1.DeleteOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		log.Printf("failed to delete Kite platform HTTPS redirect middleware: %v", err)
 	}
 
 	return nil
