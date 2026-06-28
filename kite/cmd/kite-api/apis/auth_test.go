@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -130,6 +131,35 @@ func TestLoginOmitsSecureCookieOnPlainHTTP(t *testing.T) {
 	}
 }
 
+// TestLoginUsesSecureCookieWhenForceHTTPSIsEnabled verifies runtime policy enforcement.
+// Given the request arrives over plain HTTP but kite-runtime-config has forceHttps=true.
+// When a user logs in.
+// Then the access token cookie still includes Secure because HTTP should only be a redirect surface.
+func TestLoginUsesSecureCookieWhenForceHTTPSIsEnabled(t *testing.T) {
+	r := newTestRouterWithRuntimeConfig(t, true)
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/login",
+		strings.NewReader(`{"email":"admin@example.com","password":"admin"}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+	cookies := rec.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("expected one cookie, got %d", len(cookies))
+	}
+	if !cookies[0].Secure {
+		t.Fatal("forceHttps=true must issue Secure accessToken cookies")
+	}
+}
+
 func addAccessTokenCookie(req *http.Request, token string) {
 	req.AddCookie(&http.Cookie{
 		Name:  "accessToken",
@@ -158,6 +188,15 @@ func TestLoginRejectsInvalidCredentials(t *testing.T) {
 func newTestRouter(t *testing.T) http.Handler {
 	t.Helper()
 
+	return newTestRouterWithRuntimeConfig(t, false)
+}
+
+// newTestRouterWithRuntimeConfig creates an auth test router with optional platform config.
+// forceHTTPS controls kite-runtime-config.data.forceHttps for cookie security policy tests.
+// The returned handler is used by login and logout unit tests.
+func newTestRouterWithRuntimeConfig(t *testing.T, forceHTTPS bool) http.Handler {
+	t.Helper()
+
 	gin.SetMode(gin.TestMode)
 
 	cfg := config.Config{
@@ -177,8 +216,13 @@ func newTestRouter(t *testing.T) http.Handler {
 		Config:       cfg,
 		TokenService: tokenService,
 		DynamicClient: fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
-			userTestGVR: "KiteUserList",
-		}, newLoginTestUser("admin", auth.HashPassword("admin", cfg.PasswordSalt), auth.AccessLevelAdmin)),
+			userTestGVR:      "KiteUserList",
+			authConfigMapGVR: "ConfigMapList",
+			authSecretGVR:    "SecretList",
+		},
+			newLoginTestUser("admin", auth.HashPassword("admin", cfg.PasswordSalt), auth.AccessLevelAdmin),
+			newLoginRuntimeConfig(forceHTTPS),
+		),
 	})
 
 	return r
@@ -188,6 +232,18 @@ var userTestGVR = schema.GroupVersionResource{
 	Group:    "hy3ons.github.io",
 	Version:  "v1",
 	Resource: "kiteusers",
+}
+
+var authConfigMapGVR = schema.GroupVersionResource{
+	Group:    "",
+	Version:  "v1",
+	Resource: "configmaps",
+}
+
+var authSecretGVR = schema.GroupVersionResource{
+	Group:    "",
+	Version:  "v1",
+	Resource: "secrets",
 }
 
 func newLoginTestUser(username string, passwordHash string, accessLevel int) *unstructured.Unstructured {
@@ -205,6 +261,25 @@ func newLoginTestUser(username string, passwordHash string, accessLevel int) *un
 				"namespace":     username,
 				"profile_image": "",
 				"access_level":  int64(accessLevel),
+			},
+		},
+	}
+}
+
+// newLoginRuntimeConfig creates the runtime ConfigMap used by auth cookie tests.
+// forceHTTPS controls data.forceHttps.
+// The returned object is read by requestUsesSecureCookie through the platform settings service.
+func newLoginRuntimeConfig(forceHTTPS bool) *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]any{
+			"apiVersion": "v1",
+			"kind":       "ConfigMap",
+			"metadata": map[string]any{
+				"name":      config.RuntimeConfigName,
+				"namespace": config.KiteNamespace,
+			},
+			"data": map[string]any{
+				config.ForceHTTPSConfigKey: strconv.FormatBool(forceHTTPS),
 			},
 		},
 	}

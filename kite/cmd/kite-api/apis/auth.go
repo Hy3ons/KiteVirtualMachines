@@ -13,6 +13,7 @@ import (
 	"kite/internal/account"
 	"kite/internal/auth"
 	"kite/internal/config"
+	"kite/internal/platform"
 )
 
 type Dependencies struct {
@@ -37,7 +38,7 @@ type loginResponse struct {
 
 func Register(api *gin.RouterGroup, deps Dependencies) {
 	api.POST("/login", loginHandler(deps))
-	api.POST("/logout", logoutHandler())
+	api.POST("/logout", logoutHandler(deps))
 	RegisterUsers(api, deps)
 
 	v1 := api.Group("/v1")
@@ -55,7 +56,7 @@ func RegisterV1(api *gin.RouterGroup, deps Dependencies) {
 
 	authGroup := api.Group("/auth")
 	authGroup.POST("/login", loginHandler(deps))
-	authGroup.POST("/logout", logoutHandler())
+	authGroup.POST("/logout", logoutHandler(deps))
 	authGroup.POST("/signup", userSignUpHandler(deps))
 
 	RegisterVirtualMachines(api, deps)
@@ -127,7 +128,7 @@ func loginHandler(deps Dependencies) gin.HandlerFunc {
 			return
 		}
 
-		c.Writer.Header().Add("Set-Cookie", accessTokenCookie(accessToken, int(deps.Config.AccessTokenTTL.Seconds()), requestUsesSecureCookie(c)))
+		c.Writer.Header().Add("Set-Cookie", accessTokenCookie(accessToken, int(deps.Config.AccessTokenTTL.Seconds()), requestUsesSecureCookie(c, deps)))
 
 		c.JSON(http.StatusOK, loginResponse{
 			ExpiresIn: int64(deps.Config.AccessTokenTTL.Seconds()),
@@ -137,9 +138,9 @@ func loginHandler(deps Dependencies) gin.HandlerFunc {
 	}
 }
 
-func logoutHandler() gin.HandlerFunc {
+func logoutHandler(deps Dependencies) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Writer.Header().Add("Set-Cookie", clearAccessTokenCookie(requestUsesSecureCookie(c)))
+		c.Writer.Header().Add("Set-Cookie", clearAccessTokenCookie(requestUsesSecureCookie(c, deps)))
 		c.JSON(http.StatusOK, gin.H{"message": "logged out"})
 	}
 }
@@ -164,9 +165,23 @@ func secureCookieAttribute(secure bool) string {
 	return ""
 }
 
-func requestUsesSecureCookie(c *gin.Context) bool {
+// requestUsesSecureCookie decides whether auth cookies must include the Secure attribute.
+// c provides TLS and proxy header information for the current request.
+// deps provides live platform settings so forceHttps changes take effect without restarting kite-api.
+// The returned value is used by login and logout cookie writers.
+func requestUsesSecureCookie(c *gin.Context, deps Dependencies) bool {
 	if c.Request.TLS != nil {
 		return true
 	}
-	return strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https")
+	if strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https") {
+		return true
+	}
+	if deps.DynamicClient == nil {
+		return false
+	}
+	settings, err := platform.NewService(deps.DynamicClient).Get(c.Request.Context())
+	if err != nil {
+		return false
+	}
+	return settings.ForceHTTPS
 }

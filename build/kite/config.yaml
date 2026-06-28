@@ -9,3 +9,4 @@ data:
   vmStorageClassName: "kite-vm-storage"
   goldenImageNamespace: "kite"
   defaultVmImage: "ubuntu-22.04"
+  forceHttps: "false"
