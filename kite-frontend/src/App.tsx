@@ -11,6 +11,7 @@ import { VmConsolePage } from './pages/VmConsolePage';
 import { AdminSettings } from './pages/AdminSettings';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { DEBUG_DIRECT_ROUTES_ENABLED } from './config/debug';
+import { GlobalFooter } from './components/GlobalFooter';
 
 // 인증 가드 (로그인 안된 유저 튕겨내기)
 const RequireAuth = ({ children }: { children: ReactElement }) => {
@@ -71,6 +72,7 @@ function App() {
               </RequireAdmin>
             } />
           </Routes>
+          <GlobalFooter />
         </BrowserRouter>
       </AntdApp>
     </ConfigProvider>
