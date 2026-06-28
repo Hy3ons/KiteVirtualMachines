@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { SEO } from '../components/SEO';
-import { vmApi } from '../api';
+import { configApi, vmApi } from '../api';
 import { App as AntdApp, Layout, Typography, Button, Table, Space, Form, Avatar, Empty, Tooltip } from 'antd';
 import { PlusOutlined, LogoutOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../store/useAuthStore';
@@ -25,6 +25,7 @@ export const UserDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [vms, setVms] = useState<DashboardVm[]>([]);
   const [loading, setLoading] = useState(true);
+  const [baseDomain, setBaseDomain] = useState('');
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [form] = Form.useForm();
 
@@ -45,9 +46,19 @@ export const UserDashboard: React.FC = () => {
     }
   }, [message]);
 
+  const fetchPlatformConfig = useCallback(async () => {
+    try {
+      const data = await configApi.getConfig();
+      setBaseDomain(data.config?.baseDomain || '');
+    } catch {
+      setBaseDomain('');
+      message.error('접속 도메인 설정을 불러오는데 실패했습니다.');
+    }
+  }, [message]);
+
   useEffect(() => {
-    void Promise.resolve().then(fetchVms);
-  }, [fetchVms]);
+    void Promise.all([fetchVms(), fetchPlatformConfig()]);
+  }, [fetchPlatformConfig, fetchVms]);
 
   const handleStart = async (name: string) => {
     try {
@@ -221,6 +232,7 @@ export const UserDashboard: React.FC = () => {
       <VmConnectionDrawer
         open={isDrawerVisible}
         vm={selectedVm}
+        baseDomain={baseDomain}
         onClose={() => setIsDrawerVisible(false)}
       />
     </Layout>
