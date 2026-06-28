@@ -8,7 +8,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"k8s.io/client-go/rest"
 )
@@ -59,7 +58,7 @@ func (c *KubeVirtConsoleConnector) Connect(ctx context.Context, namespace string
 
 	dialer := websocket.Dialer{
 		TLSClientConfig: tlsConfig,
-		Subprotocols:   []string{kubeVirtPlainStreamProtocol},
+		Subprotocols:    []string{kubeVirtPlainStreamProtocol},
 	}
 	socket, response, err := dialer.DialContext(ctx, endpoint, header)
 	if err != nil {

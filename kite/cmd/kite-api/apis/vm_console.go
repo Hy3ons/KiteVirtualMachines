@@ -78,7 +78,8 @@ func vmConsoleHandler(deps Dependencies) gin.HandlerFunc {
 			return
 		}
 
-		browser, err := vmConsoleUpgrader().Upgrade(c.Writer, c.Request, nil)
+		upgrader := vmConsoleUpgrader()
+		browser, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
 			_ = upstream.Close()
 			return
