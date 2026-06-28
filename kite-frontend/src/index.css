@@ -50,14 +50,17 @@ html, body {
 }
 
 .landing-hero-panel,
-.landing-login-panel {
+.landing-login-panel,
+.signup-intro-panel,
+.signup-form-panel {
   height: 100%;
   border: 1px solid #D9CFC7;
   background: #FFFFFF;
   box-shadow: 0 12px 32px rgba(44, 37, 31, 0.08);
 }
 
-.landing-hero-panel {
+.landing-hero-panel,
+.signup-intro-panel {
   position: relative;
   overflow: hidden;
   padding: 48px;
@@ -477,19 +480,10 @@ html, body {
   min-height: 680px;
 }
 
-.signup-intro-panel,
-.signup-form-panel {
-  height: 100%;
-  border: 1px solid #D9CFC7;
-  background: #FFFFFF;
-}
-
 .signup-intro-panel {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 48px;
-  background: #EFE9E3;
 }
 
 .signup-form-panel {
