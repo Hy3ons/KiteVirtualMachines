@@ -18,6 +18,136 @@ html, body {
   width: 100%;
 }
 
+.app-main {
+  width: min(calc(100% - 64px), 1200px);
+  margin: 0 auto;
+  padding: 40px 0;
+}
+
+.app-main--wide {
+  width: min(calc(100% - 64px), 1400px);
+}
+
+.app-main--landing {
+  width: min(calc(100% - 64px), 1180px);
+  padding: 48px 0;
+}
+
+.landing-content {
+  min-height: calc(100dvh - 65px);
+  background:
+    linear-gradient(90deg, rgba(239, 233, 227, 0.66), rgba(249, 248, 246, 0.9)),
+    #F9F8F6;
+}
+
+.landing-grid {
+  min-height: 680px;
+}
+
+.landing-hero-panel,
+.landing-login-panel {
+  height: 100%;
+  border: 1px solid #D9CFC7;
+  background: #FFFFFF;
+  box-shadow: 0 12px 32px rgba(44, 37, 31, 0.08);
+}
+
+.landing-hero-panel {
+  position: relative;
+  overflow: hidden;
+  padding: 48px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.88), rgba(239, 233, 227, 0.94)),
+    #EFE9E3;
+}
+
+.landing-kicker {
+  margin-bottom: 24px;
+}
+
+.landing-logo-mark {
+  width: 152px;
+  height: 152px;
+  object-fit: contain;
+  mix-blend-mode: multiply;
+  margin-left: -24px;
+  margin-bottom: -16px;
+}
+
+.landing-title {
+  margin: 0 !important;
+  color: #2C2A29 !important;
+  font-size: 56px !important;
+  line-height: 1.02 !important;
+  letter-spacing: 0;
+  text-wrap: balance;
+}
+
+.landing-subtitle {
+  max-width: 620px;
+  margin: 24px 0 40px !important;
+  color: #594E46 !important;
+  font-size: 18px;
+  line-height: 1.7;
+  text-wrap: pretty;
+}
+
+.landing-feature-list {
+  display: grid;
+  gap: 20px;
+  max-width: 660px;
+}
+
+.landing-feature {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.landing-feature > .anticon {
+  color: #8B7355;
+  font-size: 24px;
+  margin-top: 2px;
+}
+
+.landing-feature .ant-typography {
+  font-size: 16px;
+}
+
+.landing-feature .ant-typography-secondary,
+.landing-feature p {
+  margin: 4px 0 0 !important;
+  color: #594E46 !important;
+  line-height: 1.6;
+}
+
+.landing-secondary-action {
+  margin-top: 48px;
+  height: 48px;
+  background: #2C2A29;
+  color: #FFFFFF;
+  border-color: #2C2A29;
+}
+
+.landing-secondary-action:hover {
+  background: #594E46 !important;
+  color: #FFFFFF !important;
+  border-color: #594E46 !important;
+}
+
+.landing-login-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+}
+
+.landing-login-panel > div,
+.landing-login-panel > form {
+  width: 100%;
+}
+
 .global-header {
   display: flex;
   justify-content: space-between;
@@ -76,10 +206,7 @@ html, body {
 }
 
 .dashboard-content {
-  padding: 40px;
-  max-width: 1300px;
-  margin: 0 auto;
-  width: 100%;
+  width: min(calc(100% - 64px), 1300px);
 }
 
 .dashboard-summary-row {
@@ -216,10 +343,9 @@ html, body {
 }
 
 .console-page {
-  width: 100%;
-  max-width: 1400px;
+  width: min(calc(100% - 64px), 1400px);
   margin: 0 auto;
-  padding: 32px 40px 40px;
+  padding: 32px 0 40px;
 }
 
 .console-page-toolbar {
@@ -268,6 +394,10 @@ html, body {
   padding: 12px 16px;
   border-bottom: 1px solid #3A342F;
   background: #1A1816;
+}
+
+.console-panel-header .ant-btn {
+  min-width: 148px;
 }
 
 .console-panel-header .ant-typography {
@@ -327,6 +457,37 @@ html, body {
 }
 
 @media (max-width: 768px) {
+  .app-main,
+  .app-main--wide,
+  .app-main--landing,
+  .dashboard-content,
+  .console-page {
+    width: min(calc(100% - 32px), 480px);
+  }
+
+  .app-main,
+  .app-main--wide,
+  .app-main--landing {
+    padding: 24px 0;
+  }
+
+  .landing-grid {
+    min-height: 0;
+  }
+
+  .landing-hero-panel,
+  .landing-login-panel {
+    padding: 28px 24px;
+  }
+
+  .landing-title {
+    font-size: 40px !important;
+  }
+
+  .landing-subtitle {
+    font-size: 16px;
+  }
+
   .global-header {
     align-items: flex-start;
     padding: 12px 20px;
@@ -344,7 +505,8 @@ html, body {
   }
 
   .dashboard-content {
-    padding: 24px 16px;
+    padding-top: 24px;
+    padding-bottom: 24px;
   }
 
   .dashboard-profile {
@@ -371,7 +533,8 @@ html, body {
   }
 
   .console-page {
-    padding: 24px 16px;
+    padding-top: 24px;
+    padding-bottom: 24px;
   }
 
   .console-layout {
@@ -380,6 +543,11 @@ html, body {
 
   .console-panel {
     min-height: 560px;
+  }
+
+  .console-panel-header {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .console-terminal {

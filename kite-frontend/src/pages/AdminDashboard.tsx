@@ -175,6 +175,7 @@ export const AdminDashboard: React.FC = () => {
       <GlobalHeader 
         rightContent={
           <Space>
+            <Button type="primary" ghost onClick={() => navigate('/dashboard')}>My VMs</Button>
             <Button type="text" onClick={() => navigate('/admin/settings')}>시스템 전역 설정</Button>
             <Avatar src={profileImage || '/default_profile.png'} />
             <Text strong style={{ marginLeft: 8 }}>{username} (Admin)</Text>
@@ -183,7 +184,7 @@ export const AdminDashboard: React.FC = () => {
         }
       />
 
-      <Content style={{ padding: '40px', maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
+      <Content className="app-main app-main--wide admin-content">
         <Row gutter={24} style={{ marginBottom: 40 }}>
           <Col span={12}>
             <Card hoverable>

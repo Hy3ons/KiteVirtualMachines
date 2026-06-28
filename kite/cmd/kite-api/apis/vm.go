@@ -51,7 +51,10 @@ func RegisterVirtualMachines(api *gin.RouterGroup, deps Dependencies) {
 	vms.POST("/:name/start", vmPowerHandler(deps, "On"))
 	vms.POST("/:name/stop", vmPowerHandler(deps, "Off"))
 	vms.POST("/:name/console-ticket", vmConsoleTicketHandler(deps))
-	vms.GET("/:name/console", vmConsoleHandler(deps))
+
+	// Console WebSocket requests authenticate with a short-lived ticket because
+	// browser WebSocket constructors cannot attach the normal Authorization header.
+	api.GET("/vms/:name/console", vmConsoleHandler(deps))
 }
 
 // vmListHandler returns VMs in the authenticated user's namespace.

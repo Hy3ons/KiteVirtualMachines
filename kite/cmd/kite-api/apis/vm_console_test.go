@@ -124,6 +124,25 @@ func TestConsoleTicketRejectedWhenExpired(t *testing.T) {
 	}
 }
 
+func TestConsoleWebSocketUsesTicketWithoutBearerAuth(t *testing.T) {
+	tokenService := newTestTokenService(t)
+	tickets := NewConsoleTicketService(time.Minute, "test-secret")
+	token, _, err := tickets.Issue("alice", "alice-ns", "vm-a", time.Now().UTC())
+	if err != nil {
+		t.Fatalf("failed to issue console ticket: %v", err)
+	}
+
+	router := newConsoleTestRouter(t, tokenService, tickets, "Running", false)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/vms/vm-a/console?ticket="+token, nil)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code == http.StatusUnauthorized {
+		t.Fatalf("console websocket ticket should bypass bearer auth middleware, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func newConsoleTestRouter(t *testing.T, tokenService *auth.TokenService, tickets *ConsoleTicketService, phase string, deleting bool) http.Handler {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
@@ -178,5 +197,19 @@ func newConsoleTestVM(name string, namespace string, phase string, deleting bool
 type fakeConsoleConnector struct{}
 
 func (fakeConsoleConnector) Connect(_ context.Context, _ string, _ string) (ConsoleSocket, error) {
-	return nil, nil
+	return fakeConsoleSocket{}, nil
+}
+
+type fakeConsoleSocket struct{}
+
+func (fakeConsoleSocket) ReadMessage() (int, []byte, error) {
+	return 0, nil, nil
+}
+
+func (fakeConsoleSocket) WriteMessage(_ int, _ []byte) error {
+	return nil
+}
+
+func (fakeConsoleSocket) Close() error {
+	return nil
 }
