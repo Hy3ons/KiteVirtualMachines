@@ -59,10 +59,12 @@ export const SignupPage: React.FC = () => {
     <Layout style={{ minHeight: '100vh' }}>
       <SEO title="회원가입 - Kite" url="/signup" />
       <GlobalHeader />
-      <Content>
-        <Row style={{ margin: 0, width: '100%', minHeight: 'calc(100vh - 65px)', backgroundColor: '#F9F8F6' }}>
+      <Content className="signup-content">
+        <div className="app-main app-main--landing">
+          <Row gutter={[32, 32]} align="stretch" className="signup-shell">
           {/* Left Column (60%) */}
-          <Col xs={0} md={14} style={{ backgroundColor: '#EFE9E3', padding: '60px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <Col xs={24} md={14}>
+            <section className="signup-intro-panel">
             <Title level={1} style={{ fontSize: '48px', color: '#333', marginBottom: 0 }}>Kite Platform</Title>
             <Title level={3} style={{ color: '#C9B59C', marginTop: 10, marginBottom: 40 }}>
               새로운 클라우드 인프라의 시작
@@ -71,11 +73,13 @@ export const SignupPage: React.FC = () => {
               회원가입을 통해 당신만의 안전하고 독립적인 네임스페이스를 할당받으세요. 
               관리자의 설정에 따라 정해진 Quota 내에서 가상머신을 자유롭게 배포하고 제어할 수 있습니다.
             </Paragraph>
+            </section>
           </Col>
 
       {/* Right Column (40%) - Signup Form */}
-      <Col xs={24} md={10} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px' }}>
-        <div style={{ width: '100%', maxWidth: '360px' }}>
+      <Col xs={24} md={10}>
+        <section className="signup-form-panel">
+        <div className="signup-form-inner">
           <div style={{ textAlign: 'center', marginBottom: 40 }}>
             <Title level={2} style={{ color: '#333' }}>Create an Account</Title>
             <Text type="secondary">Kite 플랫폼 사용을 위해 가입해주세요.</Text>
@@ -166,8 +170,10 @@ export const SignupPage: React.FC = () => {
             <Text type="secondary">이미 계정이 있으신가요? <span style={{ color: '#C9B59C', cursor: 'pointer' }} onClick={() => navigate('/')}>로그인하러 가기</span></Text>
           </div>
         </div>
+        </section>
       </Col>
         </Row>
+        </div>
       </Content>
     </Layout>
   );

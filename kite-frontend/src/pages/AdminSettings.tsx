@@ -106,13 +106,13 @@ export const AdminSettings: React.FC = () => {
         }
       />
 
-      <Content style={{ padding: '40px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <div style={{ maxWidth: '800px', width: '100%', marginBottom: '40px' }}>
+      <Content className="app-main app-main--narrow admin-settings-content">
+        <div className="admin-settings-heading">
           <Title level={2}>시스템 전역 설정</Title>
           <Text type="secondary">Kite 클러스터 전체에 적용되는 라우팅 및 보안 설정을 독립적으로 관리합니다.</Text>
         </div>
 
-        <Card hoverable style={{ maxWidth: '800px', width: '100%', marginBottom: 24 }}>
+        <Card hoverable className="admin-settings-card">
           <Title level={4}><GlobalOutlined style={{ marginRight: 8 }} /> 베이스 도메인 설정</Title>
           <Paragraph style={{ color: '#666' }}>
             Kite 플랫폼 Ingress의 host와 가상머신별 Ingress 도메인에 사용할 기본 도메인을 설정합니다.
@@ -129,7 +129,7 @@ export const AdminSettings: React.FC = () => {
           </Form>
         </Card>
 
-        <Card hoverable style={{ maxWidth: '800px', width: '100%', marginBottom: 24 }}>
+        <Card hoverable className="admin-settings-card">
           <Title level={4}>API 런타임 설정</Title>
           <Paragraph style={{ color: '#666' }}>
             JWT Secret과 Password Salt는 서버 최초 시작 시 자동 생성되어 Kubernetes ConfigMap에 저장됩니다. 원문은 화면에 표시하지 않습니다.
@@ -170,7 +170,7 @@ export const AdminSettings: React.FC = () => {
 
         </Card>
 
-        <Card hoverable style={{ maxWidth: '800px', width: '100%' }}>
+        <Card hoverable className="admin-settings-card">
           <Title level={4}><SafetyCertificateOutlined style={{ marginRight: 8 }} /> 와일드카드 인증서 갱신/등록</Title>
           <Paragraph style={{ color: '#666' }}>
             등록된 도메인의 서브도메인을 모두 커버하는 TLS 인증서를 갱신합니다. 저장 시 즉시 K8s의 <Text strong>kube-system/global-tls-secret</Text>이 교체됩니다.

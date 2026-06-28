@@ -61,7 +61,6 @@ export const createUserDashboardColumns = ({
   {
     title: 'Actions',
     key: 'actions',
-    fixed: 'right',
     width: 360,
     render: (_, record) => (
       <Space size="small" wrap>
