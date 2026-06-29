@@ -10,6 +10,8 @@ DELETE_LONGHORN_DATA="${DELETE_LONGHORN_DATA:-false}"
 DELETE_LONGHORN_DATA_CONFIRM="${DELETE_LONGHORN_DATA_CONFIRM:-false}"
 KITE_LONGHORN_DISK_NAME="${KITE_LONGHORN_DISK_NAME:-kite-longhorn}"
 KITE_LONGHORN_DISK_TAG="${KITE_LONGHORN_DISK_TAG:-kite}"
+KITE_LONGHORN_DISK_REMOVE_TIMEOUT_SECONDS="${KITE_LONGHORN_DISK_REMOVE_TIMEOUT_SECONDS:-180}"
+KITE_LONGHORN_DISK_REMOVE_RETRY_SECONDS="${KITE_LONGHORN_DISK_REMOVE_RETRY_SECONDS:-5}"
 RESTORE_HOST_SSHD="${RESTORE_HOST_SSHD:-true}"
 
 log() {
@@ -42,14 +44,38 @@ remove_longhorn_disk_from_node() {
   local disk="$2"
   local reason="$3"
   local escaped_disk
+  local deadline
+  local original_allow_scheduling
   local output
 
   escaped_disk="$(json_pointer_escape "${disk}")"
-  if output="$(kubectl -n longhorn-system patch "${node}" --type=json -p "[{\"op\":\"remove\",\"path\":\"/spec/disks/${escaped_disk}\"}]" 2>&1)"; then
-    log "removed Longhorn disk ${disk} from ${node} (${reason})"
-    return
-  fi
+  original_allow_scheduling="$(kubectl -n longhorn-system get "${node}" -o "go-template={{ index .spec.disks \"${disk}\" \"allowScheduling\" }}" 2>/dev/null || true)"
 
+  # Longhorn blocks disk deletion until scheduling is disabled and replicas are gone.
+  # Kite deletes CDI/KubeVirt resources just before this, so stop new placements first.
+  kubectl -n longhorn-system patch "${node}" --type=json -p "[{\"op\":\"replace\",\"path\":\"/spec/disks/${escaped_disk}/allowScheduling\",\"value\":false}]" >/dev/null 2>&1 || true
+
+  # PVC/PV deletion reaches Longhorn asynchronously; retry while controllers catch up.
+  deadline=$((SECONDS + KITE_LONGHORN_DISK_REMOVE_TIMEOUT_SECONDS))
+  while true; do
+    if output="$(kubectl -n longhorn-system patch "${node}" --type=json -p "[{\"op\":\"remove\",\"path\":\"/spec/disks/${escaped_disk}\"}]" 2>&1)"; then
+      log "removed Longhorn disk ${disk} from ${node} (${reason})"
+      return
+    fi
+
+    if [[ "${output}" != *"remove all replicas and backing images first"* || "${SECONDS}" -ge "${deadline}" ]]; then
+      break
+    fi
+
+    log "waiting to remove Longhorn disk ${disk} from ${node}; Longhorn still sees replicas or backing images"
+    sleep "${KITE_LONGHORN_DISK_REMOVE_RETRY_SECONDS}"
+  done
+
+  # If Longhorn still refuses removal, keep the cluster usable by restoring the
+  # disk scheduling state that existed before cleanup touched it.
+  if [[ "${original_allow_scheduling}" == "true" || "${original_allow_scheduling}" == "false" ]]; then
+    kubectl -n longhorn-system patch "${node}" --type=json -p "[{\"op\":\"replace\",\"path\":\"/spec/disks/${escaped_disk}/allowScheduling\",\"value\":${original_allow_scheduling}}]" >/dev/null 2>&1 || true
+  fi
   log "could not remove Longhorn disk ${disk} from ${node} (${reason}): ${output}"
 }
 
@@ -59,6 +85,7 @@ remove_kite_longhorn_disks_from_node() {
   local disk
   local tags
 
+  # Install may create a named disk or tag an existing disk; uninstall both forms.
   disks="$(kubectl -n longhorn-system get "${node}" -o 'go-template={{ range $name, $disk := .spec.disks }}{{ $name }}|{{ range $disk.tags }}{{ . }} {{ end }}{{ "\n" }}{{ end }}' 2>/dev/null || true)"
   while IFS="|" read -r disk tags; do
     [[ -z "${disk}" ]] && continue
