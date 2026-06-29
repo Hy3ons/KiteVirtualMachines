@@ -203,6 +203,45 @@ The original config is backed up under `/etc/kite/host-sshd`, and
 that backup. Hosts without OpenSSH, systemd, Linux, or an active port `22`
 listener are skipped safely.
 
+## Quick Install and Uninstall
+
+Install Kite on a prepared k3s or Kubernetes host without cloning this
+repository:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/install.sh | bash
+```
+
+Install from a specific branch or tag:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/install.sh \
+  | KITE_INSTALL_REF=stage bash
+```
+
+The remote installer downloads the selected GitHub archive into a temporary
+directory and runs `build/deploy/scripts/install-all.sh`. It uses GHCR images
+and does not build containers locally.
+
+Uninstall Kite resources without cloning this repository:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/clean.sh | bash
+```
+
+Uninstall from a specific branch or tag:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/clean.sh \
+  | KITE_CLEAN_REF=stage bash
+```
+
+The remote cleanup flow downloads the selected GitHub archive into a temporary
+directory and runs `build/dev/clear.sh`. By default it removes Kite CRDs,
+namespace resources, Deployments, Services, and Kite-owned runtime state.
+Longhorn storage cleanup stays opt-in because it can delete VM disk
+infrastructure.
+
 ## Development Install
 
 `./dev.sh` builds local Docker images and deploys them to the selected Kubernetes cluster.
@@ -232,19 +271,6 @@ Development cleanup:
 KITE_CLUSTER=k3s ./clear.sh
 ```
 
-Git-free cleanup is also available:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/clean.sh | bash
-```
-
-This downloads only the top-level `clean.sh` first. The script then downloads
-the selected GitHub archive into a temporary directory and runs
-`build/dev/clear.sh`, so the machine does not need `git` or a repository clone.
-By default it removes Kite CRDs, namespace resources, deployments, Services,
-and Kite-owned runtime state. Longhorn storage cleanup stays opt-in because it
-can delete VM disk infrastructure.
-
 Longhorn cleanup is opt-in because it can remove VM disk infrastructure:
 
 ```sh
@@ -268,26 +294,6 @@ RESTORE_HOST_SSHD=false KITE_CLUSTER=k3s ./clear.sh
 `./install.sh` contains a pull-based install flow for k3s clusters. Longhorn,
 KubeVirt, and CDI are required for VM disk provisioning and VM runtime. Kite
 images are pulled from GHCR instead of being built locally.
-
-Git is not required for the pull-based installer. The command below does not
-run `git clone`; it downloads a GitHub archive with `curl` and `tar` into a
-temporary directory, then applies the production manifests. On a prepared k3s or
-Kubernetes host with `kubectl` configured, run:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/install.sh | bash
-```
-
-Install from another branch or tag:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/install.sh \
-  | KITE_INSTALL_REF=stage bash
-```
-
-The remote installer downloads the selected repository ref as a tar archive and
-runs `build/deploy/scripts/install-all.sh`. It uses GHCR images and does not
-build containers locally.
 
 The download install flow is intentionally split into two steps:
 
@@ -329,23 +335,10 @@ Uninstall Kite resources:
 build/deploy/scripts/uninstall-kite.sh
 ```
 
-Uninstall without git or a repository clone:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/clean.sh | bash
-```
-
-Use a specific branch or tag:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/clean.sh \
-  | KITE_CLEAN_REF=stage bash
-```
-
-The remote cleanup flow mirrors the installer. `clean.sh` downloads the selected
-repository ref as a tar archive and then runs `build/dev/clear.sh`. The cleanup
-removes Kite application resources and Kite CRDs first, then optionally restores
-the host SSHD handoff and removes Kite Longhorn disk data only when the explicit
+The remote cleanup commands are listed in
+[Quick Install and Uninstall](#quick-install-and-uninstall). The cleanup removes
+Kite application resources and Kite CRDs first, then optionally restores the
+host SSHD handoff and removes Kite Longhorn disk data only when the explicit
 cleanup environment variables are set.
 
 More details are in `build/deploy/README.md`.
