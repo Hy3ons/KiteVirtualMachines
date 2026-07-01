@@ -23,6 +23,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	kite "kite/api/v1"
+	"kite/internal/guestlogin"
 	"kite/internal/kube"
 	cloudinituserdata "kite/internal/render/cloud-init-userdata"
 	datavolume "kite/internal/render/data-volume"
@@ -281,8 +282,15 @@ func reconcileKiteVirtualMachineDesiredState(ctx context.Context, dynamicClient 
 		}
 		return err
 	}
+	guestPasswordHash, err := guestLoginPasswordHash(ctx, dynamicClient, vm)
+	if err != nil {
+		if statusErr := updateKiteVirtualMachineStatus(ctx, dynamicClient, vm, kiteVMPhaseFailed, currentPowerStateFromVM(vm), domain, vm.Status.NodeName, metav1.ConditionFalse, kiteVMReasonFailed, err.Error()); statusErr != nil {
+			return fmt.Errorf("%w; failed to update failed status: %v", err, statusErr)
+		}
+		return err
+	}
 
-	objects, err := kiteVirtualMachineDesiredObjects(vm, domain, keyPair.PublicKey, storageClassName)
+	objects, err := kiteVirtualMachineDesiredObjects(vm, domain, keyPair.PublicKey, guestPasswordHash, storageClassName)
 	if err != nil {
 		return err
 	}
@@ -345,9 +353,10 @@ func validateKiteVirtualMachineSpec(vm *kite.KiteVirtualMachine) error {
 // vm provides the desired VM spec.
 // domain is the optional full domain name used to render Ingress.
 // publicKey is injected into cloud-init so users can SSH through the host agent.
+// guestPasswordHash is injected into cloud-init so the browser console can log into the guest OS.
 // storageClassName selects the StorageClass for the VM disk DataVolume.
 // The returned objects are applied in dependency order by the VM reconciler.
-func kiteVirtualMachineDesiredObjects(vm *kite.KiteVirtualMachine, domain string, publicKey string, storageClassName string) ([]*unstructured.Unstructured, error) {
+func kiteVirtualMachineDesiredObjects(vm *kite.KiteVirtualMachine, domain string, publicKey string, guestPasswordHash string, storageClassName string) ([]*unstructured.Unstructured, error) {
 	dataVolume, err := (&datavolume.DataVolumeData{
 		VmName:           vm.Name,
 		Namespace:        vm.Namespace,
@@ -360,10 +369,11 @@ func kiteVirtualMachineDesiredObjects(vm *kite.KiteVirtualMachine, domain string
 	}
 
 	cloudInit, err := (&cloudinituserdata.Ubuntu2204CloudInit{
-		VmName:       vm.Name,
-		Namespace:    vm.Namespace,
-		Id:           vm.Spec.SSHID,
-		SSHPublicKey: publicKey,
+		VmName:            vm.Name,
+		Namespace:         vm.Namespace,
+		Id:                vm.Spec.SSHID,
+		SSHPublicKey:      publicKey,
+		GuestPasswordHash: guestPasswordHash,
 	}).Render()
 	if err != nil {
 		return nil, fmt.Errorf("failed to render cloud-init Secret: %w", err)
@@ -405,6 +415,34 @@ func kiteVirtualMachineDesiredObjects(vm *kite.KiteVirtualMachine, domain string
 	}
 
 	return objects, nil
+}
+
+// guestLoginPasswordHash reads the guest OS password hash Secret for one KiteVirtualMachine.
+// ctx controls the Kubernetes Secret read request.
+// dynamicClient reads core/v1 Secrets from the VM namespace.
+// vm identifies the Secret created by kite-api during VM creation.
+// The returned hash is passed to cloud-init as hashed_passwd for browser console login.
+func guestLoginPasswordHash(ctx context.Context, dynamicClient dynamic.Interface, vm *kite.KiteVirtualMachine) (string, error) {
+	secretName := guestlogin.SecretName(vm.Name)
+	secret, err := dynamicClient.Resource(secretGVR).Namespace(vm.Namespace).Get(ctx, secretName, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed to read guest login Secret %s/%s: %w", vm.Namespace, secretName, err)
+	}
+
+	data, _, _ := unstructured.NestedStringMap(secret.Object, "data")
+	encodedHash := strings.TrimSpace(data[guestlogin.PasswordHashKey])
+	if encodedHash == "" {
+		return "", fmt.Errorf("guest login Secret %s/%s is missing %s", vm.Namespace, secretName, guestlogin.PasswordHashKey)
+	}
+	hash, err := base64.StdEncoding.DecodeString(encodedHash)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode %s in guest login Secret %s/%s: %w", guestlogin.PasswordHashKey, vm.Namespace, secretName, err)
+	}
+	if strings.TrimSpace(string(hash)) == "" {
+		return "", fmt.Errorf("guest login Secret %s/%s has an empty %s", vm.Namespace, secretName, guestlogin.PasswordHashKey)
+	}
+
+	return strings.TrimSpace(string(hash)), nil
 }
 
 // vmShouldRun converts Kite power intent into a boolean running intent.
@@ -762,6 +800,7 @@ func deleteKiteVirtualMachineOwnedResources(ctx context.Context, dynamicClient d
 		{gvr: serviceGVR, name: "vps-access-" + name},
 		{gvr: serviceGVR, name: "vps-web-" + name},
 		{gvr: secretGVR, name: sshKeySecretName(name)},
+		{gvr: secretGVR, name: guestlogin.SecretName(name)},
 		{gvr: secretGVR, name: name + "-cloud-init-userdata"},
 		{gvr: dataVolumeGVR, name: name + "-disk"},
 	}
