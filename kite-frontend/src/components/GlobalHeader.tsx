@@ -19,7 +19,7 @@ export const GlobalHeader: React.FC<GlobalHeaderProps> = ({ rightContent }) => {
         <span className="global-header-divider" aria-hidden="true" />
         <span className="global-header-wordmark">
           <span className="global-header-title">Kite</span>
-          <span className="global-header-subtitle">OpenSource Private Cloud</span>
+          <span className="global-header-subtitle">Opensource Private Cloud</span>
         </span>
       </div>
 

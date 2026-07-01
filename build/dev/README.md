@@ -133,11 +133,11 @@ build/dev/clear-frontend.sh
 Set `CLEAR_IMAGES=false` to keep local Docker and k3s images while deleting only
 the Kubernetes resources.
 
-`./clear.sh` is the root cleanup wrapper. It removes Kite development resources
-and local Kite images through `build/dev/clear.sh`.
+`./clear.sh` is the root cleanup wrapper. When it runs in a terminal, it asks
+which cleanup scope to use with numbered choices.
 
 ```sh
-KITE_CLUSTER=k3s ./clear.sh
+./clear.sh
 ```
 
 The default cleanup removes Kite-owned application resources, Kite CRDs,
@@ -145,22 +145,10 @@ KiteUser namespaces, and VM allocations inside those namespaces. It does not
 delete shared KubeVirt, CDI, or Longhorn installations, because those components
 may already be used by workloads outside Kite.
 
-Longhorn cleanup is disabled by default because it deletes VM disk data.
-
-```sh
-CLEAR_LONGHORN=true KITE_CLUSTER=k3s ./clear.sh
-```
-
-`CLEAR_LONGHORN=true` uninstalls Longhorn only when no Longhorn PV remains. If
-another workload is still using Longhorn, the script skips Longhorn uninstall.
-
-To remove Kite-owned host data under `/mnt/kite-longhorn`, use the extra
-confirmation flag. This can be used without uninstalling Longhorn, but the
-script skips data deletion while Longhorn PVs still exist.
-
-```sh
-CLEAR_LONGHORN_DATA=true CLEAR_LONGHORN_DATA_CONFIRM=true KITE_CLUSTER=k3s ./clear.sh
-```
+The prompt separately asks whether to delete local images, uninstall Longhorn,
+delete Kite Longhorn host data, or restore host sshd back to port 22. Longhorn
+cleanup is disabled by default because it can delete VM disk data. Non-terminal
+automation can still set the existing environment variables directly.
 
 ## Gateway
 

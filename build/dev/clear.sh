@@ -1,18 +1,50 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# clear.sh removes Kite development resources from the selected local cluster.
-# Supported targets:
-#   KITE_CLUSTER=minikube build/dev/clear.sh
-#   KITE_CLUSTER=k3s build/dev/clear.sh
-#   KITE_CLUSTER=k3d build/dev/clear.sh
-#   KITE_CLUSTER=kind build/dev/clear.sh
-#   KITE_CLUSTER=k8s build/dev/clear.sh
-#   KITE_CLUSTER=current build/dev/clear.sh
+# ==============================================================================
+# Script: build/dev/clear.sh
+# Description: 개발 클러스터에서 Kite 리소스, user namespace, 선택적 Longhorn 데이터와 이미지 캐시를 정리한다.
 #
-# minikube mode can optionally delete the Minikube profile.
-# k3s/current mode deletes only Kite Kubernetes resources and local Kite images, not the cluster.
-# Longhorn cleanup is opt-in because it deletes VM disk data.
+# Usage:
+#   build/dev/clear.sh
+#
+# Environment Variables:
+#   KITE_CLUSTER: default auto
+#   KITE_NAMESPACE: default kite
+#   MINIKUBE_PROFILE: default minikube
+#   MINIKUBE_PURGE: default false
+#   K3S_CTR_CMD: default sudo k3s ctr -n k8s.io
+#   CLEAR_IMAGES: default true
+#   CLEAR_LONGHORN: default false
+#   CLEAR_LONGHORN_FORCE: default false
+#   CLEAR_LONGHORN_DATA: default false
+#   CLEAR_LONGHORN_DATA_CONFIRM: default false
+#   KITE_LONGHORN_DISK_NAME: default kite-longhorn
+#   KITE_LONGHORN_DISK_TAG: default kite
+#   KITE_LONGHORN_DISK_REMOVE_TIMEOUT_SECONDS: default 180
+#   KITE_LONGHORN_DISK_REMOVE_RETRY_SECONDS: default 5
+#   RESTORE_HOST_SSHD: default true
+#   KITE_RESTORE_HOST_SSHD: default ask
+#   KITE_HOST_SSHD_STATE: default /etc/kite/host-sshd/state.env
+#   KITE_HOST_SSHD_RESTORE_LOG: default /tmp/kite-host-sshd-restore.log
+#   KITE_LOG_COLOR: default auto
+#   NO_COLOR: default (unset)
+#
+# Interactive:
+#   TTY에서 직접 실행하면 명시적으로 지정하지 않은 위험 옵션을 번호 선택으로 묻는다.
+#
+# Side Effects:
+#   Kubernetes 리소스, 이미지 캐시, 선택적 Longhorn/host sshd 상태를 변경하거나 삭제할 수 있다.
+# ==============================================================================
+
+MINIKUBE_PURGE_WAS_SET="${MINIKUBE_PURGE+x}"
+CLEAR_IMAGES_WAS_SET="${CLEAR_IMAGES+x}"
+CLEAR_LONGHORN_WAS_SET="${CLEAR_LONGHORN+x}"
+CLEAR_LONGHORN_FORCE_WAS_SET="${CLEAR_LONGHORN_FORCE+x}"
+CLEAR_LONGHORN_DATA_WAS_SET="${CLEAR_LONGHORN_DATA+x}"
+CLEAR_LONGHORN_DATA_CONFIRM_WAS_SET="${CLEAR_LONGHORN_DATA_CONFIRM+x}"
+RESTORE_HOST_SSHD_WAS_SET="${RESTORE_HOST_SSHD+x}"
+KITE_RESTORE_HOST_SSHD_WAS_SET="${KITE_RESTORE_HOST_SSHD+x}"
 
 KITE_CLUSTER="${KITE_CLUSTER:-auto}"
 KITE_NAMESPACE="${KITE_NAMESPACE:-kite}"
@@ -29,20 +61,262 @@ KITE_LONGHORN_DISK_NAME="${KITE_LONGHORN_DISK_NAME:-kite-longhorn}"
 KITE_LONGHORN_DISK_TAG="${KITE_LONGHORN_DISK_TAG:-kite}"
 KITE_LONGHORN_DISK_REMOVE_TIMEOUT_SECONDS="${KITE_LONGHORN_DISK_REMOVE_TIMEOUT_SECONDS:-180}"
 KITE_LONGHORN_DISK_REMOVE_RETRY_SECONDS="${KITE_LONGHORN_DISK_REMOVE_RETRY_SECONDS:-5}"
+# RESTORE_HOST_SSHD=true이면 삭제가 끝난 뒤 Kite 설치 시 백업해 둔 host sshd
+# 설정을 복원하는 경로로 들어간다. 실제 복원 여부는 manage-host-sshd.sh 안에서
+# KITE_RESTORE_HOST_SSHD=ask/true/false로 한 번 더 결정된다.
+# 원격 서버에서 22/2222 포트를 그대로 유지해야 하면 RESTORE_HOST_SSHD=false를
+# 지정해 이 단계 전체를 건너뛴다.
 RESTORE_HOST_SSHD="${RESTORE_HOST_SSHD:-true}"
+KITE_RESTORE_HOST_SSHD="${KITE_RESTORE_HOST_SSHD:-ask}"
+KITE_HOST_SSHD_STATE="${KITE_HOST_SSHD_STATE:-/etc/kite/host-sshd/state.env}"
+KITE_HOST_SSHD_RESTORE_LOG="${KITE_HOST_SSHD_RESTORE_LOG:-/tmp/kite-host-sshd-restore.log}"
+HOST_SSHD_RESTORE_PID=""
 
-log() {
-  echo "[kite] $*"
+log_color_enabled() {
+  [[ "${KITE_LOG_COLOR:-auto}" != "false" && -z "${NO_COLOR:-}" && -t 1 ]]
 }
 
+log_timestamp() {
+  date +"%Y-%m-%dT%H:%M:%S%z"
+}
+
+log() {
+  local timestamp
+
+  timestamp="$(log_timestamp)"
+  if log_color_enabled; then
+    printf "\033[0;32m[kite] %s - %s\033[0m\n" "${timestamp}" "$*"
+  else
+    printf "[kite] %s - %s\n" "${timestamp}" "$*"
+  fi
+}
+
+warn() {
+  local timestamp
+
+  timestamp="$(log_timestamp)"
+  if log_color_enabled; then
+    printf "\033[1;33m[kite] WARNING: %s - %s\033[0m\n" "${timestamp}" "$*" >&2
+  else
+    printf "[kite] WARNING: %s - %s\n" "${timestamp}" "$*" >&2
+  fi
+}
+
+ask_numbered_bool() {
+  local prompt="$1"
+  local default_value="$2"
+  local default_label
+  local answer
+
+  if [[ "${default_value}" == "true" ]]; then
+    default_label="1"
+  else
+    default_label="2"
+  fi
+
+  while true; do
+    printf '%s\n' "${prompt}" >&2
+    printf '  1) 예\n' >&2
+    printf '  2) 아니오\n' >&2
+    read -r -p "선택 [1/2, 기본: ${default_label}] " answer
+    answer="${answer:-${default_label}}"
+
+    case "${answer}" in
+      1|y|Y|yes|YES)
+        return 0
+        ;;
+      2|n|N|no|NO)
+        return 1
+        ;;
+      *)
+        warn "1 또는 2를 입력하세요"
+        ;;
+    esac
+  done
+}
+
+interactive_clear_enabled() {
+  [[ -t 0 ]]
+}
+
+configure_interactive_clear_options() {
+  local cluster="$1"
+
+  interactive_clear_enabled || return 0
+
+  log "interactive cleanup options"
+  if [[ -z "${CLEAR_IMAGES_WAS_SET}" ]]; then
+    if ask_numbered_bool "로컬/k3s에 남은 Kite 개발 이미지도 삭제할까요?" "${CLEAR_IMAGES}"; then
+      CLEAR_IMAGES=true
+    else
+      CLEAR_IMAGES=false
+    fi
+  fi
+
+  if [[ "${cluster}" == "minikube" ]]; then
+    if [[ -z "${MINIKUBE_PURGE_WAS_SET}" ]]; then
+      if ask_numbered_bool "minikube profile만이 아니라 전체 minikube 상태를 purge할까요?" "${MINIKUBE_PURGE}"; then
+        MINIKUBE_PURGE=true
+      else
+        MINIKUBE_PURGE=false
+      fi
+    fi
+    log "cleanup choices: CLEAR_IMAGES=${CLEAR_IMAGES}, MINIKUBE_PURGE=${MINIKUBE_PURGE}"
+    return 0
+  fi
+
+  if [[ -z "${CLEAR_LONGHORN_WAS_SET}" ]]; then
+    if ask_numbered_bool "Longhorn 설치 자체와 Kite Longhorn disk entry까지 제거할까요?" "${CLEAR_LONGHORN}"; then
+      CLEAR_LONGHORN=true
+    else
+      CLEAR_LONGHORN=false
+    fi
+  fi
+  if [[ "${CLEAR_LONGHORN}" == "true" && -z "${CLEAR_LONGHORN_FORCE_WAS_SET}" ]]; then
+    if ask_numbered_bool "Longhorn PV가 남아 있어도 Longhorn 제거를 강제로 진행할까요?" "${CLEAR_LONGHORN_FORCE}"; then
+      CLEAR_LONGHORN_FORCE=true
+    else
+      CLEAR_LONGHORN_FORCE=false
+    fi
+  fi
+
+  if [[ -z "${CLEAR_LONGHORN_DATA_WAS_SET}" ]]; then
+    if ask_numbered_bool "노드의 Kite Longhorn host data까지 삭제할까요? VM 디스크 데이터가 사라질 수 있습니다." "${CLEAR_LONGHORN_DATA}"; then
+      CLEAR_LONGHORN_DATA=true
+      if [[ -z "${CLEAR_LONGHORN_DATA_CONFIRM_WAS_SET}" ]]; then
+        CLEAR_LONGHORN_DATA_CONFIRM=true
+      fi
+    else
+      CLEAR_LONGHORN_DATA=false
+    fi
+  fi
+  if [[ "${CLEAR_LONGHORN_DATA}" == "true" && -z "${CLEAR_LONGHORN_FORCE_WAS_SET}" ]]; then
+    if ask_numbered_bool "Longhorn PV가 남아 있어도 host data 삭제를 강제로 진행할까요?" "${CLEAR_LONGHORN_FORCE}"; then
+      CLEAR_LONGHORN_FORCE=true
+    fi
+  fi
+
+  if [[ -z "${RESTORE_HOST_SSHD_WAS_SET}" ]]; then
+    if ask_numbered_bool "Kite gateway가 22번을 쓰던 경우 host sshd를 22번으로 복원할까요?" "${RESTORE_HOST_SSHD}"; then
+      RESTORE_HOST_SSHD=true
+      if [[ -z "${KITE_RESTORE_HOST_SSHD_WAS_SET}" ]]; then
+        KITE_RESTORE_HOST_SSHD=true
+      fi
+    else
+      RESTORE_HOST_SSHD=false
+      if [[ -z "${KITE_RESTORE_HOST_SSHD_WAS_SET}" ]]; then
+        KITE_RESTORE_HOST_SSHD=false
+      fi
+    fi
+  fi
+
+  log "cleanup choices: CLEAR_IMAGES=${CLEAR_IMAGES}, CLEAR_LONGHORN=${CLEAR_LONGHORN}, CLEAR_LONGHORN_DATA=${CLEAR_LONGHORN_DATA}, CLEAR_LONGHORN_FORCE=${CLEAR_LONGHORN_FORCE}, RESTORE_HOST_SSHD=${RESTORE_HOST_SSHD}"
+}
+
+# host_sshd_restore_state_exists checks whether Kite previously moved host sshd away from port 22.
+# The state file may require sudo because it is stored under /etc/kite on remote Linux hosts.
+host_sshd_restore_state_exists() {
+  [[ "$(uname -s 2>/dev/null || true)" == "Linux" ]] || return 1
+  if [[ -f "${KITE_HOST_SSHD_STATE}" ]]; then
+    return 0
+  fi
+  if command -v sudo >/dev/null 2>&1 && sudo test -f "${KITE_HOST_SSHD_STATE}" 2>/dev/null; then
+    return 0
+  fi
+  return 1
+}
+
+# confirm_host_sshd_restore_before_gateway_delete asks before scheduling a detached restore.
+# The answer is exported so foreground and background restore paths use the same decision.
+confirm_host_sshd_restore_before_gateway_delete() {
+  local answer
+
+  case "${KITE_RESTORE_HOST_SSHD}" in
+    true|yes|1)
+      export KITE_RESTORE_HOST_SSHD=true
+      return 0
+      ;;
+    false|no|0)
+      export KITE_RESTORE_HOST_SSHD=false
+      return 1
+      ;;
+    ask)
+      if [[ ! -t 0 ]]; then
+        warn "non-interactive shell; not scheduling host sshd restore because KITE_RESTORE_HOST_SSHD=ask"
+        export KITE_RESTORE_HOST_SSHD=false
+        return 1
+      fi
+      if ask_numbered_bool "Kite gateway가 현재 SSH 세션을 처리 중일 수 있습니다. gateway 삭제 전에 host sshd 22번 복원 worker를 예약할까요?" "false"; then
+        export KITE_RESTORE_HOST_SSHD=true
+        return 0
+      fi
+      export KITE_RESTORE_HOST_SSHD=false
+      return 1
+      ;;
+    *)
+      warn "unknown KITE_RESTORE_HOST_SSHD=${KITE_RESTORE_HOST_SSHD}; expected ask, true, or false"
+      export KITE_RESTORE_HOST_SSHD=false
+      return 1
+      ;;
+  esac
+}
+
+# schedule_host_sshd_restore_before_gateway_delete starts a nohup restore worker before gateway deletion.
+# This keeps the port-22 recovery alive even if deleting the gateway drops the current SSH session.
+schedule_host_sshd_restore_before_gateway_delete() {
+  if [[ "${RESTORE_HOST_SSHD}" != "true" ]]; then
+    return 0
+  fi
+  if ! host_sshd_restore_state_exists; then
+    return 0
+  fi
+  if ! confirm_host_sshd_restore_before_gateway_delete; then
+    warn "host sshd restore is disabled; deleting kite-gateway may leave host SSH away from port 22"
+    return 0
+  fi
+
+  log "scheduling detached host sshd restore after port 22 is released"
+  nohup env \
+    KITE_RESTORE_HOST_SSHD=true \
+    KITE_HOST_SSHD_STATE="${KITE_HOST_SSHD_STATE}" \
+    KITE_HOST_SSHD_RESTORE_WAIT_TIMEOUT_SECONDS="${KITE_HOST_SSHD_RESTORE_WAIT_TIMEOUT_SECONDS:-90}" \
+    KITE_HOST_SSHD_RESTORE_WAIT_RETRY_SECONDS="${KITE_HOST_SSHD_RESTORE_WAIT_RETRY_SECONDS:-1}" \
+    "${ROOT_DIR}/build/deploy/scripts/manage-host-sshd.sh" restore-after-port-free >>"${KITE_HOST_SSHD_RESTORE_LOG}" 2>&1 &
+  HOST_SSHD_RESTORE_PID="$!"
+  log "host sshd restore worker pid=${HOST_SSHD_RESTORE_PID}; log=${KITE_HOST_SSHD_RESTORE_LOG}"
+}
+
+# finish_host_sshd_restore waits for the scheduled restore worker or runs a foreground restore fallback.
+# When the SSH session survived gateway deletion this gives clear.sh a deterministic success/failure result.
+finish_host_sshd_restore() {
+  if [[ "${RESTORE_HOST_SSHD}" != "true" ]]; then
+    log "skipping host sshd restore because RESTORE_HOST_SSHD=${RESTORE_HOST_SSHD}"
+    return 0
+  fi
+  if [[ -n "${HOST_SSHD_RESTORE_PID}" ]]; then
+    if wait "${HOST_SSHD_RESTORE_PID}"; then
+      log "host sshd restore worker completed"
+    else
+      warn "host sshd restore worker failed; check ${KITE_HOST_SSHD_RESTORE_LOG}"
+      return 1
+    fi
+    return 0
+  fi
+
+  "${ROOT_DIR}/build/deploy/scripts/manage-host-sshd.sh" restore-after-port-free
+}
+
+
+# 정리 과정에 꼭 필요한 CLI가 없으면 삭제가 절반만 진행되기 전에 중단한다.
 require_command() {
   local name="$1"
   if ! command -v "${name}" >/dev/null 2>&1; then
-    echo "[kite] missing required command: ${name}" >&2
+    warn "missing required command: ${name}"
     exit 1
   fi
 }
 
+# KITE_CLUSTER=auto일 때 kubectl context와 로컬 k3s 명령 존재 여부로 대상 클러스터를 추정한다.
 detect_cluster() {
   local context
 
@@ -75,14 +349,17 @@ detect_cluster() {
   esac
 }
 
+# Kite app/storage manifest와 user namespace에 흩어진 VM 관련 리소스를 삭제한다.
 delete_kite_resources() {
   require_command kubectl
 
   log "deleting Kite storage manifests"
+  # golden image와 Longhorn StorageClass부터 지워 새 VM disk 생성이 더 진행되지 않게 한다.
   kubectl delete -f "${ROOT_DIR}/build/kite-storage/golden-images" --ignore-not-found=true || true
   kubectl delete -f "${ROOT_DIR}/build/kite-storage/longhorn" --ignore-not-found=true || true
 
   log "stopping Kite workloads"
+  # workload 삭제는 wait=false로 걸어 두고, 아래에서 CR/namespace 잔여 리소스를 따로 정리한다.
   kubectl delete -f "${ROOT_DIR}/build/kite/gateway.yaml" --ignore-not-found=true --wait=false || true
   kubectl delete -f "${ROOT_DIR}/build/kite/controller.yaml" --ignore-not-found=true --wait=false || true
   kubectl delete -f "${ROOT_DIR}/build/kite/api.yaml" --ignore-not-found=true --wait=false || true
@@ -108,15 +385,16 @@ delete_kite_resources() {
   kubectl delete clusterrole kite-control-plane-role --ignore-not-found=true --wait=false || true
   kubectl delete clusterrolebinding kite-control-plane-binding --ignore-not-found=true --wait=false || true
 
-  remove_kite_longhorn_disks
 }
 
+# 특정 API resource가 현재 클러스터에서 조회 가능한지 확인한다.
 resource_available() {
   local resource="$1"
 
   kubectl api-resources -o name 2>/dev/null | grep -qx "${resource}"
 }
 
+# KiteUser status.namespace와 kite-user-* 이름 패턴을 합쳐 사용자 namespace 후보를 찾는다.
 kite_user_namespaces() {
   if kubectl get crd kiteusers.hy3ons.github.io >/dev/null 2>&1; then
     kubectl get kiteusers.hy3ons.github.io -o jsonpath='{range .items[*]}{.spec.namespace}{"\n"}{end}' 2>/dev/null || true
@@ -125,6 +403,7 @@ kite_user_namespaces() {
   kubectl get namespace -l hy3ons.github.io/managed-by=kite-controller -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null || true
 }
 
+# selector로 찾은 리소스가 terminating에 걸리지 않게 finalizer를 비운다.
 patch_finalizers_by_selector() {
   local namespace="$1"
   local resource="$2"
@@ -135,6 +414,7 @@ patch_finalizers_by_selector() {
     | xargs -r -n 1 kubectl -n "${namespace}" patch --type=merge -p '{"metadata":{"finalizers":[]}}' || true
 }
 
+# selector로 선택한 namespaced 리소스를 삭제한다.
 delete_by_selector() {
   local namespace="$1"
   local resource="$2"
@@ -148,6 +428,7 @@ delete_by_selector() {
   fi
 }
 
+# 이름 prefix로 선택한 리소스를 삭제한다. service/vps-*처럼 label이 없을 수 있는 리소스에 쓴다.
 delete_by_name_prefix() {
   local namespace="$1"
   local resource="$2"
@@ -159,6 +440,7 @@ delete_by_name_prefix() {
     | xargs -r -n 1 kubectl -n "${namespace}" delete --ignore-not-found=true --wait=false || true
 }
 
+# Kite DataVolume과 연결된 PVC를 찾아 삭제한다. CDI가 만든 PVC는 label이 항상 일정하지 않을 수 있다.
 delete_pvcs_for_kite_datavolumes() {
   local namespace="$1"
 
@@ -171,6 +453,7 @@ delete_pvcs_for_kite_datavolumes() {
       done
 }
 
+# 특정 user namespace 안에서 Kite VM이 만든 KubeVirt/CDI/Service 리소스를 정리한다.
 delete_kite_namespace_allocations() {
   local namespace="$1"
   local selector="hy3ons.github.io/managed-by=kite-controller"
@@ -201,6 +484,7 @@ delete_kite_namespace_allocations() {
   delete_by_selector "${namespace}" limitranges ""
 }
 
+# KiteUser가 만든 모든 user namespace를 순회하며 VM 관련 리소스를 먼저 삭제한다.
 delete_kite_allocated_resources() {
   kite_user_namespaces \
     | sed '/^[[:space:]]*$/d' \
@@ -210,6 +494,7 @@ delete_kite_allocated_resources() {
       done
 }
 
+# kite-user-* namespace 자체를 비동기로 삭제한다. namespace finalization은 Kubernetes에 맡긴다.
 delete_kite_user_namespaces() {
   kite_user_namespaces \
     | sed '/^[[:space:]]*$/d' \
@@ -221,6 +506,7 @@ delete_kite_user_namespaces() {
       done
 }
 
+# Kite CRD 인스턴스를 삭제한다. controller가 이미 내려간 뒤에도 CR이 남을 수 있어 별도 처리한다.
 delete_kite_custom_resources() {
   if kubectl get crd kitevirtualmachines.hy3ons.github.io >/dev/null 2>&1; then
     kubectl get kitevirtualmachines.hy3ons.github.io -A -o jsonpath='{range .items[*]}{.metadata.namespace}{" "}{.metadata.name}{"\n"}{end}' 2>/dev/null \
@@ -238,6 +524,7 @@ delete_kite_custom_resources() {
   fi
 }
 
+# Longhorn CRD가 있는 경우 Kite 전용/태그 disk entry를 node별로 제거한다.
 remove_kite_longhorn_disks() {
   if ! kubectl get crd nodes.longhorn.io >/dev/null 2>&1; then
     return
@@ -251,6 +538,7 @@ remove_kite_longhorn_disks() {
       done
 }
 
+# JSON Patch path에서 /와 ~는 escape해야 disk 이름을 안전하게 path로 쓸 수 있다.
 json_pointer_escape() {
   local value="$1"
 
@@ -259,23 +547,26 @@ json_pointer_escape() {
   printf '%s' "${value}"
 }
 
+# Longhorn node CR의 특정 disk entry를 삭제한다. replica/backing image가 남으면 제한 시간 동안 재시도한다.
 remove_longhorn_disk_from_node() {
   local node="$1"
   local disk="$2"
   local reason="$3"
   local escaped_disk
   local deadline
+  local start_time
   local original_allow_scheduling
   local output
 
   escaped_disk="$(json_pointer_escape "${disk}")"
+  start_time="${SECONDS}"
   original_allow_scheduling="$(kubectl -n longhorn-system get "${node}" -o "go-template={{ index .spec.disks \"${disk}\" \"allowScheduling\" }}" 2>/dev/null || true)"
 
-  # Longhorn blocks disk deletion until scheduling is disabled and replicas are gone.
-  # Kite deletes CDI/KubeVirt resources just before this, so stop new placements first.
+  # Longhorn은 replica가 남은 disk 삭제를 막으므로 새 배치를 막기 위해 scheduling부터 끈다.
+  # 삭제 실패 시에는 아래에서 원래 allowScheduling 값으로 되돌린다.
   kubectl -n longhorn-system patch "${node}" --type=json -p "[{\"op\":\"replace\",\"path\":\"/spec/disks/${escaped_disk}/allowScheduling\",\"value\":false}]" >/dev/null 2>&1 || true
 
-  # PVC/PV deletion reaches Longhorn asynchronously; retry while controllers catch up.
+  # PVC/PV 삭제가 Longhorn controller에 비동기로 반영되므로 잠시 기다리며 remove patch를 재시도한다.
   deadline=$((SECONDS + KITE_LONGHORN_DISK_REMOVE_TIMEOUT_SECONDS))
   while true; do
     if output="$(kubectl -n longhorn-system patch "${node}" --type=json -p "[{\"op\":\"remove\",\"path\":\"/spec/disks/${escaped_disk}\"}]" 2>&1)"; then
@@ -287,25 +578,25 @@ remove_longhorn_disk_from_node() {
       break
     fi
 
-    log "waiting to remove Longhorn disk ${disk} from ${node}; Longhorn still sees replicas or backing images"
+    log "waiting to remove Longhorn disk ${disk} from ${node}; Longhorn still sees replicas or backing images (elapsed=$((SECONDS - start_time))s timeout=${KITE_LONGHORN_DISK_REMOVE_TIMEOUT_SECONDS}s)"
     sleep "${KITE_LONGHORN_DISK_REMOVE_RETRY_SECONDS}"
   done
 
-  # If Longhorn still refuses removal, keep the cluster usable by restoring the
-  # disk scheduling state that existed before cleanup touched it.
+  # 끝까지 실패하면 cleanup 때문에 디스크가 scheduling 불가 상태로 남지 않게 원래 값을 복원한다.
   if [[ "${original_allow_scheduling}" == "true" || "${original_allow_scheduling}" == "false" ]]; then
     kubectl -n longhorn-system patch "${node}" --type=json -p "[{\"op\":\"replace\",\"path\":\"/spec/disks/${escaped_disk}/allowScheduling\",\"value\":${original_allow_scheduling}}]" >/dev/null 2>&1 || true
   fi
-  log "could not remove Longhorn disk ${disk} from ${node} (${reason}): ${output}"
+  log "could not remove Longhorn disk ${disk} from ${node} after $((SECONDS - start_time))s (${reason}): ${output}"
 }
 
+# 설치 방식에 따라 전용 disk 이름이 있거나 기존 disk에 kite tag만 있을 수 있어 둘 다 찾는다.
 remove_kite_longhorn_disks_from_node() {
   local node="$1"
   local disks
   local disk
   local tags
 
-  # Install may create a named disk or tag an existing disk; clear both forms.
+  # spec.disks 전체를 이름|태그 형식으로 뽑아 shell에서 간단히 판별한다.
   disks="$(kubectl -n longhorn-system get "${node}" -o 'go-template={{ range $name, $disk := .spec.disks }}{{ $name }}|{{ range $disk.tags }}{{ . }} {{ end }}{{ "\n" }}{{ end }}' 2>/dev/null || true)"
   while IFS="|" read -r disk tags; do
     [[ -z "${disk}" ]] && continue
@@ -321,6 +612,7 @@ remove_kite_longhorn_disks_from_node() {
   done <<< "${disks}"
 }
 
+# Longhorn PV가 남아 있으면 host 데이터 삭제나 Longhorn uninstall이 데이터 손실로 이어질 수 있다.
 longhorn_pv_count() {
   kubectl get pv -o jsonpath='{range .items[?(@.spec.csi.driver=="driver.longhorn.io")]}{.metadata.name}{"\n"}{end}' 2>/dev/null \
     | sed '/^[[:space:]]*$/d' \
@@ -328,6 +620,7 @@ longhorn_pv_count() {
     | tr -d ' '
 }
 
+# 명시 확인이 있을 때만 host path의 Kite Longhorn 데이터를 DaemonSet으로 삭제한다.
 delete_kite_longhorn_host_data() {
   if [[ "${CLEAR_LONGHORN_DATA}" != "true" ]]; then
     log "skipping Longhorn host data cleanup because CLEAR_LONGHORN_DATA=${CLEAR_LONGHORN_DATA}"
@@ -348,11 +641,13 @@ delete_kite_longhorn_host_data() {
   fi
 
   log "deleting Kite Longhorn host data on every node"
+  # cleanup DaemonSet은 각 node에서 host path를 삭제하고, rollout 확인 뒤 바로 제거된다.
   kubectl apply -f "${ROOT_DIR}/build/kite-storage/longhorn-cleanup"
   kubectl -n longhorn-system rollout status daemonset/kite-longhorn-disk-cleanup --timeout=180s || true
   kubectl delete -f "${ROOT_DIR}/build/kite-storage/longhorn-cleanup" --ignore-not-found=true || true
 }
 
+# CLEAR_LONGHORN=true일 때 Longhorn 자체 namespace/CR까지 제거한다. PV가 남으면 기본적으로 중단한다.
 delete_longhorn_resources() {
   if [[ "${CLEAR_LONGHORN}" != "true" ]]; then
     log "skipping Longhorn cleanup because CLEAR_LONGHORN=${CLEAR_LONGHORN}"
@@ -377,6 +672,7 @@ delete_longhorn_resources() {
   kubectl delete namespace longhorn-system --ignore-not-found=true --wait=false || true
 
   log "removing Longhorn finalizers from terminating resources when present"
+  # Longhorn CR은 finalizer 때문에 namespace terminating에 남을 수 있어 마지막에 비워 준다.
   kubectl api-resources --api-group=longhorn.io --verbs=list -o name 2>/dev/null \
     | while read -r resource; do
         [[ -z "${resource}" ]] && continue
@@ -385,6 +681,7 @@ delete_longhorn_resources() {
       done
 }
 
+# 로컬 Docker daemon에 남은 Kite 개발 이미지를 제거한다.
 delete_local_docker_images() {
   if [[ "${CLEAR_IMAGES}" != "true" ]]; then
     log "skipping local Docker image cleanup because CLEAR_IMAGES=${CLEAR_IMAGES}"
@@ -396,11 +693,13 @@ delete_local_docker_images() {
   fi
 
   log "removing local Docker Kite images"
+  # repository 이름이 kite-*인 개발 이미지를 찾아 tag와 관계없이 제거한다.
   docker image ls --format '{{.Repository}}:{{.Tag}}' \
     | grep -E '(^|/)kite-(api|controller|gateway|frontend):' \
     | xargs -r docker rmi -f
 }
 
+# k3s containerd에 import했던 Kite 이미지를 제거한다.
 delete_k3s_images() {
   if [[ "${CLEAR_IMAGES}" != "true" ]]; then
     log "skipping k3s image cleanup because CLEAR_IMAGES=${CLEAR_IMAGES}"
@@ -408,11 +707,13 @@ delete_k3s_images() {
   fi
 
   log "removing k3s containerd Kite images"
+  # k3s는 Docker가 아니라 containerd k8s.io namespace에서 이미지를 사용한다.
   ${K3S_CTR_CMD} images ls -q \
     | grep -E '(^|/)kite-(api|controller|gateway|frontend):' \
     | xargs -r -n 1 ${K3S_CTR_CMD} images rm || true
 }
 
+# minikube 모드에서 profile 또는 전체 minikube 상태를 삭제한다.
 delete_minikube_profile() {
   require_command minikube
 
@@ -426,11 +727,13 @@ delete_minikube_profile() {
   minikube -p "${MINIKUBE_PROFILE}" delete
 }
 
+# 대상 클러스터 종류에 맞춰 Kubernetes 리소스, storage, 이미지 캐시, host sshd 복원을 정리한다.
 main() {
   local cluster
 
   cluster="$(detect_cluster)"
   log "target cluster=${cluster}"
+  configure_interactive_clear_options "${cluster}"
 
   case "${cluster}" in
     minikube)
@@ -438,6 +741,7 @@ main() {
       delete_local_docker_images
       ;;
     k3s)
+      schedule_host_sshd_restore_before_gateway_delete
       delete_kite_resources
       delete_kite_longhorn_host_data
       delete_longhorn_resources
@@ -445,6 +749,7 @@ main() {
       delete_local_docker_images
       ;;
     k3d|kind|current|k8s|kubernetes)
+      schedule_host_sshd_restore_before_gateway_delete
       delete_kite_resources
       delete_kite_longhorn_host_data
       delete_longhorn_resources
@@ -456,11 +761,7 @@ main() {
       ;;
   esac
 
-  if [[ "${RESTORE_HOST_SSHD}" == "true" ]]; then
-    "${ROOT_DIR}/build/deploy/scripts/manage-host-sshd.sh" restore
-  else
-    log "skipping host sshd restore because RESTORE_HOST_SSHD=${RESTORE_HOST_SSHD}"
-  fi
+  finish_host_sshd_restore
 
   log "clear complete"
 }

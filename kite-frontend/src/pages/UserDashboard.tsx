@@ -57,7 +57,7 @@ export const UserDashboard: React.FC = () => {
   }, [message]);
 
   useEffect(() => {
-    void Promise.all([fetchVms(), fetchPlatformConfig()]);
+    void Promise.resolve().then(() => Promise.all([fetchVms(), fetchPlatformConfig()]));
   }, [fetchPlatformConfig, fetchVms]);
 
   const handleStart = async (name: string) => {
@@ -198,7 +198,7 @@ export const UserDashboard: React.FC = () => {
           rowKey="id" 
           loading={loading}
           pagination={false}
-          scroll={{ x: 'max-content' }}
+          scroll={{ x: 1430 }}
           locale={{
             emptyText: (
               <Empty

@@ -61,9 +61,10 @@ export const createUserDashboardColumns = ({
   {
     title: 'Actions',
     key: 'actions',
-    width: 360,
+    width: 420,
+    fixed: 'right',
     render: (_, record) => (
-      <Space size="small" wrap>
+      <Space size="small" wrap={false} className="dashboard-table-actions">
         <Button type="text" icon={<CodeOutlined />} onClick={() => onConnect(record)}>
           Connect
         </Button>

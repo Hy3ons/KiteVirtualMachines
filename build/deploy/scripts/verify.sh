@@ -1,13 +1,58 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# ==============================================================================
+# Script: build/deploy/scripts/verify.sh
+# Description: Kite 설치 후 storage, dependency, workload, golden image 상태를 확인한다.
+#
+# Usage:
+#   build/deploy/scripts/verify.sh
+#
+# Environment Variables:
+#   KITE_NAMESPACE: default kite
+#   KITE_LONGHORN_DISK_TAG: default kite
+#   KITE_LOG_COLOR: default auto
+#   NO_COLOR: default (unset)
+#
+# Side Effects:
+#   주로 상태 조회와 대기를 수행하며, test는 임시 port-forward process를 생성한다.
+# ==============================================================================
+
 KITE_NAMESPACE="${KITE_NAMESPACE:-kite}"
 KITE_LONGHORN_DISK_TAG="${KITE_LONGHORN_DISK_TAG:-kite}"
 
-log() {
-  echo "[kite-deploy] $*"
+log_color_enabled() {
+  [[ "${KITE_LOG_COLOR:-auto}" != "false" && -z "${NO_COLOR:-}" && -t 1 ]]
 }
 
+log_timestamp() {
+  date +"%Y-%m-%dT%H:%M:%S%z"
+}
+
+log() {
+  local timestamp
+
+  timestamp="$(log_timestamp)"
+  if log_color_enabled; then
+    printf "\033[0;32m[kite-deploy] %s - %s\033[0m\n" "${timestamp}" "$*"
+  else
+    printf "[kite-deploy] %s - %s\n" "${timestamp}" "$*"
+  fi
+}
+
+warn() {
+  local timestamp
+
+  timestamp="$(log_timestamp)"
+  if log_color_enabled; then
+    printf "\033[1;33m[kite-deploy] WARNING: %s - %s\033[0m\n" "${timestamp}" "$*" >&2
+  else
+    printf "[kite-deploy] WARNING: %s - %s\n" "${timestamp}" "$*" >&2
+  fi
+}
+
+
+# 각 node에 Ready/Schedulable 상태이고 kite tag가 붙은 Longhorn disk가 있는지 확인한다.
 require_kite_longhorn_disk() {
   local node="$1"
   local disks
@@ -18,6 +63,7 @@ require_kite_longhorn_disk() {
   local ready
   local schedulable
 
+  # Longhorn disk의 spec과 status를 한 번에 읽어 VM disk scheduling 가능 여부를 판단한다.
   disks="$(kubectl -n longhorn-system get "nodes.longhorn.io/${node}" -o 'go-template={{ range $name, $disk := .spec.disks }}{{ $status := index $.status.diskStatus $name }}{{ $name }}|{{ $disk.allowScheduling }}|{{ range $disk.tags }}{{ . }} {{ end }}|{{ if $status }}{{ range $status.conditions }}{{ if eq .type "Ready" }}{{ .status }}{{ end }}{{ end }}{{ end }}|{{ if $status }}{{ range $status.conditions }}{{ if eq .type "Schedulable" }}{{ .status }}{{ end }}{{ end }}{{ end }}{{ "\n" }}{{ end }}')"
 
   found="false"
@@ -35,6 +81,7 @@ require_kite_longhorn_disk() {
   fi
 }
 
+# Kubernetes node 전체를 순회하며 Kite VM용 Longhorn disk 조건을 검증한다.
 verify_kite_longhorn_disks() {
   kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' \
     | while read -r node; do
@@ -43,6 +90,7 @@ verify_kite_longhorn_disks() {
       done
 }
 
+# 설치 후 사람이 보기 쉬운 smoke verification을 순서대로 실행한다.
 main() {
   log "checking storage"
   kubectl get storageclass kite-vm-storage

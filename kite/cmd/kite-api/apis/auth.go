@@ -2,7 +2,6 @@ package apis
 
 import (
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -34,6 +33,17 @@ type loginResponse struct {
 	ExpiresIn int64  `json:"expiresIn"`
 	ExpiresAt string `json:"expiresAt"`
 	User      any    `json:"user,omitempty"`
+}
+
+const (
+	accessTokenCookieName        = "accessToken"
+	httpAccessTokenCookieMaxAge  = 10 * time.Minute
+	httpsAccessTokenCookieMaxAge = time.Hour
+)
+
+type accessTokenCookiePolicy struct {
+	secure bool
+	maxAge time.Duration
 }
 
 func Register(api *gin.RouterGroup, deps Dependencies) {
@@ -128,7 +138,8 @@ func loginHandler(deps Dependencies) gin.HandlerFunc {
 			return
 		}
 
-		c.Writer.Header().Add("Set-Cookie", accessTokenCookie(accessToken, int(deps.Config.AccessTokenTTL.Seconds()), requestUsesSecureCookie(c, deps)))
+		cookiePolicy := accessTokenCookiePolicyForRequest(c, deps)
+		c.Writer.Header().Add("Set-Cookie", cookiePolicy.accessTokenCookie(accessToken))
 
 		c.JSON(http.StatusOK, loginResponse{
 			ExpiresIn: int64(deps.Config.AccessTokenTTL.Seconds()),
@@ -140,35 +151,63 @@ func loginHandler(deps Dependencies) gin.HandlerFunc {
 
 func logoutHandler(deps Dependencies) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Writer.Header().Add("Set-Cookie", clearAccessTokenCookie(requestUsesSecureCookie(c, deps)))
+		cookiePolicy := accessTokenCookiePolicyForRequest(c, deps)
+		c.Writer.Header().Add("Set-Cookie", cookiePolicy.clearAccessTokenCookie())
 		c.JSON(http.StatusOK, gin.H{"message": "logged out"})
 	}
 }
 
-// accessTokenCookie builds the HTTP-only access token cookie value.
-// accessToken is the signed Bearer token issued by TokenService.
-// maxAge is the cookie lifetime in seconds.
-// secure controls whether the Secure attribute is emitted for HTTPS requests.
-// The returned string is added to Set-Cookie by loginHandler.
-func accessTokenCookie(accessToken string, maxAge int, secure bool) string {
-	return "accessToken=\"Bearer " + accessToken + "\"; Path=/; Max-Age=" + strconv.Itoa(maxAge) + "; HttpOnly" + secureCookieAttribute(secure) + "; SameSite=Lax"
-}
-
-func clearAccessTokenCookie(secure bool) string {
-	return "accessToken=; Path=/; Max-Age=0; HttpOnly" + secureCookieAttribute(secure) + "; SameSite=Lax"
-}
-
-func secureCookieAttribute(secure bool) string {
+// accessTokenCookiePolicyForRequest creates the cookie policy for one auth request.
+// c provides TLS and proxy header information for the current request.
+// deps provides live platform settings so forceHttps changes take effect without restarting kite-api.
+// The returned policy controls Secure and Max-Age for login and logout Set-Cookie headers.
+func accessTokenCookiePolicyForRequest(c *gin.Context, deps Dependencies) accessTokenCookiePolicy {
+	secure := requestUsesSecureCookie(c, deps)
+	maxAge := httpAccessTokenCookieMaxAge
 	if secure {
-		return "; Secure"
+		maxAge = httpsAccessTokenCookieMaxAge
 	}
-	return ""
+
+	return accessTokenCookiePolicy{
+		secure: secure,
+		maxAge: maxAge,
+	}
+}
+
+// accessTokenCookie builds the HTTP-only access token cookie value.
+// p provides the Secure flag and browser retention time for this request.
+// accessToken is the signed Bearer token issued by TokenService.
+// The returned string is added to Set-Cookie by loginHandler.
+func (p accessTokenCookiePolicy) accessTokenCookie(accessToken string) string {
+	return (&http.Cookie{
+		Name:     accessTokenCookieName,
+		Value:    "Bearer " + accessToken,
+		Path:     "/",
+		MaxAge:   int(p.maxAge.Seconds()),
+		HttpOnly: true,
+		Secure:   p.secure,
+		SameSite: http.SameSiteLaxMode,
+	}).String()
+}
+
+// clearAccessTokenCookie builds the Set-Cookie value that removes the access token.
+// p provides the Secure flag so logout clears the same browser cookie namespace used by login.
+// The returned string is added to Set-Cookie by logoutHandler.
+func (p accessTokenCookiePolicy) clearAccessTokenCookie() string {
+	return (&http.Cookie{
+		Name:     accessTokenCookieName,
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   p.secure,
+		SameSite: http.SameSiteLaxMode,
+	}).String()
 }
 
 // requestUsesSecureCookie decides whether auth cookies must include the Secure attribute.
 // c provides TLS and proxy header information for the current request.
 // deps provides live platform settings so forceHttps changes take effect without restarting kite-api.
-// The returned value is used by login and logout cookie writers.
+// The returned value is used by the access token cookie policy factory.
 func requestUsesSecureCookie(c *gin.Context, deps Dependencies) bool {
 	if c.Request.TLS != nil {
 		return true

@@ -70,10 +70,13 @@ export const LandingPage: React.FC = () => {
                   <Tag>KubeVirt</Tag>
                   <Tag>Namespace isolated</Tag>
                 </Space>
-                <img src="/favicon.png" alt="Kite logo" className="landing-logo-mark" />
-                <Title level={1} className="landing-title">Kite Platform</Title>
+                <div className="landing-product-heading">
+                  <Title level={1} className="landing-title">Kite</Title>
+                  <Text className="landing-title-caption">Opensource Private Cloud</Text>
+                </div>
                 <Paragraph className="landing-subtitle">
-                  팀원이 필요한 VM을 직접 대여하고, 관리자는 같은 화면에서 전체 상태를 조용하게 통제합니다.
+                  Kubernetes 위에서 돌아가는 KubeVirt를 응용해 더욱 추상화된 VM 상태 관리를 제공합니다.
+                  간단한 웹 UI로 VM을 대여하고, 서버 호스트의 sshd를 대신하는 kite-sshgateway로 접속 흐름을 최적화합니다.
                 </Paragraph>
 
                 <div className="landing-feature-list">
@@ -115,18 +118,16 @@ export const LandingPage: React.FC = () => {
             <Col xs={24} lg={10}>
               <section className="landing-login-panel">
                 {authenticated ? (
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ marginBottom: 24 }}>
+                  <div className="landing-session-card">
+                    <div className="landing-profile-mark">
                       {profileImage ? (
-                        <img src={profileImage} alt="Profile" style={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover' }} />
+                        <img src={profileImage} alt="Profile" className="landing-profile-image" />
                       ) : (
-                        <div style={{ width: 80, height: 80, borderRadius: '50%', backgroundColor: '#f0f0f0', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <UserOutlined style={{ fontSize: 32, color: '#bfbfbf' }} />
-                        </div>
+                        <UserOutlined className="landing-profile-icon" />
                       )}
                     </div>
-                    <Title level={3} style={{ color: '#333' }}>{username}님 환영합니다!</Title>
-                    <Text type="secondary" style={{ display: 'block', marginBottom: 32 }}>현재 로그인된 상태입니다.</Text>
+                    <Title level={3} className="landing-login-title">{username}님 환영합니다!</Title>
+                    <Text type="secondary" className="landing-login-caption">현재 로그인된 상태입니다.</Text>
 
                     <Button
                       type="primary"
@@ -134,24 +135,27 @@ export const LandingPage: React.FC = () => {
                       block
                       icon={<DashboardOutlined />}
                       onClick={() => navigate('/dashboard')}
-                      style={{ backgroundColor: '#8B7355', borderColor: '#8B7355', height: '48px', marginBottom: 16 }}
+                      className="landing-primary-action"
                     >
                       My VMs로 이동하기
                     </Button>
                     {accessLevel !== null && accessLevel >= 2 && (
-                      <Button block onClick={() => navigate('/admin/dashboard')} style={{ height: '44px', marginBottom: 12 }}>
+                      <Button block onClick={() => navigate('/admin/dashboard')} className="landing-outline-action">
                         Admin Console
                       </Button>
                     )}
-                    <Button type="text" onClick={logout} block>
+                    <Button type="text" onClick={logout} block className="landing-text-action">
                       로그아웃
                     </Button>
                   </div>
                 ) : (
                   <>
-                    <div style={{ textAlign: 'center', marginBottom: 40 }}>
-                      <Title level={2} style={{ color: '#333' }}>Welcome to Kite</Title>
-                      <Text type="secondary">로그인 후 VM 대여 대시보드로 이동합니다.</Text>
+                    <div className="landing-login-intro">
+                      <div className="landing-orbit-mark">
+                        <img src="/favicon.png" alt="Kite logo" />
+                      </div>
+                      <Title level={2} className="landing-login-title">Welcome to Kite</Title>
+                      <Text type="secondary" className="landing-login-caption">로그인 후 VM 대여 대시보드로 이동합니다.</Text>
                     </div>
 
                     <Form
@@ -159,30 +163,31 @@ export const LandingPage: React.FC = () => {
                       layout="vertical"
                       onFinish={onFinish}
                       size="large"
+                      className="landing-login-form"
                     >
                       <Form.Item
                         name="username"
                         rules={[{ required: true, message: '아이디를 입력해주세요.' }]}
                       >
-                        <Input prefix={<UserOutlined style={{ color: '#bfbfbf' }} />} placeholder="Email" />
+                        <Input prefix={<UserOutlined className="landing-input-icon" />} placeholder="Email" />
                       </Form.Item>
 
                       <Form.Item
                         name="password"
                         rules={[{ required: true, message: '비밀번호를 입력해주세요.' }]}
                       >
-                        <Input.Password prefix={<LockOutlined style={{ color: '#bfbfbf' }} />} placeholder="Password" />
+                        <Input.Password prefix={<LockOutlined className="landing-input-icon" />} placeholder="Password" />
                       </Form.Item>
 
                       <Form.Item>
-                        <Button type="primary" htmlType="submit" block loading={loading} style={{ backgroundColor: '#8B7355', borderColor: '#8B7355', height: '48px', fontSize: '16px' }}>
+                        <Button type="primary" htmlType="submit" block loading={loading} className="landing-primary-action">
                           Log in
                         </Button>
                       </Form.Item>
 
-                      <div style={{ textAlign: 'center', marginTop: 16 }}>
+                      <div className="landing-signup-row">
                         <Text type="secondary">계정이 없으신가요? </Text>
-                        <Button type="link" onClick={() => navigate('/signup')} style={{ padding: 0, color: '#8B7355' }}>회원가입</Button>
+                        <Button type="link" onClick={() => navigate('/signup')} className="landing-signup-link">회원가입</Button>
                       </div>
                     </Form>
                   </>

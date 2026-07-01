@@ -17,11 +17,13 @@ Kite Frontend is a practical VM and Kubernetes management console. The UI should
 - Error: `#C86B6B`
 
 ## Shape
-- Border radius is `0px` across buttons, inputs, cards, drawers, modals, and tables.
-- Shadows are only used for elevated surfaces such as cards, tables, dropdowns, drawers, and modals.
+- Border radius is `0px` across buttons, cards, drawers, modals, tables, and outer landing panels.
+- Landing authentication controls may use an `8px` radius when the page is acting as a branded first impression rather than a dense workspace.
+- Shadows are only used for elevated surfaces such as cards, tables, dropdowns, drawers, modals, and landing panels. Landing panel shadows should be soft and even on all sides.
 
 ## Typography
-- Primary font stack: `Pretendard Variable`, Pretendard, system UI, Roboto, sans-serif.
+- Primary font stack: system UI fonts first, then Korean platform fonts: `-apple-system`, `BlinkMacSystemFont`, `Segoe UI`, `system-ui`, `Apple SD Gothic Neo`, `Malgun Gothic`, `Noto Sans KR`, `Roboto`, sans-serif.
+- Landing display headings may use common serif fonts: `Georgia`, `Times New Roman`, serif.
 - Numeric dashboard values use tabular figures where possible.
 - Korean and English labels should stay readable without forcing single-line overflow in narrow layouts.
 

@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { SEO } from '../components/SEO';
-import { vmApi } from '../api';
+import { configApi, vmApi } from '../api';
 import { App as AntdApp, Layout, Typography, Space, Tag, Breadcrumb, Card, Tabs, Button, Descriptions, Popconfirm, Spin, Avatar, Alert } from 'antd';
 import { useParams, useNavigate } from 'react-router-dom';
 import { PoweroffOutlined, DeleteOutlined, CodeOutlined, DesktopOutlined, SafetyCertificateOutlined, ArrowLeftOutlined, CaretRightOutlined, CopyOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../store/useAuthStore';
 import { useLogout } from '../hooks/useLogout';
 import { GlobalHeader } from '../components/GlobalHeader';
-import { MOCK_ENV } from '../config/mockEnv';
 
 const { Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
@@ -31,14 +30,19 @@ export const VmDetail: React.FC = () => {
   const logout = useLogout();
   const safeAccessLevel = accessLevel ?? 1;
   const [vm, setVm] = useState<VM | null>(null);
+  const [baseDomain, setBaseDomain] = useState('');
   const [loading, setLoading] = useState(true);
 
   const fetchVmDetail = useCallback(async () => {
     if (!vmName) return;
     try {
       setLoading(true);
-      const data = await vmApi.getVm(vmName);
-      setVm(data.vm);
+      const [vmData, configData] = await Promise.all([
+        vmApi.getVm(vmName),
+        configApi.getConfig().catch(() => null),
+      ]);
+      setVm(vmData.vm);
+      setBaseDomain(configData?.config?.baseDomain || '');
     } catch {
       message.error('VM 정보를 불러오지 못했습니다.');
       navigate('/dashboard');
@@ -77,7 +81,12 @@ export const VmDetail: React.FC = () => {
 
   const copySSHCommand = async () => {
     if (!vm) return;
-    await navigator.clipboard.writeText(`ssh ${vm.sshId}@${MOCK_ENV.BASE_DOMAIN}`);
+    const connectionHost = baseDomain.trim();
+    if (!connectionHost) {
+      message.warning('접속 도메인 설정을 불러온 뒤 다시 복사하세요.');
+      return;
+    }
+    await navigator.clipboard.writeText(`ssh ${vm.sshId}@${connectionHost}`);
     message.success('SSH 명령어를 복사했습니다.');
   };
 
@@ -105,6 +114,8 @@ export const VmDetail: React.FC = () => {
   }
 
   if (!vm) return null;
+  const connectionHost = baseDomain.trim();
+  const displayedHost = connectionHost || '<base-domain>';
 
   return (
     <Layout style={{ minHeight: '100vh', backgroundColor: '#F9F8F6' }}>
@@ -190,6 +201,15 @@ export const VmDetail: React.FC = () => {
                 <Card hoverable style={{ marginTop: 16 }}>
                   <Title level={4}>SSH 접속 방법</Title>
                   <Paragraph>Kite가 설치된 서버에 VM 생성 시 입력한 계정으로 접속합니다.</Paragraph>
+                  {!connectionHost && (
+                    <Alert
+                      title="베이스 도메인 설정 필요"
+                      description="관리자 설정의 baseDomain을 불러오지 못했거나 아직 설정되지 않았습니다. 도메인 설정 후 다시 SSH 안내를 확인하세요."
+                      type="warning"
+                      showIcon
+                      style={{ marginBottom: 24 }}
+                    />
+                  )}
                   {vm.phase !== 'Running' && (
                     <Alert
                       title="VM이 실행 중이 아닙니다."
@@ -206,7 +226,7 @@ export const VmDetail: React.FC = () => {
                       <Button icon={<CopyOutlined />} onClick={copySSHCommand}>Copy</Button>
                     </div>
                     <div style={{ marginTop: '8px', fontFamily: 'monospace', background: '#2d2d2d', color: '#fff', padding: '12px', borderRadius: 0 }}>
-                      ssh {vm.sshId}@{MOCK_ENV.BASE_DOMAIN}
+                      ssh {vm.sshId}@{displayedHost}
                     </div>
                   </div>
                 </Card>

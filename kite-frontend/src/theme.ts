@@ -13,7 +13,7 @@ export const kiteTheme: ThemeConfig = {
     colorWarning: '#D4A373',
     colorError: '#C86B6B',
     borderRadius: 0,
-    fontFamily: "'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif",
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', Roboto, sans-serif",
     boxShadow: '0 4px 16px rgba(44, 37, 31, 0.06)',
     boxShadowSecondary: '0 12px 32px rgba(44, 37, 31, 0.10)',
     controlHeight: 44,

@@ -75,6 +75,9 @@ func TestLoginIssuesAccessToken(t *testing.T) {
 	if cookie.SameSite != http.SameSiteLaxMode {
 		t.Fatalf("expected SameSite=Lax, got %v", cookie.SameSite)
 	}
+	if cookie.MaxAge != int(time.Hour.Seconds()) {
+		t.Fatalf("expected HTTPS cookie Max-Age=3600, got %d", cookie.MaxAge)
+	}
 
 	claims, err := newTestTokenService(t).VerifyAccessToken(cookie.Value)
 	if err != nil {
@@ -129,6 +132,9 @@ func TestLoginOmitsSecureCookieOnPlainHTTP(t *testing.T) {
 	if cookies[0].Secure {
 		t.Fatal("plain HTTP dev and QA requests must receive a storable non-Secure cookie")
 	}
+	if cookies[0].MaxAge != int((10 * time.Minute).Seconds()) {
+		t.Fatalf("expected plain HTTP cookie Max-Age=600, got %d", cookies[0].MaxAge)
+	}
 }
 
 // TestLoginUsesSecureCookieWhenForceHTTPSIsEnabled verifies runtime policy enforcement.
@@ -157,6 +163,9 @@ func TestLoginUsesSecureCookieWhenForceHTTPSIsEnabled(t *testing.T) {
 	}
 	if !cookies[0].Secure {
 		t.Fatal("forceHttps=true must issue Secure accessToken cookies")
+	}
+	if cookies[0].MaxAge != int(time.Hour.Seconds()) {
+		t.Fatalf("forceHttps=true must issue one-hour accessToken cookies, got %d", cookies[0].MaxAge)
 	}
 }
 

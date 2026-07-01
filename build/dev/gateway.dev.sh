@@ -1,5 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# ==============================================================================
+# Script: build/dev/gateway.dev.sh
+# Description: gateway만 로컬 빌드 후 재배포하도록 component.dev.sh에 위임한다.
+#
+# Usage:
+#   build/dev/gateway.dev.sh
+#
+# Environment Variables:
+#   없음: 이 wrapper는 인자와 하위 스크립트의 환경변수를 그대로 전달한다.
+#
+# Side Effects:
+#   Kubernetes 리소스 적용, 컨테이너 이미지 빌드/주입, rollout 대기를 수행할 수 있다.
+# ==============================================================================
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# gateway만 로컬 빌드/재배포하도록 공용 component.dev.sh에 컴포넌트 이름을 넘긴다.
 exec "${SCRIPT_DIR}/component.dev.sh" gateway "$@"

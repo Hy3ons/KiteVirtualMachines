@@ -11,7 +11,7 @@ export const GlobalFooter: React.FC = () => (
         <img src="/favicon.png" alt="Kite Logo" className="global-footer-logo" />
         <div>
           <Text strong className="global-footer-title">Kite</Text>
-          <Text className="global-footer-subtitle">OpenSource Private Cloud</Text>
+          <Text className="global-footer-subtitle">Opensource Private Cloud</Text>
         </div>
       </div>
 
