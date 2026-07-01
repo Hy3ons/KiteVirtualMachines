@@ -10,6 +10,7 @@ import { VmDetail } from './pages/VmDetail';
 import { VmConsolePage } from './pages/VmConsolePage';
 import { AdminSettings } from './pages/AdminSettings';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { KiteDocsPage } from './pages/KiteDocsPage';
 import { DEBUG_DIRECT_ROUTES_ENABLED } from './config/debug';
 import { GlobalFooter } from './components/GlobalFooter';
 
@@ -40,6 +41,7 @@ function App() {
           <Routes>
             {/* 랜딩 겸 로그인 페이지 */}
             <Route path="/" element={<LandingPage />} />
+            <Route path="/kite-docs" element={<KiteDocsPage />} />
             <Route path="/signup" element={<SignupPage />} />
             <Route path="/login" element={<Navigate to="/" replace />} />
 
