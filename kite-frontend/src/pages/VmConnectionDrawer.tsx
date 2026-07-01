@@ -27,7 +27,7 @@ export const VmConnectionDrawer: React.FC<VmConnectionDrawerProps> = ({ open, vm
         <div className="drawer-stack">
           <Alert
             title="SSH 접속 안내"
-            description="VM 생성 시 입력한 SSH User ID와 SSH Password로 Kite 서버에 접속하면 kite-gateway가 해당 VM SSH 서비스로 연결합니다."
+            description="SSH 명령은 VM에 직접 비밀번호 로그인하지 않습니다. VM 생성 시 입력한 ID와 초기 비밀번호로 Kite gateway에 로그인하면, gateway가 Kite 관리 키로 해당 VM에 연결합니다."
             type="info"
             showIcon
           />
@@ -43,7 +43,7 @@ export const VmConnectionDrawer: React.FC<VmConnectionDrawerProps> = ({ open, vm
 
           <div>
             <Title level={5}>방법 1. 한 줄 명령어로 바로 접속하기</Title>
-            <Paragraph>Kite gateway 도메인으로 접속합니다.</Paragraph>
+            <Paragraph>Kite gateway 도메인으로 접속합니다. 비밀번호 프롬프트에는 VM 생성 시 입력한 초기 비밀번호를 사용합니다.</Paragraph>
             <pre className="code-block">
               <code>ssh {vm.sshId}@{displayedHost}</code>
             </pre>

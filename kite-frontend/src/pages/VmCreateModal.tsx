@@ -69,7 +69,12 @@ export const VmCreateModal: React.FC<VmCreateModalProps> = ({
         <Input placeholder="ubuntu" />
       </Form.Item>
 
-      <Form.Item name="sshPassword" label="SSH Password" rules={[{ required: true, message: '비밀번호를 입력하세요.' }]}>
+      <Form.Item
+        name="sshPassword"
+        label="Initial Login Password"
+        extra="VM 생성 시 한 번 설정됩니다. SSH gateway 로그인과 웹 콘솔 OS 로그인에 함께 사용되며, Kite에서 변경하거나 복구할 수 없습니다."
+        rules={[{ required: true, message: '초기 로그인 비밀번호를 입력하세요.' }]}
+      >
         <Input.Password placeholder="Strong password" />
       </Form.Item>
 

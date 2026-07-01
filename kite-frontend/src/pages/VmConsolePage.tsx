@@ -108,7 +108,7 @@ export const VmConsolePage: React.FC = () => {
               </div>
 
               <Paragraph type="secondary" className="console-copy">
-                Serial console은 VM의 ttyS0에 직접 연결됩니다. 입력 내용은 실제 가상머신으로 전달됩니다.
+                Serial console은 VM 내부 OS의 ttyS0에 직접 연결됩니다. VM 생성 시 입력한 SSH ID와 초기 비밀번호로 로그인하며, 이 비밀번호는 Kite에서 변경하거나 복구할 수 없습니다.
               </Paragraph>
 
               <Descriptions column={1} size="small" bordered>

@@ -2,6 +2,8 @@ package vm
 
 import (
 	"context"
+	"encoding/base64"
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -9,10 +11,13 @@ import (
 	"github.com/google/uuid"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 
 	"kite/internal/auth"
+	"kite/internal/guestlogin"
 	"kite/internal/store"
 )
 
@@ -24,17 +29,25 @@ const (
 )
 
 const (
-	defaultCPU        = 2
-	defaultMemory     = "4Gi"
-	defaultImage      = "ubuntu-22.04"
-	defaultPowerState = "Off"
-	minDiskSize       = "20Gi"
-	maxSSHPasswordLen = 128
+	defaultCPU                 = 2
+	defaultMemory              = "4Gi"
+	defaultImage               = "ubuntu-22.04"
+	defaultPowerState          = "Off"
+	minDiskSize                = "20Gi"
+	maxSSHPasswordLen          = 128
+	kiteSecretTypeLabel        = "hy3ons.github.io/secret-type"
+	kiteVMGuestLoginSecretType = "kite-vm-guest-login"
 )
 
 var minimumDiskQuantity = resource.MustParse(minDiskSize)
 
 var sshIDPattern = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
+
+var secretGVR = schema.GroupVersionResource{
+	Group:    "",
+	Version:  "v1",
+	Resource: "secrets",
+}
 
 // RequestError describes a VM request error that is safe to return through HTTP.
 // Kind separates validation errors from unexpected Kubernetes failures.
@@ -108,8 +121,9 @@ type VirtualMachine struct {
 // vmStore reads and writes namespaced KiteVirtualMachine resources.
 // This service is used by kite-api VM handlers before kite-controller reconciles real resources.
 type Service struct {
-	vmStore      *store.VirtualMachineStore
-	passwordSalt string
+	vmStore       *store.VirtualMachineStore
+	dynamicClient dynamic.Interface
+	passwordSalt  string
 }
 
 // NewService creates a VM service backed by a dynamic Kubernetes client.
@@ -118,8 +132,9 @@ type Service struct {
 // The returned service is request-scoped by API handlers.
 func NewService(dynamicClient dynamic.Interface, passwordSalt string) *Service {
 	return &Service{
-		vmStore:      store.NewVirtualMachineStore(dynamicClient),
-		passwordSalt: passwordSalt,
+		vmStore:       store.NewVirtualMachineStore(dynamicClient),
+		dynamicClient: dynamicClient,
+		passwordSalt:  passwordSalt,
 	}
 }
 
@@ -139,9 +154,19 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (VirtualMachine
 	if err := s.ensureUniqueSSHID(ctx, record.Spec.SSHID, "", ""); err != nil {
 		return VirtualMachine{}, err
 	}
+	guestPasswordHash, err := guestlogin.GeneratePasswordHash(req.SSHPassword)
+	if err != nil {
+		return VirtualMachine{}, err
+	}
 
 	created, err := s.vmStore.Create(ctx, record)
 	if err != nil {
+		return VirtualMachine{}, err
+	}
+	if err := s.createGuestLoginSecret(ctx, record, guestPasswordHash); err != nil {
+		if cleanupErr := s.vmStore.Delete(ctx, record.Namespace, record.Name); cleanupErr != nil && !apierrors.IsNotFound(cleanupErr) {
+			return VirtualMachine{}, fmt.Errorf("%w; failed to roll back virtual machine after guest login Secret error: %v", err, cleanupErr)
+		}
 		return VirtualMachine{}, err
 	}
 
@@ -206,9 +231,6 @@ func (s *Service) Update(ctx context.Context, namespace string, name string, req
 
 	if err := applyUpdate(&record, req); err != nil {
 		return VirtualMachine{}, err
-	}
-	if req.SSHPassword != nil {
-		record.Spec.SSHPasswordHash = auth.HashPassword(*req.SSHPassword, s.passwordSalt)
 	}
 	if req.SSHID != nil {
 		if err := s.ensureUniqueSSHID(ctx, record.Spec.SSHID, namespace, name); err != nil {
@@ -388,9 +410,7 @@ func applyUpdate(record *store.KiteVirtualMachineRecord, req UpdateRequest) erro
 		}
 	}
 	if req.SSHPassword != nil {
-		if err := validateSSHPassword(*req.SSHPassword); err != nil {
-			return err
-		}
+		return invalid("sshPassword cannot be changed after VM creation")
 	}
 	if req.PowerState != nil {
 		powerState := strings.TrimSpace(*req.PowerState)
@@ -420,6 +440,46 @@ func validateDisk(disk string) error {
 	}
 
 	return nil
+}
+
+// createGuestLoginSecret writes the Linux OS password hash for one VM.
+// ctx controls the Kubernetes Secret create request.
+// record identifies the owning KiteVirtualMachine and namespace.
+// guestPasswordHash is the SHA-512 crypt hash rendered into cloud-init by kite-controller.
+// This function is used by the VM create flow after the CRD has been created.
+func (s *Service) createGuestLoginSecret(ctx context.Context, record store.KiteVirtualMachineRecord, guestPasswordHash string) error {
+	secret := newGuestLoginSecret(record, guestPasswordHash)
+	if _, err := s.dynamicClient.Resource(secretGVR).Namespace(record.Namespace).Create(ctx, secret, metav1.CreateOptions{}); err != nil {
+		return fmt.Errorf("failed to create guest login Secret %s/%s: %w", record.Namespace, guestlogin.SecretName(record.Name), err)
+	}
+	return nil
+}
+
+// newGuestLoginSecret creates the Kubernetes Secret that stores the guest OS password hash.
+// record identifies the KiteVirtualMachine that owns this Secret.
+// guestPasswordHash is base64 encoded into Secret.data so tests and the controller see the same shape as Kubernetes.
+// The returned object is written by kite-api and later read by kite-controller during cloud-init rendering.
+func newGuestLoginSecret(record store.KiteVirtualMachineRecord, guestPasswordHash string) *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]any{
+			"apiVersion": "v1",
+			"kind":       "Secret",
+			"metadata": map[string]any{
+				"name":      guestlogin.SecretName(record.Name),
+				"namespace": record.Namespace,
+				"labels": map[string]any{
+					"hy3ons.github.io/managed-by":        "kite-controller",
+					kiteSecretTypeLabel:                  kiteVMGuestLoginSecretType,
+					"hy3ons.github.io/kite-vm-name":      record.Name,
+					"hy3ons.github.io/kite-vm-namespace": record.Namespace,
+				},
+			},
+			"type": "Opaque",
+			"data": map[string]any{
+				guestlogin.PasswordHashKey: base64.StdEncoding.EncodeToString([]byte(guestPasswordHash)),
+			},
+		},
+	}
 }
 
 // validateSSHPassword rejects unsafe or likely mistaken gateway SSH passwords.

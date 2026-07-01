@@ -21,7 +21,7 @@ stringData:
     hostname: {{ .VmName }}
     disable_root: false
     ssh_deletekeys: false
-    ssh_pwauth: true
+    ssh_pwauth: false
     ssh_authorized_keys:
       - {{ .SSHPublicKey }}
     users:
@@ -30,6 +30,7 @@ stringData:
         groups: [adm, sudo]
         shell: /bin/bash
         lock_passwd: false
+        hashed_passwd: '{{ .GuestPasswordHash }}'
         sudo: ["ALL=(ALL) NOPASSWD:ALL"]
         ssh_authorized_keys:
           - {{ .SSHPublicKey }}

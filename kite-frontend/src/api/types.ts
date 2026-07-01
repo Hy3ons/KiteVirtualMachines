@@ -93,7 +93,6 @@ export type CreateVmPayload = {
 
 export type UpdateVmPayload = {
   readonly domainPrefix?: string;
-  readonly sshPassword?: string;
   readonly powerState?: 'On' | 'Off';
 };
 

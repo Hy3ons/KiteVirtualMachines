@@ -2,6 +2,7 @@ package apps
 
 import (
 	"context"
+	"encoding/base64"
 	"testing"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -10,6 +11,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic/fake"
+
+	"kite/internal/guestlogin"
 )
 
 // TestReconcileKiteVirtualMachineDeleteIntentDeletesKubeVirtFirst verifies delete intent cleanup order.
@@ -106,6 +109,7 @@ func TestReconcileKiteVirtualMachineFailsClearlyWhenDataVolumeAPIMissing(t *test
 	name := "vm-a"
 	client := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), machineReconcileListKinds(),
 		newMachineReconcileKiteVirtualMachineSpec(namespace, name),
+		newMachineReconcileGuestLoginSecret(namespace, name, "$6$rounds=500000$salt$hash"),
 	)
 
 	err := ReconcileKiteVirtualMachine(ctx, client, newMachineReconcileKiteVirtualMachineSpec(namespace, name))
@@ -353,12 +357,12 @@ func newMachineReconcileKiteVirtualMachineSpec(namespace string, name string) *u
 				"generation": int64(1),
 			},
 			"spec": map[string]any{
-				"cpu":         int64(2),
-				"memory":      "4Gi",
-				"image":       "ubuntu-22.04",
-				"disk":        "25Gi",
-				"powerState":  "Off",
-				"sshId":       "ubuntu",
+				"cpu":             int64(2),
+				"memory":          "4Gi",
+				"image":           "ubuntu-22.04",
+				"disk":            "25Gi",
+				"powerState":      "Off",
+				"sshId":           "ubuntu",
 				"sshPasswordHash": "hashed-password",
 			},
 		},
@@ -401,6 +405,28 @@ func newMachineReconcileDataVolume(namespace string, name string, labels map[str
 			"apiVersion": "cdi.kubevirt.io/v1beta1",
 			"kind":       "DataVolume",
 			"metadata":   metadata,
+		},
+	}
+}
+
+// newMachineReconcileGuestLoginSecret creates a guest login Secret test fixture.
+// namespace is metadata.namespace for the Secret.
+// name is the owning KiteVirtualMachine name used to derive the Secret name and labels.
+// passwordHash is the Linux crypt hash that controller code reads for cloud-init.
+// The returned object is used by VM reconcile tests that need to pass guest login setup.
+func newMachineReconcileGuestLoginSecret(namespace string, name string, passwordHash string) *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]any{
+			"apiVersion": "v1",
+			"kind":       "Secret",
+			"metadata": map[string]any{
+				"name":      guestlogin.SecretName(name),
+				"namespace": namespace,
+				"labels":    kiteOwnerLabels(namespace, name),
+			},
+			"data": map[string]any{
+				guestlogin.PasswordHashKey: base64.StdEncoding.EncodeToString([]byte(passwordHash)),
+			},
 		},
 	}
 }
