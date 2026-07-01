@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { SEO } from '../components/SEO';
 import { authApi } from '../api';
 import { App as AntdApp, Row, Col, Form, Input, Button, Typography, Layout, Space, Tag } from 'antd';
-import { UserOutlined, LockOutlined, CloudServerOutlined, SecurityScanOutlined, BuildOutlined, GithubOutlined, DashboardOutlined } from '@ant-design/icons';
+import { UserOutlined, LockOutlined, CloudServerOutlined, SecurityScanOutlined, BuildOutlined, GithubOutlined, DashboardOutlined, BookOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../store/useAuthStore';
 import { useLogout } from '../hooks/useLogout';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -103,15 +103,25 @@ export const LandingPage: React.FC = () => {
                   </div>
                 </div>
 
-                <Button
-                  size="large"
-                  icon={<GithubOutlined />}
-                  href="https://github.com/Hy3ons/KiteVirtualMachines"
-                  target="_blank"
-                  className="landing-secondary-action"
-                >
-                  Repository
-                </Button>
+                <Space size={12} wrap className="landing-hero-actions">
+                  <Button
+                    size="large"
+                    icon={<BookOutlined />}
+                    onClick={() => navigate('/kite-docs')}
+                    className="landing-secondary-action landing-docs-action"
+                  >
+                    Kite Docs
+                  </Button>
+                  <Button
+                    size="large"
+                    icon={<GithubOutlined />}
+                    href="https://github.com/Hy3ons/KiteVirtualMachines"
+                    target="_blank"
+                    className="landing-secondary-action"
+                  >
+                    Repository
+                  </Button>
+                </Space>
               </section>
             </Col>
 

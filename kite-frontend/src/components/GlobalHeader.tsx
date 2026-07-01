@@ -1,6 +1,6 @@
 import React from 'react';
 import { Layout, Space, Button } from 'antd';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { GithubOutlined, BookOutlined } from '@ant-design/icons';
 
 const { Header } = Layout;
@@ -28,9 +28,10 @@ export const GlobalHeader: React.FC<GlobalHeaderProps> = ({ rightContent }) => {
           <Button type="link" icon={<GithubOutlined />} href="https://github.com/Hy3ons/KiteVirtualMachines" target="_blank" style={{ color: '#8B7355' }}>
             Repository
           </Button>
-          <Button type="link" icon={<BookOutlined />} href="https://kubernetes.io/docs/home/" target="_blank" style={{ color: '#8B7355' }}>
-            K8s Docs
-          </Button>
+          <Link to="/kite-docs" className="global-header-docs-link">
+            <BookOutlined />
+            Kite Docs
+          </Link>
         </Space>
         <div className="global-header-session">{rightContent}</div>
       </Space>

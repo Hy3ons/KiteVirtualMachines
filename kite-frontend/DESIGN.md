@@ -38,6 +38,7 @@ Kite Frontend is a practical VM and Kubernetes management console. The UI should
 - Dashboard cards: flat rectangular surfaces with light border and minimal shadow.
 - Tables: constrained columns, ellipsis for long identifiers, horizontal scroll for operational data.
 - Forms: vertical labels, 44px controls, full-width inputs in modals and settings pages.
+- Documentation pages: full-width operational sections with compact cards, clear policy tables, and no nested cards. Use the same neutral surfaces and brown accent ramp as dashboards.
 
 ## States
 - Loading, empty, and failure states use AntD primitives styled through the theme.
