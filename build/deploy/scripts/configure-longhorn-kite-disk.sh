@@ -130,10 +130,10 @@ tag_existing_longhorn_disks() {
   local next_tags
 
   # go-template로 spec/status를 한 번에 뽑아 patch 가능한 디스크만 골라낸다.
-  disks="$(kubectl -n longhorn-system get "nodes.longhorn.io/${node}" -o 'go-template={{ range $name, $disk := .spec.disks }}{{ $status := index $.status.diskStatus $name }}{{ $name }}|{{ $disk.allowScheduling }}|{{ if $status }}{{ range $status.conditions }}{{ if eq .type "Ready" }}{{ .status }}{{ end }}{{ end }}{{ end }}|{{ if $status }}{{ range $status.conditions }}{{ if eq .type "Schedulable" }}{{ .status }}{{ end }}{{ end }}{{ end }}|{{ range $disk.tags }}{{ . }} {{ end }}{{ "\n" }}{{ end }}')"
+  disks="$(kubectl -n longhorn-system get "nodes.longhorn.io/${node}" -o 'go-template={{ range $name, $disk := .spec.disks }}{{ $name }}|{{ $disk.allowScheduling }}|{{ if $.status.diskStatus }}{{ $status := index $.status.diskStatus $name }}{{ if $status }}{{ range $status.conditions }}{{ if eq .type "Ready" }}{{ .status }}{{ end }}{{ end }}{{ end }}{{ end }}|{{ if $.status.diskStatus }}{{ $status := index $.status.diskStatus $name }}{{ if $status }}{{ range $status.conditions }}{{ if eq .type "Schedulable" }}{{ .status }}{{ end }}{{ end }}{{ end }}{{ end }}|{{ range $disk.tags }}{{ . }} {{ end }}{{ "\n" }}{{ end }}')"
   if [[ -z "${disks}" ]]; then
-    echo "[kite-deploy] no Longhorn disks found on node/${node}" >&2
-    return 1
+    log "no Longhorn disks found on node/${node}; waiting for Longhorn to report a Ready disk"
+    return
   fi
 
   log "tagging existing Ready Longhorn disks on node/${node} with ${KITE_LONGHORN_DISK_TAG}"
@@ -151,6 +151,70 @@ tag_existing_longhorn_disks() {
     next_tags="$(printf '%s\n%s\n' "${tags}" "${KITE_LONGHORN_DISK_TAG}" | xargs -n 1 | awk 'NF && !seen[$0]++ { printf "%s\"%s\"", sep, $0; sep=", " }')"
     kubectl -n longhorn-system patch "nodes.longhorn.io/${node}" --type=json -p "[{\"op\":\"replace\",\"path\":\"/spec/disks/${disk}/tags\",\"value\":[${next_tags}]}]"
   done <<< "${disks}"
+}
+
+longhorn_disk_status_lines() {
+  kubectl -n longhorn-system get nodes.longhorn.io -o 'go-template={{ range $node := .items }}{{ range $name, $disk := $node.spec.disks }}{{ $node.metadata.name }}|{{ $name }}|{{ $disk.allowScheduling }}|{{ if $node.status.diskStatus }}{{ $status := index $node.status.diskStatus $name }}{{ if $status }}{{ range $status.conditions }}{{ if eq .type "Ready" }}{{ .status }}{{ end }}{{ end }}{{ end }}{{ end }}|{{ if $node.status.diskStatus }}{{ $status := index $node.status.diskStatus $name }}{{ if $status }}{{ range $status.conditions }}{{ if eq .type "Schedulable" }}{{ .status }}{{ end }}{{ end }}{{ end }}{{ end }}|{{ range $disk.tags }}{{ . }} {{ end }}|{{ if $node.status.diskStatus }}{{ $status := index $node.status.diskStatus $name }}{{ if $status }}{{ range $status.conditions }}{{ if ne .status "True" }}{{ .type }}={{ .status }}:{{ .reason }}:{{ .message }}; {{ end }}{{ end }}{{ end }}{{ end }}{{ "\n" }}{{ end }}{{ end }}'
+}
+
+ready_kite_disk_count() {
+  local node
+  local disk
+  local allow_scheduling
+  local ready
+  local schedulable
+  local tags
+  local diagnostics
+  local count=0
+
+  while IFS="|" read -r node disk allow_scheduling ready schedulable tags diagnostics; do
+    [[ -z "${node}" || -z "${disk}" ]] && continue
+    if [[ "${KITE_LONGHORN_USE_DEDICATED_DISK}" == "true" && "${disk}" != "${KITE_LONGHORN_DISK_NAME}" ]]; then
+      continue
+    fi
+    if [[ " ${tags} " != *" ${KITE_LONGHORN_DISK_TAG} "* ]]; then
+      continue
+    fi
+    if [[ "${allow_scheduling}" == "true" && "${ready}" == "True" && "${schedulable}" == "True" ]]; then
+      count=$((count + 1))
+    fi
+  done < <(longhorn_disk_status_lines)
+
+  printf '%s\n' "${count}"
+}
+
+wait_for_ready_kite_disk() {
+  local deadline
+  local count
+  local node
+  local disk
+  local allow_scheduling
+  local ready
+  local schedulable
+  local tags
+  local diagnostics
+
+  deadline=$((SECONDS + TIMEOUT_SECONDS))
+  while true; do
+    count="$(ready_kite_disk_count)"
+    if [[ "${count}" != "0" ]]; then
+      log "found ${count} Ready/Schedulable Longhorn disk(s) tagged ${KITE_LONGHORN_DISK_TAG}"
+      return
+    fi
+
+    if (( SECONDS >= deadline )); then
+      warn "no Ready/Schedulable Longhorn disk tagged ${KITE_LONGHORN_DISK_TAG} after ${TIMEOUT_SECONDS}s"
+      warn "Kite VM disks use StorageClass diskSelector=${KITE_LONGHORN_DISK_TAG}; fix Longhorn disk readiness before importing the golden image"
+      while IFS="|" read -r node disk allow_scheduling ready schedulable tags diagnostics; do
+        [[ -z "${node}" || -z "${disk}" ]] && continue
+        warn "Longhorn disk node=${node} disk=${disk} allowScheduling=${allow_scheduling} ready=${ready:-unknown} schedulable=${schedulable:-unknown} tags='${tags}' diagnostics='${diagnostics}'"
+      done < <(longhorn_disk_status_lines)
+      return 1
+    fi
+
+    log "waiting for a Ready/Schedulable Longhorn disk tagged ${KITE_LONGHORN_DISK_TAG}"
+    sleep "${PATCH_RETRY_INTERVAL_SECONDS}"
+  done
 }
 
 # 모든 Kubernetes node에 대해 전용 디스크 생성 또는 기존 디스크 tag 부여를 수행한다.
@@ -178,6 +242,8 @@ main() {
           tag_existing_longhorn_disks "${node}"
         fi
       done
+
+  wait_for_ready_kite_disk
 }
 
 main "$@"

@@ -142,6 +142,13 @@ and the golden image using the existing deployment helpers. Default: `true`.
 When `true`, dependency setup may allow gateway host sshd handoff. Default:
 `false` because remote server access can be affected.
 
+`TEST_GATEWAY_HOST_KEY_SOURCE`
+
+How the general cluster E2E scripts create the `kite-gateway` SSH host key
+Secret. Default: `generate`, which avoids reading `/etc/ssh` from the host and
+keeps noninteractive test runs free of sudo prompts. Use `host` only when the
+test must verify host key reuse.
+
 `./test/all-test-k3s-ssh-handoff.sh`
 
 This is the dangerous SSH acceptance gate for k3s hosts. It intentionally
