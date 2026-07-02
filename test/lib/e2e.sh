@@ -332,6 +332,17 @@ images:
 
 patches:
   - target:
+      version: v1
+      kind: Service
+      name: kite-gateway
+    patch: |-
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: kite-gateway
+      spec:
+        type: ClusterIP
+  - target:
       group: apps
       version: v1
       kind: Deployment
@@ -578,15 +589,35 @@ create_test_vm() {
 
 verify_vm_reconcile() {
   log "checking VM-owned resources"
-  kubectl -n "${TEST_USER_NAMESPACE}" get "datavolumes.cdi.kubevirt.io/${TEST_VM_NAME}-disk" >/dev/null
-  kubectl -n "${TEST_USER_NAMESPACE}" get "virtualmachines.kubevirt.io/${TEST_VM_NAME}" >/dev/null
-  kubectl -n "${TEST_USER_NAMESPACE}" get "secret/${TEST_VM_NAME}-guest-login" >/dev/null
-  kubectl -n "${TEST_USER_NAMESPACE}" get "secret/${TEST_VM_NAME}-ssh-key" >/dev/null
-  kubectl -n "${TEST_USER_NAMESPACE}" get "secret/${TEST_VM_NAME}-cloud-init-userdata" >/dev/null
-  kubectl -n "${TEST_USER_NAMESPACE}" get "service/vps-access-${TEST_VM_NAME}" >/dev/null
-  kubectl -n "${TEST_USER_NAMESPACE}" get "service/vps-web-${TEST_VM_NAME}" >/dev/null
+  wait_for_resource "datavolumes.cdi.kubevirt.io/${TEST_VM_NAME}-disk" "${TEST_USER_NAMESPACE}"
+  wait_for_resource "virtualmachines.kubevirt.io/${TEST_VM_NAME}" "${TEST_USER_NAMESPACE}"
+  wait_for_resource "secret/${TEST_VM_NAME}-guest-login" "${TEST_USER_NAMESPACE}"
+  wait_for_resource "secret/${TEST_VM_NAME}-ssh-key" "${TEST_USER_NAMESPACE}"
+  wait_for_resource "secret/${TEST_VM_NAME}-cloud-init-userdata" "${TEST_USER_NAMESPACE}"
+  wait_for_resource "service/vps-access-${TEST_VM_NAME}" "${TEST_USER_NAMESPACE}"
+  wait_for_resource "service/vps-web-${TEST_VM_NAME}" "${TEST_USER_NAMESPACE}"
 
   wait_for_jsonpath "kitevirtualmachines.hy3ons.github.io/${TEST_VM_NAME}" "{.status.phase}" "Running" "${TEST_VM_TIMEOUT}" -n "${TEST_USER_NAMESPACE}"
+}
+
+wait_for_resource() {
+  local resource="$1"
+  local namespace="$2"
+  local timeout_seconds="${3:-180}"
+  local deadline
+
+  log "waiting for ${namespace}/${resource} to exist"
+  deadline=$((SECONDS + timeout_seconds))
+  while true; do
+    if kubectl -n "${namespace}" get "${resource}" >/dev/null 2>&1; then
+      return 0
+    fi
+    if (( SECONDS >= deadline )); then
+      kubectl -n "${namespace}" get "${resource}"
+      return 1
+    fi
+    sleep 2
+  done
 }
 
 wait_for_jsonpath() {
