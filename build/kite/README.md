@@ -33,6 +33,6 @@ The gateway reads `KiteVirtualMachine` CRDs, VM SSH key Secrets, and VM access
 Services through Kubernetes RBAC. It does not create host Linux users.
 
 `build/kite` expects the optional `kite-gateway-host-key` Secret when stable SSH
-host fingerprints are required. `./dev.sh` and `./install.sh` create this Secret
+host fingerprints are required. `./build-install.sh` and `./ghcr-install.sh` create this Secret
 automatically when it is missing. Manual `kubectl apply -k build/kite` still
 starts the gateway with an ephemeral host key if the Secret does not exist.

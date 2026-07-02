@@ -1,6 +1,6 @@
 # Kite Development Install
 
-`dev.sh` builds the Kite API, controller, gateway, and frontend images with
+`build/dev/dev.sh` builds the Kite API, controller, gateway, and frontend images with
 local Docker, then applies the shared `build/kite` manifests to the selected
 cluster.
 
@@ -9,13 +9,18 @@ the Ubuntu golden image before building and deploying Kite from local source, us
 the root wrapper:
 
 ```sh
-KITE_CLUSTER=k3s ./dev.sh
+KITE_CLUSTER=k3s ./build-install.sh
 ```
 
-`./dev.sh` calls `build/dev/all-in-one.sh`, and that script calls
+`./build-install.sh` calls `build/dev/all-in-one.sh`, and that script calls
 `build/dev/dev.sh` after the infrastructure is ready. The Kite API, controller,
 gateway, and frontend are built from local source and deployed as Kubernetes
 workloads.
+
+`./build-install.sh` asks all install choices near the start of the run. If a
+variable is already set in the environment, that value is used without asking.
+Set `KITE_ASSUME_DEFAULTS=true` for automation that should use documented
+defaults.
 
 Each phase can be skipped through environment flags:
 
@@ -25,7 +30,7 @@ INSTALL_KUBEVIRT=false \
 INSTALL_CDI=false \
 APPLY_GOLDEN_IMAGE=false \
 KITE_CLUSTER=k3s \
-./dev.sh
+./build-install.sh
 ```
 
 ```sh
@@ -50,7 +55,7 @@ only when the cluster pulls from a registry:
 PUSH_IMAGES=true IMAGE_REGISTRY=registry.example.com/kite KITE_CLUSTER=k8s build/dev/dev.sh
 ```
 
-The frontend image does not read `.env.*` files. `dev.sh` injects Vite values
+The frontend image does not read `.env.*` files. `build/dev/dev.sh` injects Vite values
 through Docker build args from the current shell session:
 
 ```sh
@@ -65,7 +70,7 @@ Defaults are `production`, `/api/v1`, and `false`.
 ## Component rebuilds
 
 Use the component scripts when only one Kite workload needs to be rebuilt and
-rolled out. They reuse the same image loading rules as `dev.sh`, but only touch
+rolled out. They reuse the same image loading rules as `build/dev/dev.sh`, but only touch
 the selected Deployment and its image.
 
 ```sh
@@ -133,13 +138,13 @@ build/dev/clear-frontend.sh
 Set `CLEAR_IMAGES=false` to keep local Docker and k3s images while deleting only
 the Kubernetes resources.
 
-`./clear.sh` is the root development cleanup wrapper. It always targets the
-local checkout flow under `build/dev`, while `./clean.sh` is reserved for
-pull-based deployment uninstall. When `./clear.sh` runs in a terminal, it asks
+`./build-clear.sh` is the root development cleanup wrapper. It always targets the
+local checkout flow under `build/dev`, while `./uninstall.sh` is reserved for
+pull-based deployment uninstall. When `./build-clear.sh` runs in a terminal, it asks
 which cleanup scope to use with numbered choices.
 
 ```sh
-./clear.sh
+./build-clear.sh
 ```
 
 The default cleanup removes Kite-owned application resources, Kite CRDs,
@@ -151,14 +156,15 @@ The prompt separately asks whether to delete local images, uninstall Longhorn,
 delete Kite Longhorn host data, or restore host sshd back to port 22. Longhorn
 cleanup is disabled by default because it can delete VM disk data. Non-terminal
 automation can still set the existing environment variables directly.
+`KITE_ASSUME_DEFAULTS=true` skips prompts and uses defaults/env values.
 
-Use `./clean.sh` or `build/deploy/scripts/uninstall-kite.sh` when the target is
+Use `./uninstall.sh` or `build/deploy/scripts/uninstall-kite.sh` when the target is
 a pull-based install that should follow the production uninstall path. The
 folder-level map and naming rules are documented in `build/README.md`.
 
 ## Gateway
 
-`dev.sh` also builds and deploys `kite-gateway`. The Service is a
+`build/dev/dev.sh` also builds and deploys `kite-gateway`. The Service is a
 `LoadBalancer` that exposes external SSH on port `22` and forwards it to the
 pod's internal `2222` port.
 
@@ -170,7 +176,7 @@ The current implementation authenticates with `KiteVirtualMachine.spec.sshPasswo
 and proxies to `vps-access-<vmName>.<namespace>.svc.cluster.local:22` with the
 VM SSH key Secret created by `kite-controller`.
 
-`dev.sh` creates `kite-gateway-host-key` automatically when it does not exist.
+`build/dev/dev.sh` creates `kite-gateway-host-key` automatically when it does not exist.
 On Linux hosts it first tries to copy the existing OpenSSH host key from
 `/etc/ssh/ssh_host_ed25519_key`, `ssh_host_ecdsa_key`, or `ssh_host_rsa_key`.
 That keeps the SSH fingerprint consistent when Kite takes over port `22`. If no
@@ -184,13 +190,13 @@ host key, run:
 KITE_GATEWAY_HOST_KEY_REFRESH=true KITE_GATEWAY_HOST_KEY_SOURCE=host KITE_CLUSTER=k3s build/dev/dev.sh
 ```
 
-When the host is Linux with systemd OpenSSH, `dev.sh` asks before moving host
+When the host is Linux with systemd OpenSSH, `build/dev/dev.sh` asks before moving host
 sshd away from port `22`. If host sshd already listens on another global port,
 Kite leaves it there and patches gateway fallback to that detected port. If it
 must move, Kite backs up `/etc/ssh/sshd_config` under `/etc/kite/host-sshd`,
 asks which port host sshd should use, checks that the port is free, and requires
 typing the same port again before restarting the service so the gateway can own
-port `22`. `./clear.sh` asks before restoring that backup. Set
+port `22`. `./build-clear.sh` asks before restoring that backup. Set
 `KITE_MANAGE_HOST_SSHD=true` and `KITE_HOST_SSHD_PORT=<port>` or
 `KITE_RESTORE_HOST_SSHD=true` for non-interactive opt-in, and set
 `MANAGE_HOST_SSHD=false` or `RESTORE_HOST_SSHD=false` to skip these host changes.

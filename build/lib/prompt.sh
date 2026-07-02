@@ -45,7 +45,7 @@ kite_prompt_configure_bool() {
 
   eval "current_value=\"\${${variable_name}:-false}\""
 
-  if [[ -n "${was_set}" || ! kite_prompt_interactive ]]; then
+  if [[ -n "${was_set}" ]] || ! kite_prompt_interactive; then
     return 0
   fi
 
@@ -55,4 +55,38 @@ kite_prompt_configure_bool() {
     printf -v "${variable_name}" '%s' "false"
   fi
   export "${variable_name}"
+}
+
+kite_prompt_value() {
+  local variable_name="$1"
+  local was_set="$2"
+  local prompt="$3"
+  local description="${4:-}"
+  local current_value
+  local answer
+
+  eval "current_value=\"\${${variable_name}:-}\""
+
+  if [[ -n "${was_set}" ]] || ! kite_prompt_interactive; then
+    return 0
+  fi
+
+  printf '%s\n' "${prompt}" >&2
+  if [[ -n "${description}" ]]; then
+    printf '  %s\n' "${description}" >&2
+  fi
+  read -r -p "입력 [기본: ${current_value:-없음}] " answer
+  answer="${answer:-${current_value}}"
+  printf -v "${variable_name}" '%s' "${answer}"
+  export "${variable_name}"
+}
+
+kite_option_source() {
+  local was_set="$1"
+
+  if [[ -n "${was_set}" ]]; then
+    printf 'env'
+  else
+    printf 'default'
+  fi
 }

@@ -23,15 +23,16 @@
 
 목적: 사용자가 저장소 루트에서 기억하기 쉬운 명령만 실행해 설치, 개발 배포, 삭제를 수행한다.
 
-최종 기준: `./install.sh`, `./dev.sh`, `./clean.sh`, `./clear.sh`가 각각 올바른 하위 스크립트로 위임되고, 사용자의 선택 없이 위험 작업을 수행하지 않는다.
+최종 기준: `./ghcr-install.sh`, `./build-install.sh`, `./uninstall.sh`, `./build-clear.sh`가 각각 올바른 하위 스크립트로 위임되고, 사용자의 선택 없이 위험 작업을 수행하지 않는다.
 
 | 소분류 | 테스트해야 하는 것 |
 | --- | --- |
-| `./install.sh` pull 기반 설치 | git checkout이 있는 경우와 curl pipe 실행 모두에서 deploy install 흐름으로 진입하는지 확인한다. |
-| `./dev.sh` 개발 설치 | 로컬 checkout 이미지를 빌드하고 현재 클러스터에 배포하는 dev all-in-one 흐름으로 진입하는지 확인한다. |
-| `./clean.sh` 배포 제거 | pull 기반 배포 제거 경로로 진입하고, git checkout이 없어도 archive download cleanup이 가능한지 확인한다. |
-| `./clear.sh` 개발 제거 | 개발 배포 제거 경로로 진입하고, local image 삭제와 클러스터 리소스 삭제 선택이 분리되는지 확인한다. |
+| `./ghcr-install.sh` pull 기반 설치 | git checkout이 있는 경우와 curl pipe 실행 모두에서 deploy install 흐름으로 진입하는지 확인한다. |
+| `./build-install.sh` 개발 설치 | 로컬 checkout 이미지를 빌드하고 현재 클러스터에 배포하는 dev all-in-one 흐름으로 진입하는지 확인한다. |
+| `./uninstall.sh` 배포 제거 | pull 기반 배포 제거 경로로 진입하고, git checkout이 없어도 archive download cleanup이 가능한지 확인한다. |
+| `./build-clear.sh` 개발 제거 | 개발 배포 제거 경로로 진입하고, local image 삭제와 클러스터 리소스 삭제 선택이 분리되는지 확인한다. |
 | 환경변수 전달 | 루트 wrapper가 하위 스크립트에 사용자가 지정한 환경변수를 손실 없이 전달하는지 확인한다. |
+| prompt-first 정책 | 터미널 실행 시 필요한 질문이 실행 초반에 모두 끝나고, 하위 스크립트 실행 중 같은 질문이 다시 나오지 않는지 확인한다. |
 | interactive prompt | 터미널 실행 시 위험 옵션을 설명하고 묻는지, noninteractive 실행 시 기본값 또는 명시 환경변수만 쓰는지 확인한다. |
 | 실패 전파 | 하위 스크립트 실패가 wrapper 성공으로 숨겨지지 않는지 확인한다. |
 
@@ -174,7 +175,7 @@
 | Host fallback | VM route가 없는 username은 configured host sshd 주소로 password/key 인증을 전달하는지 확인한다. |
 | Fallback priority | host username과 VM sshId가 충돌하면 VM route가 우선되는지 확인한다. |
 | Host key Secret | gateway host key Secret이 없으면 생성되고, 있으면 기본적으로 재사용되는지 확인한다. |
-| Host sshd address env | install/dev/clear/clean 흐름에서 `KITE_GATEWAY_HOST_SSHD_ADDRESS`가 실제 host sshd 포트와 일치하는지 확인한다. |
+| Host sshd address env | `ghcr-install.sh`, `build-install.sh`, `uninstall.sh`, `build-clear.sh` 흐름에서 `KITE_GATEWAY_HOST_SSHD_ADDRESS`가 실제 host sshd 포트와 일치하는지 확인한다. |
 | Timeout | backend VM 또는 host sshd가 응답하지 않을 때 제한 시간 안에 실패하는지 확인한다. |
 | External port handoff | gateway Service가 외부 22번을 받고 host sshd는 선택 포트로 직접 접속 가능한지 확인한다. |
 
@@ -182,7 +183,7 @@
 
 목적: gateway가 22번을 사용해야 할 때 기존 host sshd 접속 경로를 안전하게 이동하고 복원한다.
 
-최종 기준: 설정 변경 전 검증, 사용자 재확인, 포트 점유 방지, sshd restart 검증, rollback, clean 복원이 모두 작동한다.
+최종 기준: 설정 변경 전 검증, 사용자 재확인, 포트 점유 방지, sshd restart 검증, rollback, uninstall/build-clear 복원이 모두 작동한다.
 
 | 소분류 | 테스트해야 하는 것 |
 | --- | --- |
@@ -196,8 +197,8 @@
 | restart rollback | sshd restart 실패 시 이전 config와 state로 되돌리고 gateway fallback을 바꾸지 않는지 확인한다. |
 | listen 확인 | restart 후 선택 포트가 실제 listen 중이 아니면 rollback되는지 확인한다. |
 | socket activation | ssh.socket/sshd.socket이 active이면 자동 handoff를 거부하거나 skip하는지 확인한다. |
-| restore worker | `clean.sh`/`clear.sh`가 gateway 삭제 전에 root 권한 restore worker를 예약하고 완료까지 확인하는지 확인한다. |
-| 복원 결과 | clean 후 host sshd가 22번으로 돌아오고 선택 포트와 `/etc/kite/host-sshd` state가 사라지는지 확인한다. |
+| restore worker | `uninstall.sh`/`build-clear.sh`가 gateway 삭제 전에 root 권한 restore worker를 예약하고 완료까지 확인하는지 확인한다. |
+| 복원 결과 | `uninstall.sh` 또는 `build-clear.sh` 후 host sshd가 22번으로 돌아오고 선택 포트와 `/etc/kite/host-sshd` state가 사라지는지 확인한다. |
 
 ## Frontend
 
@@ -271,14 +272,14 @@
 | KubeVirt install | KubeVirt operator/CR 설치와 Ready 대기가 idempotent하게 동작하는지 확인한다. |
 | CDI install | CDI operator/CR 설치와 Ready 대기가 idempotent하게 동작하는지 확인한다. |
 | all-in-one 순서 | host sshd handoff, storage, KubeVirt, CDI, golden image, app deploy, verify 순서가 지켜지는지 확인한다. |
-| deploy install | GHCR 이미지를 pull하는 install 흐름에서 이미지 태그와 manifest가 production default와 맞는지 확인한다. |
-| dev install | 로컬 build/import 후 같은 manifest가 새 image tag로 배포되는지 확인한다. |
+| `ghcr-install.sh` install | GHCR 이미지를 pull하는 설치 흐름에서 이미지 태그와 manifest가 production default와 맞는지 확인한다. |
+| `build-install.sh` install | 로컬 build/import 후 같은 manifest가 새 image tag로 배포되는지 확인한다. |
 | component deploy | api/controller/gateway/frontend 단일 rebuild가 해당 Deployment만 갱신하고 다른 workload를 깨지 않는지 확인한다. |
 | verify script | storage, dependencies, CRD, workload, golden image 검사가 실제 실패를 성공으로 숨기지 않는지 확인한다. |
 | prompt helper | bool prompt가 기본값, 명시 env, interactive/noninteractive 모드를 일관되게 처리하는지 확인한다. |
 | dry-run | dry-run이 위험 리소스를 바꾸지 않고 실행 계획만 출력하는지 확인한다. |
 
-## Cleanup, Clear, Uninstall
+## Uninstall and Build Clear
 
 목적: 설치된 Kite 리소스를 안전하게 제거하고, 필요하면 host sshd와 Longhorn host data를 복원/정리한다.
 
@@ -286,8 +287,8 @@
 
 | 소분류 | 테스트해야 하는 것 |
 | --- | --- |
-| 기본 clean | Kite namespace, CRD, RBAC, Service, Deployment, StorageClass가 제거되는지 확인한다. |
-| 기본 clear | 개발 배포 리소스와 local image cleanup 선택이 분리되어 동작하는지 확인한다. |
+| 기본 `uninstall.sh` | Kite namespace, CRD, RBAC, Service, Deployment, StorageClass가 제거되는지 확인한다. |
+| 기본 `build-clear.sh` | 개발 배포 리소스와 local image cleanup 선택이 분리되어 동작하는지 확인한다. |
 | Golden image 삭제 | `DELETE_GOLDEN_IMAGE=true`일 때 DataVolume/PVC가 namespace 삭제 전에 제거되는지 확인한다. |
 | User namespace cleanup | 테스트/사용자 namespace와 VM 관련 리소스가 고아로 남지 않는지 확인한다. |
 | Longhorn data skip | Longhorn PV가 남아 있으면 host data cleanup을 건너뛰고 이유를 출력하는지 확인한다. |
@@ -295,8 +296,8 @@
 | Longhorn disk entry 제거 | Kite 전용 disk entry만 제거하고 공유 기본 disk를 통째로 삭제하지 않는지 확인한다. |
 | Longhorn uninstall | `DELETE_LONGHORN=true`와 force 조합별로 Longhorn namespace/CR finalizer 처리가 기대대로 동작하는지 확인한다. |
 | Host sshd restore | gateway 삭제 후 host sshd가 22번으로 돌아오고 restore worker 실패가 숨겨지지 않는지 확인한다. |
-| Idempotent rerun | 이미 삭제된 상태에서 clean/clear를 다시 실행해도 성공하거나 안전하게 skip하는지 확인한다. |
-| Remote cleanup | curl pipe clean이 git checkout 없이 같은 cleanup 정책을 수행하는지 확인한다. |
+| Idempotent rerun | 이미 삭제된 상태에서 `uninstall.sh`/`build-clear.sh`를 다시 실행해도 성공하거나 안전하게 skip하는지 확인한다. |
+| Remote cleanup | curl pipe `uninstall.sh`가 git checkout 없이 같은 cleanup 정책을 수행하는지 확인한다. |
 
 ## Cluster E2E Release Gates
 
@@ -359,7 +360,7 @@
 | 소분류 | 테스트해야 하는 것 |
 | --- | --- |
 | Root README | 아키텍처, install, SSH gateway, cleanup 설명이 실제 스크립트 동작과 일치하는지 확인한다. |
-| build README | dev/clear/install/clean 경계와 wrapper 위임 설명이 실제 경로와 일치하는지 확인한다. |
+| build README | `ghcr-install.sh`, `build-install.sh`, `uninstall.sh`, `build-clear.sh` 경계와 wrapper 위임 설명이 실제 경로와 일치하는지 확인한다. |
 | deploy docs | production install, Longhorn/KubeVirt/CDI, host sshd handoff 설명이 최신 환경변수와 일치하는지 확인한다. |
 | dev docs | component rebuild, local image loading, frontend build arg 설명이 실제 script option과 일치하는지 확인한다. |
 | frontend docs | API spec, design convention, mock 설명이 현재 UI/API 타입과 어긋나지 않는지 확인한다. |
@@ -408,5 +409,5 @@
 | Storage 변경 | Longhorn/CDI wait, golden image import, VM disk clone, cleanup safety 테스트 |
 | Frontend UI 변경 | typecheck/build, route/component E2E, visual QA, backend contract 확인 |
 | Dockerfile/build 변경 | buildx build, local load/push, deployed image tag 확인 |
-| install/clean 변경 | interactive/noninteractive, idempotency, failure propagation, 실제 install-clean roundtrip |
+| install/uninstall 변경 | interactive/noninteractive, idempotency, failure propagation, 실제 install-uninstall roundtrip |
 | docs/example 변경 | 명령 실행 가능성, CRD apply 가능성, 최신 환경변수 일치 확인 |

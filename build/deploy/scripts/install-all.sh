@@ -18,6 +18,8 @@ set -euo pipefail
 #   APPLY_GOLDEN_IMAGE: default true
 #   MANAGE_HOST_SSHD: default true
 #   KITE_HOST_SSHD_PORT: default 2222
+#   KITE_LONGHORN_USE_DEDICATED_DISK: default false
+#   KITE_GATEWAY_HOST_KEY_REFRESH: default false
 #   RUN_VERIFY: default true
 #   KITE_LOG_COLOR: default auto
 #   NO_COLOR: default (unset)
@@ -34,6 +36,9 @@ INSTALL_KUBEVIRT_WAS_SET="${INSTALL_KUBEVIRT+x}"
 INSTALL_CDI_WAS_SET="${INSTALL_CDI+x}"
 APPLY_GOLDEN_IMAGE_WAS_SET="${APPLY_GOLDEN_IMAGE+x}"
 MANAGE_HOST_SSHD_WAS_SET="${MANAGE_HOST_SSHD+x}"
+KITE_HOST_SSHD_PORT_WAS_SET="${KITE_HOST_SSHD_PORT+x}"
+KITE_LONGHORN_USE_DEDICATED_DISK_WAS_SET="${KITE_LONGHORN_USE_DEDICATED_DISK+x}"
+KITE_GATEWAY_HOST_KEY_REFRESH_WAS_SET="${KITE_GATEWAY_HOST_KEY_REFRESH+x}"
 RUN_VERIFY_WAS_SET="${RUN_VERIFY+x}"
 KITE_NAMESPACE="${KITE_NAMESPACE:-kite}"
 INSTALL_LONGHORN="${INSTALL_LONGHORN:-false}"
@@ -45,6 +50,8 @@ APPLY_GOLDEN_IMAGE="${APPLY_GOLDEN_IMAGE:-true}"
 MANAGE_HOST_SSHD="${MANAGE_HOST_SSHD:-true}"
 KITE_HOST_SSHD_PORT="${KITE_HOST_SSHD_PORT:-2222}"
 KITE_HOST_SSHD_STATE="${KITE_HOST_SSHD_STATE:-/etc/kite/host-sshd/state.env}"
+KITE_LONGHORN_USE_DEDICATED_DISK="${KITE_LONGHORN_USE_DEDICATED_DISK:-false}"
+KITE_GATEWAY_HOST_KEY_REFRESH="${KITE_GATEWAY_HOST_KEY_REFRESH:-false}"
 RUN_VERIFY="${RUN_VERIFY:-true}"
 
 # shellcheck source=build/lib/prompt.sh
@@ -127,15 +134,38 @@ configure_interactive_install_options() {
 
   log "interactive install options"
   kite_prompt_configure_bool MANAGE_HOST_SSHD "${MANAGE_HOST_SSHD_WAS_SET}" "Kite gateway가 22번을 쓸 수 있게 host sshd handoff를 확인할까요?"
+  if [[ "${MANAGE_HOST_SSHD}" == "true" ]]; then
+    kite_prompt_value KITE_HOST_SSHD_PORT "${KITE_HOST_SSHD_PORT_WAS_SET}" "KITE_HOST_SSHD_PORT 값을 정합니다." "host sshd가 22번에서 이동할 포트입니다. 실제 적용 전 점유 확인과 재입력 확인을 한 번 더 거칩니다."
+  fi
   kite_prompt_configure_bool INSTALL_LONGHORN "${INSTALL_LONGHORN_WAS_SET}" "Longhorn 기본 manifest를 설치할까요?"
   kite_prompt_configure_bool CONFIGURE_LONGHORN "${CONFIGURE_LONGHORN_WAS_SET}" "Longhorn에 Kite 전용 disk/tag 설정을 적용할까요?"
+  if [[ "${CONFIGURE_LONGHORN}" == "true" ]]; then
+    kite_prompt_configure_bool KITE_LONGHORN_USE_DEDICATED_DISK "${KITE_LONGHORN_USE_DEDICATED_DISK_WAS_SET}" "Longhorn에 Kite 전용 host path disk entry를 만들까요? 아니오면 기존 Ready disk에 kite tag만 붙입니다."
+  fi
   kite_prompt_configure_bool APPLY_STORAGECLASS "${APPLY_STORAGECLASS_WAS_SET}" "Kite 전용 Longhorn StorageClass를 적용할까요?"
   kite_prompt_configure_bool INSTALL_KUBEVIRT "${INSTALL_KUBEVIRT_WAS_SET}" "KubeVirt를 설치할까요?"
   kite_prompt_configure_bool INSTALL_CDI "${INSTALL_CDI_WAS_SET}" "CDI를 설치할까요?"
   kite_prompt_configure_bool APPLY_GOLDEN_IMAGE "${APPLY_GOLDEN_IMAGE_WAS_SET}" "Ubuntu golden image DataVolume을 적용할까요?"
+  kite_prompt_configure_bool KITE_GATEWAY_HOST_KEY_REFRESH "${KITE_GATEWAY_HOST_KEY_REFRESH_WAS_SET}" "기존 kite-gateway host key Secret이 있으면 새 key로 갱신할까요?"
   kite_prompt_configure_bool RUN_VERIFY "${RUN_VERIFY_WAS_SET}" "설치 후 verify 스크립트를 실행할까요?"
 
-  log "install choices: MANAGE_HOST_SSHD=${MANAGE_HOST_SSHD}, KITE_HOST_SSHD_PORT=${KITE_HOST_SSHD_PORT}, INSTALL_LONGHORN=${INSTALL_LONGHORN}, CONFIGURE_LONGHORN=${CONFIGURE_LONGHORN}, APPLY_STORAGECLASS=${APPLY_STORAGECLASS}, INSTALL_KUBEVIRT=${INSTALL_KUBEVIRT}, INSTALL_CDI=${INSTALL_CDI}, APPLY_GOLDEN_IMAGE=${APPLY_GOLDEN_IMAGE}, RUN_VERIFY=${RUN_VERIFY}"
+  log "install choices: MANAGE_HOST_SSHD=${MANAGE_HOST_SSHD}, KITE_HOST_SSHD_PORT=${KITE_HOST_SSHD_PORT}, INSTALL_LONGHORN=${INSTALL_LONGHORN}, CONFIGURE_LONGHORN=${CONFIGURE_LONGHORN}, KITE_LONGHORN_USE_DEDICATED_DISK=${KITE_LONGHORN_USE_DEDICATED_DISK}, APPLY_STORAGECLASS=${APPLY_STORAGECLASS}, INSTALL_KUBEVIRT=${INSTALL_KUBEVIRT}, INSTALL_CDI=${INSTALL_CDI}, APPLY_GOLDEN_IMAGE=${APPLY_GOLDEN_IMAGE}, KITE_GATEWAY_HOST_KEY_REFRESH=${KITE_GATEWAY_HOST_KEY_REFRESH}, RUN_VERIFY=${RUN_VERIFY}"
+}
+
+export_install_options() {
+  export KITE_HOST_SSHD_PORT
+  export KITE_LONGHORN_USE_DEDICATED_DISK
+  export KITE_GATEWAY_HOST_KEY_REFRESH
+  if [[ "${MANAGE_HOST_SSHD}" == "true" ]]; then
+    if [[ -z "${KITE_MANAGE_HOST_SSHD:-}" ]]; then
+      export KITE_MANAGE_HOST_SSHD=true
+    fi
+    if kite_prompt_interactive && [[ -z "${KITE_HOST_SSHD_PORT_RECONFIRM:-}" ]]; then
+      export KITE_HOST_SSHD_PORT_RECONFIRM=true
+    fi
+  else
+    export KITE_MANAGE_HOST_SSHD=false
+  fi
 }
 
 # pull 기반 설치의 전체 순서다. host sshd handoff, Longhorn/KubeVirt/CDI 준비,
@@ -145,6 +175,7 @@ main() {
 
   kubectl get nodes >/dev/null
   configure_interactive_install_options
+  export_install_options
   # gateway가 외부 22번을 쓰려면 host sshd를 다른 포트로 옮겨야 할 수 있다.
   # 원격 서버에서는 접속 경로가 바뀌므로 manage-host-sshd.sh가 별도로 확인/백업한다.
   if [[ "${MANAGE_HOST_SSHD}" == "true" ]]; then

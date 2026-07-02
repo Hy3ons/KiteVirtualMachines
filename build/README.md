@@ -1,26 +1,30 @@
 # Kite Build Directory
 
 This directory is the operational surface for installing, developing, testing,
-and removing Kite. The layout is intentionally split by purpose so `clear`,
-`clean`, development scripts, and deployment scripts do not point at surprising
-places.
+and removing Kite. The layout is intentionally split by purpose so the root
+commands say what they do before the user has to read the implementation.
 
 ## Naming Contract
 
 | Name | Meaning | Primary entrypoint |
 | --- | --- | --- |
-| `dev` | Build Kite images from this checkout and deploy them to a selected cluster. | `./dev.sh` -> `build/dev/all-in-one.sh` |
-| `clear` | Clear a local development deployment from this checkout. | `./clear.sh` -> `build/dev/clear.sh` |
-| `install` | Install a pull-based deployment using GHCR images. | `./install.sh` -> `build/deploy/scripts/install-all.sh` |
-| `clean` | Remove a pull-based deployment, including the no-git `curl` cleanup path. | `./clean.sh` -> `build/deploy/scripts/clean.sh` |
-| `uninstall` | The actual deploy cleanup implementation. | `build/deploy/scripts/uninstall-kite.sh` |
+| `ghcr-install.sh` | 일반 사용자/운영자가 GHCR 이미지를 pull해서 설치한다. | `./ghcr-install.sh` -> `build/deploy/scripts/install-all.sh` |
+| `build-install.sh` | 개발자가 현재 checkout 이미지를 빌드해서 설치한다. | `./build-install.sh` -> `build/dev/all-in-one.sh` |
+| `uninstall.sh` | 일반 사용자/운영자가 Kite 배포를 제거한다. | `./uninstall.sh` -> `build/deploy/scripts/clean.sh` |
+| `build-clear.sh` | 개발자가 local build/deploy 산출물을 제거한다. | `./build-clear.sh` -> `build/dev/clear.sh` |
+| `build/deploy/scripts/uninstall-kite.sh` | 배포 제거의 실제 구현이다. | `build/deploy/scripts/uninstall-kite.sh` |
 
-`clear` and `clean` are deliberately different:
+`uninstall.sh` and `build-clear.sh` are deliberately different:
 
-- Use `clear` when you are working from a repository checkout and want to remove
-  the development deployment created by `./dev.sh`.
-- Use `clean` when the target was installed through the deployment path or when
-  you want the remote `curl .../clean.sh | bash` cleanup flow.
+- Use `build-clear.sh` when you are working from a repository checkout and want
+  to remove the development deployment created by `./build-install.sh`.
+- Use `uninstall.sh` when the target was installed through the deployment path or when
+  you want the remote `curl .../uninstall.sh | bash` cleanup flow.
+
+The public root scripts ask all interactive questions at the beginning of the
+run. If an environment variable is already set, it is treated as a fixed answer.
+Set `KITE_ASSUME_DEFAULTS=true` to skip prompts and use defaults/env values in
+automation.
 
 ## Directory Map
 
@@ -40,17 +44,17 @@ The repository root keeps small wrappers for human ergonomics and remote
 bootstrap compatibility:
 
 ```text
-./dev.sh
+./build-install.sh
   -> build/dev/all-in-one.sh
 
-./clear.sh
+./build-clear.sh
   -> build/dev/clear.sh
 
-./install.sh
+./ghcr-install.sh
   -> build/deploy/scripts/install-all.sh
   -> when piped from curl, downloads the selected archive first
 
-./clean.sh
+./uninstall.sh
   -> build/deploy/scripts/clean.sh
   -> build/deploy/scripts/uninstall-kite.sh
   -> when piped from curl, downloads the selected archive first
@@ -65,16 +69,16 @@ shared shell helpers belong in `build/lib`.
 Use the development path when you want to build local images from this checkout:
 
 ```sh
-KITE_CLUSTER=k3s ./dev.sh
+KITE_CLUSTER=k3s ./build-install.sh
 ```
 
-Use `./clear.sh` to remove the development deployment:
+Use `./build-clear.sh` to remove the development deployment:
 
 ```sh
-KITE_CLUSTER=k3s ./clear.sh
+KITE_CLUSTER=k3s ./build-clear.sh
 ```
 
-`./clear.sh` asks for numbered choices in an interactive terminal. Longhorn
+`./build-clear.sh` asks for numbered choices in an interactive terminal. Longhorn
 uninstall and Longhorn host data removal stay disabled by default because they
 can remove VM disk infrastructure. Automation can still provide the explicit
 environment variables documented in `build/dev/README.md`.
@@ -85,25 +89,25 @@ Use the deployment path when the target should pull already-published GHCR
 images:
 
 ```sh
-./install.sh
+./ghcr-install.sh
 ```
 
 Without a git checkout, pipe the root bootstrapper:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/ghcr-install.sh | bash
 ```
 
-Use `./clean.sh` for the matching deployment cleanup:
+Use `./uninstall.sh` for the matching deployment cleanup:
 
 ```sh
-./clean.sh
+./uninstall.sh
 ```
 
 Without a git checkout:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/clean.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/uninstall.sh | bash
 ```
 
 The deployment cleanup path removes Kite resources by default. Golden image,

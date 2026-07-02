@@ -136,7 +136,7 @@ ask_numbered_bool() {
 }
 
 interactive_clear_enabled() {
-  [[ -t 0 ]]
+  [[ -t 0 && "${KITE_ASSUME_DEFAULTS:-false}" != "true" ]]
 }
 
 configure_interactive_clear_options() {
@@ -210,7 +210,22 @@ configure_interactive_clear_options() {
     fi
   fi
 
-  log "cleanup choices: CLEAR_IMAGES=${CLEAR_IMAGES}, CLEAR_LONGHORN=${CLEAR_LONGHORN}, CLEAR_LONGHORN_DATA=${CLEAR_LONGHORN_DATA}, CLEAR_LONGHORN_FORCE=${CLEAR_LONGHORN_FORCE}, RESTORE_HOST_SSHD=${RESTORE_HOST_SSHD}"
+  log "cleanup choices: namespace=${KITE_NAMESPACE}, CLEAR_IMAGES=${CLEAR_IMAGES}, CLEAR_LONGHORN=${CLEAR_LONGHORN}, CLEAR_LONGHORN_DATA=${CLEAR_LONGHORN_DATA}, CLEAR_LONGHORN_FORCE=${CLEAR_LONGHORN_FORCE}, RESTORE_HOST_SSHD=${RESTORE_HOST_SSHD}"
+}
+
+normalize_clear_options() {
+  if [[ "${RESTORE_HOST_SSHD}" == "true" && -z "${KITE_RESTORE_HOST_SSHD_WAS_SET}" ]]; then
+    KITE_RESTORE_HOST_SSHD=true
+  elif [[ "${RESTORE_HOST_SSHD}" != "true" && -z "${KITE_RESTORE_HOST_SSHD_WAS_SET}" ]]; then
+    KITE_RESTORE_HOST_SSHD=false
+  fi
+  export CLEAR_IMAGES
+  export CLEAR_LONGHORN
+  export CLEAR_LONGHORN_FORCE
+  export CLEAR_LONGHORN_DATA
+  export CLEAR_LONGHORN_DATA_CONFIRM
+  export RESTORE_HOST_SSHD
+  export KITE_RESTORE_HOST_SSHD
 }
 
 # host_sshd_restore_state_exists checks whether Kite previously moved host sshd away from port 22.
@@ -746,6 +761,7 @@ main() {
   cluster="$(detect_cluster)"
   log "target cluster=${cluster}"
   configure_interactive_clear_options "${cluster}"
+  normalize_clear_options
 
   case "${cluster}" in
     minikube)

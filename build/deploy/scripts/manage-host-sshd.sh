@@ -12,6 +12,7 @@ set -euo pipefail
 #   KITE_MANAGE_HOST_SSHD: default ask
 #   KITE_RESTORE_HOST_SSHD: default ask
 #   KITE_HOST_SSHD_PORT: default 2222
+#   KITE_HOST_SSHD_PORT_RECONFIRM: default false
 #   KITE_GATEWAY_EXTERNAL_PORT: default 22
 #   KITE_HOST_SSHD_CONFIG: default /etc/ssh/sshd_config
 #   KITE_HOST_SSHD_STATE_DIR: default /etc/kite/host-sshd
@@ -31,6 +32,7 @@ KITE_HOST_SSHD_PORT_WAS_SET="${KITE_HOST_SSHD_PORT+x}"
 KITE_MANAGE_HOST_SSHD="${KITE_MANAGE_HOST_SSHD:-ask}"
 KITE_RESTORE_HOST_SSHD="${KITE_RESTORE_HOST_SSHD:-ask}"
 KITE_HOST_SSHD_PORT="${KITE_HOST_SSHD_PORT:-2222}"
+KITE_HOST_SSHD_PORT_RECONFIRM="${KITE_HOST_SSHD_PORT_RECONFIRM:-false}"
 KITE_GATEWAY_EXTERNAL_PORT="${KITE_GATEWAY_EXTERNAL_PORT:-22}"
 KITE_HOST_SSHD_CONFIG="${KITE_HOST_SSHD_CONFIG:-/etc/ssh/sshd_config}"
 KITE_HOST_SSHD_STATE_DIR="${KITE_HOST_SSHD_STATE_DIR:-/etc/kite/host-sshd}"
@@ -380,7 +382,7 @@ confirm_selected_port() {
   local port="$1"
   local answer
 
-  if [[ "${KITE_MANAGE_HOST_SSHD}" != "ask" ]]; then
+  if [[ "${KITE_MANAGE_HOST_SSHD}" != "ask" && "${KITE_HOST_SSHD_PORT_RECONFIRM}" != "true" ]]; then
     return 0
   fi
   if [[ ! -t 0 ]]; then

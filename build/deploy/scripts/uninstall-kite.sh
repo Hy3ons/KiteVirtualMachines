@@ -15,6 +15,7 @@ set -euo pipefail
 #   DELETE_LONGHORN_FORCE: default false
 #   DELETE_LONGHORN_DATA: default false
 #   DELETE_LONGHORN_DATA_CONFIRM: default false
+#   KITE_UNINSTALL_PRESET: default safe
 #   KITE_LONGHORN_DISK_NAME: default kite-longhorn
 #   KITE_LONGHORN_DISK_TAG: default kite
 #   KITE_LONGHORN_DISK_REMOVE_TIMEOUT_SECONDS: default 180
@@ -39,11 +40,26 @@ DELETE_LONGHORN_DATA_WAS_SET="${DELETE_LONGHORN_DATA+x}"
 DELETE_LONGHORN_DATA_CONFIRM_WAS_SET="${DELETE_LONGHORN_DATA_CONFIRM+x}"
 RESTORE_HOST_SSHD_WAS_SET="${RESTORE_HOST_SSHD+x}"
 KITE_RESTORE_HOST_SSHD_WAS_SET="${KITE_RESTORE_HOST_SSHD+x}"
-DELETE_GOLDEN_IMAGE="${DELETE_GOLDEN_IMAGE:-false}"
-DELETE_LONGHORN="${DELETE_LONGHORN:-false}"
+KITE_UNINSTALL_PRESET="${KITE_UNINSTALL_PRESET:-safe}"
+case "${KITE_UNINSTALL_PRESET}" in
+  safe)
+    DELETE_GOLDEN_IMAGE="${DELETE_GOLDEN_IMAGE:-false}"
+    DELETE_LONGHORN="${DELETE_LONGHORN:-false}"
+    DELETE_LONGHORN_DATA="${DELETE_LONGHORN_DATA:-false}"
+    DELETE_LONGHORN_DATA_CONFIRM="${DELETE_LONGHORN_DATA_CONFIRM:-false}"
+    ;;
+  full)
+    DELETE_GOLDEN_IMAGE="${DELETE_GOLDEN_IMAGE:-true}"
+    DELETE_LONGHORN="${DELETE_LONGHORN:-true}"
+    DELETE_LONGHORN_DATA="${DELETE_LONGHORN_DATA:-true}"
+    DELETE_LONGHORN_DATA_CONFIRM="${DELETE_LONGHORN_DATA_CONFIRM:-true}"
+    ;;
+  *)
+    echo "[kite-deploy] KITE_UNINSTALL_PRESET must be safe or full" >&2
+    exit 1
+    ;;
+esac
 DELETE_LONGHORN_FORCE="${DELETE_LONGHORN_FORCE:-false}"
-DELETE_LONGHORN_DATA="${DELETE_LONGHORN_DATA:-false}"
-DELETE_LONGHORN_DATA_CONFIRM="${DELETE_LONGHORN_DATA_CONFIRM:-false}"
 KITE_LONGHORN_DISK_NAME="${KITE_LONGHORN_DISK_NAME:-kite-longhorn}"
 KITE_LONGHORN_DISK_TAG="${KITE_LONGHORN_DISK_TAG:-kite}"
 KITE_LONGHORN_DISK_REMOVE_TIMEOUT_SECONDS="${KITE_LONGHORN_DISK_REMOVE_TIMEOUT_SECONDS:-180}"
@@ -93,7 +109,7 @@ warn() {
 configure_interactive_uninstall_options() {
   kite_prompt_interactive || return 0
 
-  log "interactive uninstall options"
+  log "interactive uninstall options (preset=${KITE_UNINSTALL_PRESET})"
   kite_prompt_configure_bool DELETE_GOLDEN_IMAGE "${DELETE_GOLDEN_IMAGE_WAS_SET}" "Ubuntu golden image DataVolume/PVC까지 삭제할까요?"
   kite_prompt_configure_bool DELETE_LONGHORN "${DELETE_LONGHORN_WAS_SET}" "Longhorn 설치 자체와 Kite Longhorn disk entry까지 제거할까요?"
   if [[ "${DELETE_LONGHORN}" == "true" ]]; then
@@ -113,7 +129,22 @@ configure_interactive_uninstall_options() {
     KITE_RESTORE_HOST_SSHD=false
   fi
 
-  log "uninstall choices: DELETE_GOLDEN_IMAGE=${DELETE_GOLDEN_IMAGE}, DELETE_LONGHORN=${DELETE_LONGHORN}, DELETE_LONGHORN_DATA=${DELETE_LONGHORN_DATA}, DELETE_LONGHORN_FORCE=${DELETE_LONGHORN_FORCE}, RESTORE_HOST_SSHD=${RESTORE_HOST_SSHD}"
+  log "uninstall choices: namespace=${KITE_NAMESPACE}, preset=${KITE_UNINSTALL_PRESET}, DELETE_GOLDEN_IMAGE=${DELETE_GOLDEN_IMAGE}($(kite_option_source "${DELETE_GOLDEN_IMAGE_WAS_SET}")), DELETE_LONGHORN_DATA=${DELETE_LONGHORN_DATA}($(kite_option_source "${DELETE_LONGHORN_DATA_WAS_SET}")), DELETE_LONGHORN=${DELETE_LONGHORN}($(kite_option_source "${DELETE_LONGHORN_WAS_SET}")), DELETE_LONGHORN_FORCE=${DELETE_LONGHORN_FORCE}($(kite_option_source "${DELETE_LONGHORN_FORCE_WAS_SET}")), RESTORE_HOST_SSHD=${RESTORE_HOST_SSHD}($(kite_option_source "${RESTORE_HOST_SSHD_WAS_SET}"))"
+}
+
+normalize_uninstall_options() {
+  if [[ "${RESTORE_HOST_SSHD}" == "true" && -z "${KITE_RESTORE_HOST_SSHD_WAS_SET}" ]]; then
+    KITE_RESTORE_HOST_SSHD=true
+  elif [[ "${RESTORE_HOST_SSHD}" != "true" && -z "${KITE_RESTORE_HOST_SSHD_WAS_SET}" ]]; then
+    KITE_RESTORE_HOST_SSHD=false
+  fi
+  export DELETE_GOLDEN_IMAGE
+  export DELETE_LONGHORN
+  export DELETE_LONGHORN_FORCE
+  export DELETE_LONGHORN_DATA
+  export DELETE_LONGHORN_DATA_CONFIRM
+  export RESTORE_HOST_SSHD
+  export KITE_RESTORE_HOST_SSHD
 }
 
 # host_sshd_restore_state_exists checks whether Kite previously moved host sshd away from port 22.
@@ -380,6 +411,7 @@ delete_longhorn_resources() {
 # 배포 제거의 전체 순서다. Kite 리소스, 선택적 storage 데이터, Longhorn, host sshd 복원을 처리한다.
 main() {
   configure_interactive_uninstall_options
+  normalize_uninstall_options
   schedule_host_sshd_restore_before_gateway_delete
 
   if [[ "${DELETE_GOLDEN_IMAGE}" == "true" ]]; then

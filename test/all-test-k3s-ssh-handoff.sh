@@ -86,7 +86,7 @@ prompt_value() {
   local answer
 
   eval "current_value=\"\${${variable_name}:-}\""
-  if [[ -n "${was_set}" || ! kite_prompt_interactive ]]; then
+  if [[ -n "${was_set}" ]] || ! kite_prompt_interactive; then
     return 0
   fi
 

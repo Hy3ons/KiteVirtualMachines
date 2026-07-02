@@ -188,10 +188,10 @@ Kite가 관리하는 Kubernetes API는 `build/kite/crds.yaml`에 정의되어 �
 
 Kite has two top-level install entrypoints:
 
-- `./install.sh`: pull-based install. It installs or waits for Longhorn,
+- `./ghcr-install.sh`: pull-based install. It installs or waits for Longhorn,
   KubeVirt, CDI, applies the Ubuntu golden image, and deploys Kite manifests
   that pull prebuilt images from `ghcr.io/hy3ons`.
-- `./dev.sh`: local-build install. It prepares the same infrastructure, builds
+- `./build-install.sh`: local-build install. It prepares the same infrastructure, builds
   the API, controller, gateway, and frontend images from this checkout, then
   imports or loads those images into the selected local cluster before deploying
   Kite.
@@ -203,9 +203,14 @@ does, Kite does not move it and patches gateway fallback to that existing port.
 If host `sshd` still needs to move, the flow asks which port should receive it,
 checks that the port is free, and requires typing the same port again before
 changing the host. The original config is backed up under `/etc/kite/host-sshd`,
-and `./clear.sh`, `./clean.sh`, or `build/deploy/scripts/uninstall-kite.sh` can
+and `./build-clear.sh`, `./uninstall.sh`, or `build/deploy/scripts/uninstall-kite.sh` can
 restore it from that backup. Hosts without OpenSSH, systemd, Linux, or an active
 port `22` listener are skipped safely.
+
+All public root scripts collect their interactive choices at the beginning of
+the run. If an environment variable is already set, the script treats it as an
+operator decision and does not ask again. Set `KITE_ASSUME_DEFAULTS=true` to
+skip prompts and use defaults/env values for automation.
 
 ## Quick Install and Uninstall
 
@@ -213,14 +218,14 @@ Install Kite on a prepared k3s or Kubernetes host without cloning this
 repository:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/ghcr-install.sh | bash
 ```
 
 Install from a specific branch or tag:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/install.sh \
-  | KITE_INSTALL_REF=stage bash
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/ghcr-install.sh \
+  | KITE_GHCR_INSTALL_REF=stage bash
 ```
 
 The remote installer downloads the selected GitHub archive into a temporary
@@ -230,14 +235,14 @@ and does not build containers locally.
 Uninstall Kite resources without cloning this repository:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/clean.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/uninstall.sh | bash
 ```
 
 Uninstall from a specific branch or tag:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/clean.sh \
-  | KITE_CLEAN_REF=stage bash
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/uninstall.sh \
+  | KITE_UNINSTALL_REF=stage bash
 ```
 
 The remote cleanup flow downloads the selected GitHub archive into a temporary
@@ -249,10 +254,10 @@ infrastructure.
 
 ## Development Install
 
-`./dev.sh` builds local Docker images and deploys them to the selected Kubernetes cluster.
+`./build-install.sh` builds local Docker images and deploys them to the selected Kubernetes cluster.
 
 ```sh
-KITE_CLUSTER=k3s ./dev.sh
+KITE_CLUSTER=k3s ./build-install.sh
 ```
 
 Supported `KITE_CLUSTER` values are `minikube`, `k3s`, `k3d`, `kind`, `k8s`, `kubernetes`, and `current`.
@@ -267,43 +272,43 @@ For local clusters, the script builds these images and loads or imports them int
 Generic Kubernetes clusters usually need a registry push:
 
 ```sh
-PUSH_IMAGES=true IMAGE_REGISTRY=registry.example.com/kite KITE_CLUSTER=k8s ./dev.sh
+PUSH_IMAGES=true IMAGE_REGISTRY=registry.example.com/kite KITE_CLUSTER=k8s ./build-install.sh
 ```
 
 Development cleanup:
 
 ```sh
-KITE_CLUSTER=k3s ./clear.sh
+KITE_CLUSTER=k3s ./build-clear.sh
 ```
 
 Longhorn cleanup is opt-in because it can remove VM disk infrastructure:
 
 ```sh
-CLEAR_LONGHORN=true KITE_CLUSTER=k3s ./clear.sh
-CLEAR_LONGHORN_DATA=true CLEAR_LONGHORN_DATA_CONFIRM=true KITE_CLUSTER=k3s ./clear.sh
+CLEAR_LONGHORN=true KITE_CLUSTER=k3s ./build-clear.sh
+CLEAR_LONGHORN_DATA=true CLEAR_LONGHORN_DATA_CONFIRM=true KITE_CLUSTER=k3s ./build-clear.sh
 ```
 
 More details are in `build/dev/README.md`. The full `build` directory layout
-and `clear`/`clean` naming contract are documented in `build/README.md`.
+and root command naming contract are documented in `build/README.md`.
 
 Host SSHD handoff can be controlled with environment variables:
 
 ```sh
-KITE_MANAGE_HOST_SSHD=true KITE_CLUSTER=k3s ./dev.sh
-MANAGE_HOST_SSHD=false KITE_CLUSTER=k3s ./dev.sh
-KITE_RESTORE_HOST_SSHD=true KITE_CLUSTER=k3s ./clear.sh
-RESTORE_HOST_SSHD=false KITE_CLUSTER=k3s ./clear.sh
+KITE_MANAGE_HOST_SSHD=true KITE_CLUSTER=k3s ./build-install.sh
+MANAGE_HOST_SSHD=false KITE_CLUSTER=k3s ./build-install.sh
+KITE_RESTORE_HOST_SSHD=true KITE_CLUSTER=k3s ./build-clear.sh
+RESTORE_HOST_SSHD=false KITE_CLUSTER=k3s ./build-clear.sh
 ```
 
 ## Production-Oriented k3s Install
 
-`./install.sh` contains a pull-based install flow for k3s clusters. Longhorn,
+`./ghcr-install.sh` contains a pull-based install flow for k3s clusters. Longhorn,
 KubeVirt, and CDI are required for VM disk provisioning and VM runtime. Kite
 images are pulled from GHCR instead of being built locally.
 
 The download install flow is intentionally split into two steps:
 
-1. `install.sh` is the small bootstrap script fetched by `curl`.
+1. `ghcr-install.sh` is the small bootstrap script fetched by `curl`.
 2. The bootstrap script downloads the selected repository ref as a tar archive,
    extracts it under a temporary directory, and executes
    `build/deploy/scripts/install-all.sh` from that extracted copy.
@@ -314,14 +319,14 @@ and deploys the Kite manifests using GHCR images.
 
 ```sh
 kubectl get nodes
-INSTALL_LONGHORN=true ./install.sh
+INSTALL_LONGHORN=true ./ghcr-install.sh
 build/deploy/scripts/verify.sh
 ```
 
 If Longhorn is already installed and ready:
 
 ```sh
-./install.sh
+./ghcr-install.sh
 ```
 
 Expected storage flow:
@@ -349,8 +354,8 @@ cleanup environment variables are set.
 
 More details are in `build/deploy/README.md`.
 
-The same host SSHD handoff variables are supported by `./install.sh`,
-`./clean.sh`, and `build/deploy/scripts/uninstall-kite.sh`.
+The same host SSHD handoff variables are supported by `./ghcr-install.sh`,
+`./uninstall.sh`, and `build/deploy/scripts/uninstall-kite.sh`.
 
 ## Container Images
 
@@ -370,8 +375,8 @@ The workflow publishes these tags:
 - `production`
 - `sha-<commit>`
 
-The workflow logs in with the `GHCR_TOKEN` GitHub secret. `./install.sh` uses
-the GHCR images by default, while `./dev.sh` builds images locally and imports
+The workflow logs in with the `GHCR_TOKEN` GitHub secret. `./ghcr-install.sh` uses
+the GHCR images by default, while `./build-install.sh` builds images locally and imports
 or loads them into the selected development cluster.
 
 ## Smoke Test
@@ -396,6 +401,10 @@ The smoke test checks the Kite namespace, CRDs, deployments, API health, signup/
 
 ## Related Docs
 
+- `CONTRIBUTE-KO.md`
+- `CONTRIBUTE-EN.md`
+- `docs/branch-policy.md`
+- `docs/commit-convention.md`
 - `kite/cmd/kite-api/Readme.md`
 - `kite/cmd/kite-controller/Readme.md`
 - `kite/cmd/kite-gateway/Readme.md`

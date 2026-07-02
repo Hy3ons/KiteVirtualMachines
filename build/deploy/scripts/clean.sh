@@ -3,15 +3,15 @@ set -euo pipefail
 
 # ==============================================================================
 # Script: build/deploy/scripts/clean.sh
-# Description: checkout 또는 curl 경로에서 pull 기반 Kite 배포 제거를 시작한다.
+# Description: checkout 또는 curl 경로에서 Kite uninstall을 시작한다.
 #
 # Usage:
 #   build/deploy/scripts/clean.sh
 #
 # Environment Variables:
-#   KITE_CLEAN_REPOSITORY: default Hy3ons/KiteVirtualMachines
-#   KITE_CLEAN_REF: default main
-#   KITE_CLEAN_ARCHIVE_URL: default (empty)
+#   KITE_UNINSTALL_REPOSITORY: default Hy3ons/KiteVirtualMachines
+#   KITE_UNINSTALL_REF: default main
+#   KITE_UNINSTALL_ARCHIVE_URL: default (empty)
 #   KITE_LOG_COLOR: default auto
 #   NO_COLOR: default (unset)
 #
@@ -19,10 +19,10 @@ set -euo pipefail
 #   Kubernetes 리소스, 선택적 Longhorn/host sshd 상태를 변경하거나 삭제할 수 있다.
 # ==============================================================================
 
-KITE_CLEAN_REPOSITORY="${KITE_CLEAN_REPOSITORY:-Hy3ons/KiteVirtualMachines}"
-KITE_CLEAN_REF="${KITE_CLEAN_REF:-main}"
-KITE_CLEAN_ARCHIVE_URL="${KITE_CLEAN_ARCHIVE_URL:-}"
-KITE_CLEAN_TMPDIR=""
+KITE_UNINSTALL_REPOSITORY="${KITE_UNINSTALL_REPOSITORY:-Hy3ons/KiteVirtualMachines}"
+KITE_UNINSTALL_REF="${KITE_UNINSTALL_REF:-main}"
+KITE_UNINSTALL_ARCHIVE_URL="${KITE_UNINSTALL_ARCHIVE_URL:-}"
+KITE_UNINSTALL_TMPDIR=""
 
 log_color_enabled() {
   [[ "${KITE_LOG_COLOR:-auto}" != "false" && -z "${NO_COLOR:-}" && -t 1 ]]
@@ -37,9 +37,9 @@ log() {
 
   timestamp="$(log_timestamp)"
   if log_color_enabled; then
-    printf "\033[0;32m[kite-clean] %s - %s\033[0m\n" "${timestamp}" "$*"
+    printf "\033[0;32m[kite-uninstall] %s - %s\033[0m\n" "${timestamp}" "$*"
   else
-    printf "[kite-clean] %s - %s\n" "${timestamp}" "$*"
+    printf "[kite-uninstall] %s - %s\n" "${timestamp}" "$*"
   fi
 }
 
@@ -48,9 +48,9 @@ warn() {
 
   timestamp="$(log_timestamp)"
   if log_color_enabled; then
-    printf "\033[1;33m[kite-clean] WARNING: %s - %s\033[0m\n" "${timestamp}" "$*" >&2
+    printf "\033[1;33m[kite-uninstall] WARNING: %s - %s\033[0m\n" "${timestamp}" "$*" >&2
   else
-    printf "[kite-clean] WARNING: %s - %s\n" "${timestamp}" "$*" >&2
+    printf "[kite-uninstall] WARNING: %s - %s\n" "${timestamp}" "$*" >&2
   fi
 }
 
@@ -67,17 +67,17 @@ script_root() {
 }
 
 archive_url() {
-  if [[ -n "${KITE_CLEAN_ARCHIVE_URL}" ]]; then
-    printf '%s\n' "${KITE_CLEAN_ARCHIVE_URL}"
+  if [[ -n "${KITE_UNINSTALL_ARCHIVE_URL}" ]]; then
+    printf '%s\n' "${KITE_UNINSTALL_ARCHIVE_URL}"
     return
   fi
 
-  printf 'https://github.com/%s/archive/%s.tar.gz\n' "${KITE_CLEAN_REPOSITORY}" "${KITE_CLEAN_REF}"
+  printf 'https://github.com/%s/archive/%s.tar.gz\n' "${KITE_UNINSTALL_REPOSITORY}" "${KITE_UNINSTALL_REF}"
 }
 
 cleanup() {
-  if [[ -n "${KITE_CLEAN_TMPDIR:-}" ]]; then
-    rm -rf "${KITE_CLEAN_TMPDIR}"
+  if [[ -n "${KITE_UNINSTALL_TMPDIR:-}" ]]; then
+    rm -rf "${KITE_UNINSTALL_TMPDIR}"
   fi
 }
 
@@ -96,14 +96,14 @@ clean_from_remote_archive() {
   require_command mktemp
 
   trap cleanup EXIT
-  KITE_CLEAN_TMPDIR="$(mktemp -d "${TMPDIR:-/tmp}/kite-clean.XXXXXX")"
+  KITE_UNINSTALL_TMPDIR="$(mktemp -d "${TMPDIR:-/tmp}/kite-uninstall.XXXXXX")"
 
   url="$(archive_url)"
   log "downloading Kite deploy cleaner from ${url}"
-  curl -fsSL "${url}" | tar -xz --strip-components=1 -C "${KITE_CLEAN_TMPDIR}"
+  curl -fsSL "${url}" | tar -xz --strip-components=1 -C "${KITE_UNINSTALL_TMPDIR}"
 
-  log "running Kite deploy cleaner without git clone from ${KITE_CLEAN_REPOSITORY}@${KITE_CLEAN_REF}"
-  "${KITE_CLEAN_TMPDIR}/build/deploy/scripts/uninstall-kite.sh" "$@"
+  log "running Kite uninstaller without git clone from ${KITE_UNINSTALL_REPOSITORY}@${KITE_UNINSTALL_REF}"
+  "${KITE_UNINSTALL_TMPDIR}/build/deploy/scripts/uninstall-kite.sh" "$@"
 }
 
 main() {
