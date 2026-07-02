@@ -31,21 +31,21 @@ const accessLevelDocs: readonly AccessLevelDoc[] = [
     title: 'No VM Create',
     tone: '권한 요청 단계',
     summary: '로그인은 허용하지만 VM 생성과 제어는 제한합니다.',
-    rules: ['Dashboard에 관리자 연락처를 표시합니다.', 'API 직접 호출로 VM 생성/수정/전원/삭제를 시도하면 403을 반환합니다.'],
+    rules: ['Dashboard는 계정 상태를 보여주고 VM 생성 흐름은 열지 않습니다.', 'API 직접 호출로 VM 생성/수정/전원/삭제를 시도하면 403을 반환합니다.'],
   },
   {
     level: '1',
     title: 'Fixed Self-service',
     tone: '일반 사용자',
     summary: '자기 namespace 안에서 고정 스펙 VM만 생성하고 관리할 수 있습니다.',
-    rules: ['CPU 2, Memory 4Gi, Disk 25Gi로 고정합니다.', '직접 생성할 수 있는 VM은 최대 2개로 제한합니다.'],
+    rules: ['CPU 2, Memory 4Gi, Disk 20Gi로 고정합니다.', 'Frontend에서는 직접 생성할 수 있는 VM을 최대 3개로 제한합니다.'],
   },
   {
     level: '2',
     title: 'Power User',
     tone: '팀 운영자',
-    summary: '자기 VM은 자유 스펙으로 만들 수 있고, 사용자 권한은 0/1 범위에서만 조정할 수 있습니다.',
-    rules: ['다른 사용자의 VM 전원/삭제/설정 변경은 허용하지 않습니다.', '관리 화면에는 0과 1 사이의 권한 변경만 노출합니다.'],
+    summary: '자기 VM은 자유 스펙으로 만들 수 있고, 전체 VM 조회와 전원/삭제 운영을 할 수 있습니다.',
+    rules: ['관리자 VM 목록에서 VM 상태를 보고 전원 변경과 삭제 요청을 처리할 수 있습니다.', '사용자 삭제, 권한 변경, 시스템 설정은 Level 3에 둡니다.'],
   },
   {
     level: '3',
@@ -175,8 +175,8 @@ export const KiteDocsPage: React.FC = () => {
                 <div className="docs-policy-grid">
                   <span>CPU</span><strong>2</strong>
                   <span>Memory</span><strong>4Gi</strong>
-                  <span>Disk</span><strong>25Gi</strong>
-                  <span>Quota</span><strong>2 VMs</strong>
+                  <span>Disk</span><strong>20Gi</strong>
+                  <span>Quota</span><strong>3 VMs</strong>
                 </div>
               </Card>
             </Col>
@@ -185,19 +185,19 @@ export const KiteDocsPage: React.FC = () => {
                 <UserSwitchOutlined className="docs-card-icon" />
                 <Title level={3}>Level 2 범위</Title>
                 <Paragraph>
-                  Level 2는 자기 VM을 자유 스펙으로 만들 수 있지만 전체 관리자 권한은 아닙니다. 사용자 권한은 0과 1 사이에서만 변경할 수 있습니다.
+                  Level 2는 자기 VM을 자유 스펙으로 만들 수 있고, 운영 화면에서 전체 VM을 조회하며 전원 변경과 삭제 요청을 처리할 수 있습니다.
                 </Paragraph>
-                <Alert type="info" showIcon title="Level 2는 다른 사용자의 VM 전원, 삭제, 설정 변경을 허용하지 않습니다." />
+                <Alert type="info" showIcon title="사용자 삭제, 권한 변경, 시스템 설정은 Level 3 관리자 작업으로 분리합니다." />
               </Card>
             </Col>
             <Col xs={24} lg={8}>
               <Card className="docs-policy-card" hoverable>
                 <LockOutlined className="docs-card-icon" />
-                <Title level={3}>관리자 연락처</Title>
+                <Title level={3}>Level 0 제한</Title>
                 <Paragraph>
-                  Level 0 사용자는 VM 생성 버튼 대신 관리자 연락 안내를 봅니다. 연락처는 `kite-runtime-config`에서 관리합니다.
+                  Level 0 사용자는 로그인할 수 있지만 VM 생성과 제어 작업은 열리지 않습니다. 필요한 권한 안내는 운영자가 별도 채널에서 처리합니다.
                 </Paragraph>
-                <Alert type="warning" showIcon title="adminContact는 email, Slack, 전화번호, URL 등 자유 텍스트로 설정할 수 있습니다." />
+                <Alert type="warning" showIcon title="현재 Frontend와 API는 연락처 설정을 별도 필드로 읽지 않습니다." />
               </Card>
             </Col>
           </Row>
