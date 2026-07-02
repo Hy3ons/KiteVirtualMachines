@@ -11,6 +11,7 @@ TEST_GATEWAY_PORT_WAS_SET="${TEST_GATEWAY_PORT+x}"
 TEST_HOST_SSHD_PORT_WAS_SET="${TEST_HOST_SSHD_PORT+x}"
 TEST_MANAGE_HOST_SSHD_WAS_SET="${TEST_MANAGE_HOST_SSHD+x}"
 TEST_APPLY_GATEWAY_LOADBALANCER_WAS_SET="${TEST_APPLY_GATEWAY_LOADBALANCER+x}"
+TEST_SSH_PROBE_RUNNER_WAS_SET="${TEST_SSH_PROBE_RUNNER+x}"
 TEST_DRY_RUN_WAS_SET="${TEST_DRY_RUN+x}"
 
 KITE_NAMESPACE="${KITE_NAMESPACE:-kite}"
@@ -21,6 +22,7 @@ TEST_GATEWAY_PORT="${TEST_GATEWAY_PORT:-22}"
 TEST_HOST_SSHD_PORT="${TEST_HOST_SSHD_PORT:-2222}"
 TEST_MANAGE_HOST_SSHD="${TEST_MANAGE_HOST_SSHD:-true}"
 TEST_APPLY_GATEWAY_LOADBALANCER="${TEST_APPLY_GATEWAY_LOADBALANCER:-true}"
+TEST_SSH_PROBE_RUNNER="${TEST_SSH_PROBE_RUNNER:-auto}"
 TEST_DRY_RUN="${TEST_DRY_RUN:-false}"
 
 source "${ROOT_DIR}/build/lib/prompt.sh"
@@ -121,6 +123,7 @@ configure_options() {
     prompt_value TEST_HOST_SSH_PASSWORD "${TEST_HOST_SSH_PASSWORD_WAS_SET}" "TEST_HOST_SSH_PASSWORD 값을 정합니다." "위 host 계정의 SSH 비밀번호입니다. 2222 직접 로그인과 22 gateway fallback 로그인을 검증할 때만 사용합니다." true
     prompt_value TEST_GATEWAY_PORT "${TEST_GATEWAY_PORT_WAS_SET}" "TEST_GATEWAY_PORT 값을 정합니다." "외부에서 kite-gateway가 받아야 하는 SSH 포트입니다. 운영 기본값은 22입니다."
     prompt_value TEST_HOST_SSHD_PORT "${TEST_HOST_SSHD_PORT_WAS_SET}" "TEST_HOST_SSHD_PORT 값을 정합니다." "host sshd가 handoff 후 직접 들을 포트입니다. 운영 기본값은 2222입니다."
+    prompt_value TEST_SSH_PROBE_RUNNER "${TEST_SSH_PROBE_RUNNER_WAS_SET}" "TEST_SSH_PROBE_RUNNER 값을 정합니다." "SSH password probe 실행 방식입니다. auto는 go가 있으면 go run, 없으면 Docker golang image를 사용합니다. 값: auto, go, docker."
     kite_prompt_configure_bool TEST_MANAGE_HOST_SSHD "${TEST_MANAGE_HOST_SSHD_WAS_SET}" $'TEST_MANAGE_HOST_SSHD 값을 정합니다.\n  예를 고르면 /etc/ssh/sshd_config를 백업하고 host sshd를 2222로 옮깁니다.'
     kite_prompt_configure_bool TEST_APPLY_GATEWAY_LOADBALANCER "${TEST_APPLY_GATEWAY_LOADBALANCER_WAS_SET}" $'TEST_APPLY_GATEWAY_LOADBALANCER 값을 정합니다.\n  예를 고르면 kite-gateway Service를 LoadBalancer로 바꿔 22번을 gateway가 받게 합니다.'
     kite_prompt_configure_bool TEST_DRY_RUN "${TEST_DRY_RUN_WAS_SET}" $'TEST_DRY_RUN 값을 정합니다.\n  예를 고르면 host sshd와 Kubernetes Service를 바꾸지 않고 실행 계획만 출력합니다.'
@@ -151,16 +154,39 @@ print_plan() {
   host sshd port:     ${TEST_HOST_SSHD_PORT}
   manage host sshd:   ${TEST_MANAGE_HOST_SSHD}
   apply LoadBalancer: ${TEST_APPLY_GATEWAY_LOADBALANCER}
+  probe runner:       ${TEST_SSH_PROBE_RUNNER}
   dry run:            ${TEST_DRY_RUN}
 
 EOF
 }
 
+selected_probe_runner() {
+  case "${TEST_SSH_PROBE_RUNNER}" in
+    go|docker)
+      echo "${TEST_SSH_PROBE_RUNNER}"
+      ;;
+    auto)
+      if command -v go >/dev/null 2>&1; then
+        echo go
+      else
+        echo docker
+      fi
+      ;;
+    *)
+      warn "TEST_SSH_PROBE_RUNNER must be auto, go, or docker"
+      exit 1
+      ;;
+  esac
+}
+
 preflight() {
+  local runner
+
   require_command kubectl
-  require_command go
   require_command ssh
   require_command python3
+  runner="$(selected_probe_runner)"
+  require_command "${runner}"
 
   if [[ "${TEST_DRY_RUN}" == "true" ]]; then
     return
@@ -208,12 +234,29 @@ apply_gateway_loadbalancer() {
 }
 
 probe() {
+  local runner
+
   if [[ "${TEST_DRY_RUN}" == "true" ]]; then
-    printf '[kite-ssh-handoff] dry-run: go run ./test/tools/ssh-probe.go %q\n' "$*"
+    printf '[kite-ssh-handoff] dry-run: %s SSH probe' "$(selected_probe_runner)"
+    printf ' %q' "$@"
+    printf '\n'
     return 0
   fi
 
-  (cd "${ROOT_DIR}/kite" && TEST_HOST_SSH_PASSWORD="${TEST_HOST_SSH_PASSWORD}" go run "${ROOT_DIR}/test/tools/ssh-probe.go" "$@")
+  runner="$(selected_probe_runner)"
+  case "${runner}" in
+    go)
+      (cd "${ROOT_DIR}/kite" && TEST_HOST_SSH_PASSWORD="${TEST_HOST_SSH_PASSWORD}" go run "${ROOT_DIR}/test/tools/ssh-probe.go" "$@")
+      ;;
+    docker)
+      docker run --rm --network host \
+        -e TEST_HOST_SSH_PASSWORD="${TEST_HOST_SSH_PASSWORD}" \
+        -v "${ROOT_DIR}:/workspace" \
+        -w /workspace/kite \
+        golang:1.25-alpine \
+        go run ../test/tools/ssh-probe.go "$@"
+      ;;
+  esac
 }
 
 verify_ports_and_fallback() {

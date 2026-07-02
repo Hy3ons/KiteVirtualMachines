@@ -163,6 +163,10 @@ TEST_HOST_SSH_PASSWORD='<host-password>' \
 ./test/all-test-k3s-ssh-handoff.sh
 ```
 
+If the host does not have Go installed, the script automatically runs the SSH
+probe through Docker with `golang:1.25-alpine` and host networking. Override this
+with `TEST_SSH_PROBE_RUNNER=go` or `TEST_SSH_PROBE_RUNNER=docker` when needed.
+
 The general cluster E2E scripts do not perform this check. They patch
 `kite-gateway` to `ClusterIP` and verify the gateway through `kubectl
 port-forward`, because normal deploy-before-release testing must not steal the
