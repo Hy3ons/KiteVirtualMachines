@@ -310,9 +310,11 @@ render_manifest() {
 
   policy="$(pull_policy)"
   log "rendering test manifest with tag ${TEST_IMAGE_TAG}"
+  rm -rf "${KUSTOMIZE_OVERLAY_DIR}/kite"
+  cp -R "${ROOT_DIR}/build/kite" "${KUSTOMIZE_OVERLAY_DIR}/kite"
   cat > "${KUSTOMIZE_OVERLAY_DIR}/kustomization.yaml" <<EOF
 resources:
-  - ${ROOT_DIR}/build/kite
+  - kite
 
 images:
   - name: ghcr.io/hy3ons/kite-api
