@@ -264,6 +264,8 @@ confirm_host_sshd_restore_before_gateway_delete() {
 # schedule_host_sshd_restore_before_gateway_delete starts a nohup restore worker before gateway deletion.
 # This keeps the port-22 recovery alive even if deleting the gateway drops the current SSH session.
 schedule_host_sshd_restore_before_gateway_delete() {
+  local restore_cmd
+
   if [[ "${RESTORE_HOST_SSHD}" != "true" ]]; then
     return 0
   fi
@@ -275,8 +277,18 @@ schedule_host_sshd_restore_before_gateway_delete() {
     return 0
   fi
 
+  if [[ "${EUID:-$(id -u)}" == "0" ]]; then
+    restore_cmd=(env)
+  else
+    if ! sudo -v; then
+      warn "sudo is required before deleting kite-gateway so host sshd restore can run after port 22 is released"
+      return 1
+    fi
+    restore_cmd=(sudo -n env)
+  fi
+
   log "scheduling detached host sshd restore after port 22 is released"
-  nohup env \
+  nohup "${restore_cmd[@]}" \
     KITE_RESTORE_HOST_SSHD=true \
     KITE_HOST_SSHD_STATE="${KITE_HOST_SSHD_STATE}" \
     KITE_HOST_SSHD_RESTORE_WAIT_TIMEOUT_SECONDS="${KITE_HOST_SSHD_RESTORE_WAIT_TIMEOUT_SECONDS:-90}" \
