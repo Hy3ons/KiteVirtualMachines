@@ -170,7 +170,7 @@ export const KiteDocsPage: React.FC = () => {
                 <SafetyCertificateOutlined className="docs-card-icon" />
                 <Title level={3}>Level 1 제한</Title>
                 <Paragraph>
-                  일반 사용자는 직접 VM을 만들 수 있지만 스펙은 고정됩니다. UI 안내뿐 아니라 백엔드에서도 같은 정책을 강제합니다.
+                  일반 사용자는 직접 VM을 만들 수 있지만 스펙과 생성 한도가 고정됩니다. Frontend와 API가 모두 3대 초과 생성을 막습니다.
                 </Paragraph>
                 <div className="docs-policy-grid">
                   <span>CPU</span><strong>2</strong>

@@ -6,6 +6,7 @@ const (
 	levelOneFixedCPU    = 2
 	levelOneFixedMemory = "4Gi"
 	levelOneFixedDisk   = "20Gi"
+	levelOneVMQuota     = 3
 )
 
 // applyAccessLevelCreateLimits enforces VM create-time resource limits from the authenticated user.

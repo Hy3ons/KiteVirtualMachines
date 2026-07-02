@@ -101,7 +101,20 @@ func vmCreateHandler(deps Dependencies) gin.HandlerFunc {
 		}
 		applyAccessLevelCreateLimits(user.AccessLevel, &req)
 
-		created, err := vmServiceFromDependencies(deps).Create(c.Request.Context(), vmservice.CreateRequest{
+		vmService := vmServiceFromDependencies(deps)
+		if user.AccessLevel == int64(auth.AccessLevelUser) {
+			vms, err := vmService.List(c.Request.Context(), user.Namespace)
+			if err != nil {
+				writeVMError(c, err, "failed to list virtual machines")
+				return
+			}
+			if len(vms) >= levelOneVMQuota {
+				c.JSON(http.StatusForbidden, gin.H{"message": "Level 1 users can create up to 3 virtual machines"})
+				return
+			}
+		}
+
+		created, err := vmService.Create(c.Request.Context(), vmservice.CreateRequest{
 			Name:         req.Name,
 			Namespace:    user.Namespace,
 			CPU:          req.CPU,
