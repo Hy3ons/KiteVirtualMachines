@@ -15,6 +15,7 @@ TEST_DRY_RUN_WAS_SET="${TEST_DRY_RUN+x}"
 TEST_API_LOCAL_PORT_WAS_SET="${TEST_API_LOCAL_PORT+x}"
 TEST_FRONTEND_LOCAL_PORT_WAS_SET="${TEST_FRONTEND_LOCAL_PORT+x}"
 TEST_GATEWAY_LOCAL_PORT_WAS_SET="${TEST_GATEWAY_LOCAL_PORT+x}"
+TEST_GATEWAY_HOST_KEY_SOURCE_WAS_SET="${TEST_GATEWAY_HOST_KEY_SOURCE+x}"
 TEST_USERNAME_WAS_SET="${TEST_USERNAME+x}"
 TEST_EMAIL_WAS_SET="${TEST_EMAIL+x}"
 TEST_PASSWORD_WAS_SET="${TEST_PASSWORD+x}"
@@ -38,6 +39,7 @@ TEST_DRY_RUN="${TEST_DRY_RUN:-false}"
 TEST_API_LOCAL_PORT="${TEST_API_LOCAL_PORT:-18080}"
 TEST_FRONTEND_LOCAL_PORT="${TEST_FRONTEND_LOCAL_PORT:-18081}"
 TEST_GATEWAY_LOCAL_PORT="${TEST_GATEWAY_LOCAL_PORT:-10022}"
+TEST_GATEWAY_HOST_KEY_SOURCE="${TEST_GATEWAY_HOST_KEY_SOURCE:-generate}"
 TEST_USERNAME="${TEST_USERNAME:-e2e-$(date +%s)}"
 TEST_EMAIL="${TEST_EMAIL:-${TEST_USERNAME}@example.com}"
 TEST_PASSWORD="${TEST_PASSWORD:-Kite-e2e-password-1}"
@@ -154,6 +156,7 @@ configure_interactive_test_options() {
   prompt_value TEST_API_LOCAL_PORT "${TEST_API_LOCAL_PORT_WAS_SET}" "TEST_API_LOCAL_PORT 값을 정합니다." "로컬 curl이 cluster 내부 kite-api Service에 접속하도록 port-forward할 내 PC/서버의 포트입니다. 이미 쓰는 포트면 다른 값을 고르세요."
   prompt_value TEST_FRONTEND_LOCAL_PORT "${TEST_FRONTEND_LOCAL_PORT_WAS_SET}" "TEST_FRONTEND_LOCAL_PORT 값을 정합니다." "frontend Service가 HTML을 내는지 확인할 때 port-forward할 로컬 포트입니다."
   prompt_value TEST_GATEWAY_LOCAL_PORT "${TEST_GATEWAY_LOCAL_PORT_WAS_SET}" "TEST_GATEWAY_LOCAL_PORT 값을 정합니다." "gateway Service의 SSH banner를 확인하기 위해 port-forward할 로컬 포트입니다. 22번 대신 높은 포트를 쓰는 게 안전합니다."
+  prompt_value TEST_GATEWAY_HOST_KEY_SOURCE "${TEST_GATEWAY_HOST_KEY_SOURCE_WAS_SET}" "TEST_GATEWAY_HOST_KEY_SOURCE 값을 정합니다." "gateway SSH host key Secret을 어디서 만들지 정합니다. E2E 기본값 generate는 host /etc/ssh key를 읽지 않아 sudo 없이 자동화하기 좋습니다."
   prompt_value TEST_USERNAME "${TEST_USERNAME_WAS_SET}" "TEST_USERNAME 값을 정합니다." "테스트용 KiteUser의 로그인 username입니다. 테스트가 끝나면 TEST_CLEANUP=true일 때 이 사용자를 삭제합니다."
   TEST_EMAIL="${TEST_EMAIL:-${TEST_USERNAME}@example.com}"
   prompt_value TEST_EMAIL "${TEST_EMAIL_WAS_SET}" "TEST_EMAIL 값을 정합니다." "테스트 사용자가 API login에 사용할 email입니다. signup 후 이 email/password로 실제 API 로그인을 검증합니다."
@@ -180,7 +183,7 @@ configure_interactive_test_options() {
   kite_prompt_configure_bool TEST_CLEANUP "${TEST_CLEANUP_WAS_SET}" $'TEST_CLEANUP 값을 정합니다.\n  예를 고르면 테스트가 만든 VM, KiteUser, 사용자 namespace를 끝나고 삭제합니다. 실패 상태를 직접 조사하려면 아니오가 좋습니다.'
   kite_prompt_configure_bool TEST_DRY_RUN "${TEST_DRY_RUN_WAS_SET}" $'TEST_DRY_RUN 값을 정합니다.\n  예를 고르면 실제 빌드/배포/VM 생성 없이 어떤 명령을 실행할지 계획만 출력합니다.'
 
-  log "e2e choices: cluster=${TEST_CLUSTER}, namespace=${KITE_NAMESPACE}, image=${TEST_IMAGE_REGISTRY}/<component>:${TEST_IMAGE_TAG}, install_deps=${TEST_INSTALL_DEPS}, manage_host_sshd=${TEST_MANAGE_HOST_SSHD}, cleanup=${TEST_CLEANUP}, vm_timeout=${TEST_VM_TIMEOUT}, dry_run=${TEST_DRY_RUN}"
+  log "e2e choices: cluster=${TEST_CLUSTER}, namespace=${KITE_NAMESPACE}, image=${TEST_IMAGE_REGISTRY}/<component>:${TEST_IMAGE_TAG}, install_deps=${TEST_INSTALL_DEPS}, manage_host_sshd=${TEST_MANAGE_HOST_SSHD}, gateway_host_key_source=${TEST_GATEWAY_HOST_KEY_SOURCE}, cleanup=${TEST_CLEANUP}, vm_timeout=${TEST_VM_TIMEOUT}, dry_run=${TEST_DRY_RUN}"
 }
 
 validate_static_options() {
@@ -465,7 +468,7 @@ prepare_dependencies() {
 
 apply_kite_runtime() {
   log "applying Kite runtime manifest"
-  run_cmd env KITE_ASSUME_DEFAULTS=true KITE_NAMESPACE="${KITE_NAMESPACE}" "${ROOT_DIR}/build/deploy/scripts/ensure-gateway-host-key-secret.sh"
+  run_cmd env KITE_ASSUME_DEFAULTS=true KITE_NAMESPACE="${KITE_NAMESPACE}" KITE_GATEWAY_HOST_KEY_SOURCE="${TEST_GATEWAY_HOST_KEY_SOURCE}" "${ROOT_DIR}/build/deploy/scripts/ensure-gateway-host-key-secret.sh"
   run_cmd kubectl apply -f "${RENDERED_MANIFEST}"
 
   log "waiting for Kite rollouts"
@@ -755,6 +758,7 @@ print_plan() {
   image tag:      ${TEST_IMAGE_TAG}
   install deps:   ${TEST_INSTALL_DEPS}
   host sshd:      ${TEST_MANAGE_HOST_SSHD}
+  gateway key:    ${TEST_GATEWAY_HOST_KEY_SOURCE}
   cleanup:        ${TEST_CLEANUP}
   vm timeout:     ${TEST_VM_TIMEOUT}
   test user:      ${TEST_USERNAME} <${TEST_EMAIL}>
