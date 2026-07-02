@@ -69,6 +69,10 @@ CDI.
 build/deploy/scripts/uninstall-kite.sh
 ```
 
+`./clean.sh` is the root compatibility wrapper for the same deploy cleanup
+path. Inside this directory, `build/deploy/scripts/clean.sh` is the bootstrap
+entrypoint and `build/deploy/scripts/uninstall-kite.sh` is the implementation.
+
 Run the same cleanup without git or a repository clone:
 
 ```sh

@@ -199,9 +199,9 @@ Both install modes deploy `kite-gateway` as the SSH entrypoint. When the target
 host is Linux with systemd OpenSSH and the gateway external port is `22`, the
 install flow asks before moving the host's existing `sshd` listener to `2222`.
 The original config is backed up under `/etc/kite/host-sshd`, and
-`./clear.sh` or `build/deploy/scripts/uninstall-kite.sh` can restore it from
-that backup. Hosts without OpenSSH, systemd, Linux, or an active port `22`
-listener are skipped safely.
+`./clear.sh`, `./clean.sh`, or `build/deploy/scripts/uninstall-kite.sh` can
+restore it from that backup. Hosts without OpenSSH, systemd, Linux, or an
+active port `22` listener are skipped safely.
 
 ## Quick Install and Uninstall
 
@@ -237,7 +237,8 @@ curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/cle
 ```
 
 The remote cleanup flow downloads the selected GitHub archive into a temporary
-directory and runs `build/dev/clear.sh`. By default it removes Kite CRDs,
+directory and runs `build/deploy/scripts/clean.sh`, which delegates to
+`build/deploy/scripts/uninstall-kite.sh`. By default it removes Kite CRDs,
 namespace resources, Deployments, Services, and Kite-owned runtime state.
 Longhorn storage cleanup stays opt-in because it can delete VM disk
 infrastructure.
@@ -278,7 +279,8 @@ CLEAR_LONGHORN=true KITE_CLUSTER=k3s ./clear.sh
 CLEAR_LONGHORN_DATA=true CLEAR_LONGHORN_DATA_CONFIRM=true KITE_CLUSTER=k3s ./clear.sh
 ```
 
-More details are in `build/dev/README.md`.
+More details are in `build/dev/README.md`. The full `build` directory layout
+and `clear`/`clean` naming contract are documented in `build/README.md`.
 
 Host SSHD handoff can be controlled with environment variables:
 
@@ -343,8 +345,8 @@ cleanup environment variables are set.
 
 More details are in `build/deploy/README.md`.
 
-The same host SSHD handoff variables are supported by `./install.sh` and
-`build/deploy/scripts/uninstall-kite.sh`.
+The same host SSHD handoff variables are supported by `./install.sh`,
+`./clean.sh`, and `build/deploy/scripts/uninstall-kite.sh`.
 
 ## Container Images
 

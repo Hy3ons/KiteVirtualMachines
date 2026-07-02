@@ -57,8 +57,8 @@ KITE_HOST_SSHD_STATE="${KITE_HOST_SSHD_STATE:-/etc/kite/host-sshd/state.env}"
 KITE_HOST_SSHD_RESTORE_LOG="${KITE_HOST_SSHD_RESTORE_LOG:-/tmp/kite-host-sshd-restore.log}"
 HOST_SSHD_RESTORE_PID=""
 
-# shellcheck source=build/scripts/prompt.sh
-source "${ROOT_DIR}/build/scripts/prompt.sh"
+# shellcheck source=build/lib/prompt.sh
+source "${ROOT_DIR}/build/lib/prompt.sh"
 
 log_color_enabled() {
   [[ "${KITE_LOG_COLOR:-auto}" != "false" && -z "${NO_COLOR:-}" && -t 1 ]]

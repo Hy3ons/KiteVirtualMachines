@@ -2,11 +2,11 @@
 set -euo pipefail
 
 # ==============================================================================
-# Script: clean.sh
-# Description: curl 또는 checkout에서 Kite 배포 제거를 시작하는 호환 진입점이다. 실제 흐름은 build/deploy/scripts/clean.sh로 위임한다.
+# Script: build/deploy/scripts/clean.sh
+# Description: checkout 또는 curl 경로에서 pull 기반 Kite 배포 제거를 시작한다.
 #
 # Usage:
-#   ./clean.sh
+#   build/deploy/scripts/clean.sh
 #
 # Environment Variables:
 #   KITE_CLEAN_REPOSITORY: default Hy3ons/KiteVirtualMachines
@@ -62,8 +62,8 @@ require_command() {
   fi
 }
 
-script_dir() {
-  cd "$(dirname "${BASH_SOURCE[0]}")" && pwd
+script_root() {
+  cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd
 }
 
 archive_url() {
@@ -85,7 +85,7 @@ clean_from_checkout() {
   local root_dir="$1"
   shift
 
-  exec "${root_dir}/build/deploy/scripts/clean.sh" "$@"
+  exec "${root_dir}/build/deploy/scripts/uninstall-kite.sh" "$@"
 }
 
 clean_from_remote_archive() {
@@ -99,18 +99,18 @@ clean_from_remote_archive() {
   KITE_CLEAN_TMPDIR="$(mktemp -d "${TMPDIR:-/tmp}/kite-clean.XXXXXX")"
 
   url="$(archive_url)"
-  log "downloading Kite cleaner from ${url}"
+  log "downloading Kite deploy cleaner from ${url}"
   curl -fsSL "${url}" | tar -xz --strip-components=1 -C "${KITE_CLEAN_TMPDIR}"
 
   log "running Kite deploy cleaner without git clone from ${KITE_CLEAN_REPOSITORY}@${KITE_CLEAN_REF}"
-  "${KITE_CLEAN_TMPDIR}/build/deploy/scripts/clean.sh" "$@"
+  "${KITE_CLEAN_TMPDIR}/build/deploy/scripts/uninstall-kite.sh" "$@"
 }
 
 main() {
   local root_dir
 
-  root_dir="$(script_dir)"
-  if [[ -x "${root_dir}/build/deploy/scripts/clean.sh" ]]; then
+  root_dir="$(script_root)"
+  if [[ -x "${root_dir}/build/deploy/scripts/uninstall-kite.sh" ]]; then
     clean_from_checkout "${root_dir}" "$@"
     return
   fi

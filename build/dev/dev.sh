@@ -75,8 +75,8 @@ K3D_LOAD_IMAGES="${K3D_LOAD_IMAGES:-true}"
 KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-}"
 KIND_LOAD_IMAGES="${KIND_LOAD_IMAGES:-true}"
 
-# shellcheck source=build/scripts/prompt.sh
-source "${ROOT_DIR}/build/scripts/prompt.sh"
+# shellcheck source=build/lib/prompt.sh
+source "${ROOT_DIR}/build/lib/prompt.sh"
 
 cleanup() {
   rm -rf "${KUSTOMIZE_OVERLAY_DIR}"
