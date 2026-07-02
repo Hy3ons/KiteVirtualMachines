@@ -875,7 +875,7 @@ html, body {
 
 .docs-access-card,
 .docs-policy-card,
-.docs-offer-card,
+.docs-architecture-card,
 .docs-timeline-card {
   height: 100%;
 }
@@ -898,7 +898,7 @@ html, body {
 
 .docs-card-summary,
 .docs-policy-card p,
-.docs-offer-card p,
+.docs-architecture-card p,
 .docs-limit-card p {
   color: #594E46 !important;
   line-height: 1.7;
@@ -944,7 +944,7 @@ html, body {
   font-variant-numeric: tabular-nums;
 }
 
-.docs-offer-section {
+.docs-architecture-section {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(249, 248, 246, 0.88)),
     #FFFFFF;
