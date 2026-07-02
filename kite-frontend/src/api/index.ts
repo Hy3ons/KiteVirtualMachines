@@ -2,7 +2,9 @@ import { apiClient } from './axios';
 import { debugMockApi } from './debugMockStore';
 import type {
   AdminUsersResponse,
+  AdminCreateVmOfferPayload,
   CertPayload,
+  ClaimVmOfferPayload,
   CreateVmPayload,
   HTTPSPolicyPayload,
   LoginCredentials,
@@ -125,6 +127,20 @@ export const vmApi = {
     const { data } = await apiClient.post(`/vms/${name}/console-ticket`);
     return data;
   },
+  getOffers: async () => {
+    if (useMockApi) {
+      return debugMockApi.getOffers();
+    }
+    const { data } = await apiClient.get('/vm-offers');
+    return data;
+  },
+  claimOffer: async (name: string, payload: ClaimVmOfferPayload) => {
+    if (useMockApi) {
+      return debugMockApi.claimOffer(name, payload);
+    }
+    const { data } = await apiClient.post(`/vm-offers/${name}/claim`, payload);
+    return data;
+  },
 };
 
 // ========================
@@ -198,6 +214,27 @@ export const adminApi = {
       return debugMockApi.saveHTTPSPolicy(payload);
     }
     const { data } = await apiClient.post('/admin/https', payload);
+    return data;
+  },
+  saveAdminContact: async (adminContact: string) => {
+    if (useMockApi) {
+      return debugMockApi.saveAdminContact(adminContact);
+    }
+    const { data } = await apiClient.post('/admin/admin-contact', { adminContact });
+    return data;
+  },
+  createVmOffer: async (payload: AdminCreateVmOfferPayload) => {
+    if (useMockApi) {
+      return debugMockApi.createVmOffer(payload);
+    }
+    const { data } = await apiClient.post('/admin/vm-offers', payload);
+    return data;
+  },
+  deleteVmOffer: async (namespace: string, name: string) => {
+    if (useMockApi) {
+      return debugMockApi.deleteVmOffer(namespace, name);
+    }
+    const { data } = await apiClient.delete(`/admin/vm-offers/${namespace}/${name}`);
     return data;
   },
   rotateRuntimeSecrets: async (payload: RuntimeSecretRotation) => {

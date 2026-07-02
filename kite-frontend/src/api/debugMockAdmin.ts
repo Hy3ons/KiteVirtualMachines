@@ -84,6 +84,13 @@ export const debugAdminApi = {
     return { config };
   },
 
+  saveAdminContact: async (adminContact: string): Promise<ConfigResponse> => {
+    const state = readDebugState();
+    const config = { ...state.config, adminContact };
+    writeDebugState({ ...state, config });
+    return { config };
+  },
+
   rotateRuntimeSecrets: async (payload: RuntimeSecretRotation): Promise<ConfigResponse> => {
     const state = readDebugState();
     const config = {

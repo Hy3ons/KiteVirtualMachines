@@ -11,6 +11,7 @@ type UserDashboardColumnsOptions = {
   onStart: (name: string) => void;
   onStop: (name: string) => void;
   onDelete: (name: string) => void;
+  canMutateVm: boolean;
 };
 
 export const createUserDashboardColumns = ({
@@ -19,7 +20,8 @@ export const createUserDashboardColumns = ({
   onOpenConsole,
   onStart,
   onStop,
-  onDelete
+  onDelete,
+  canMutateVm
 }: UserDashboardColumnsOptions): TableColumnsType<DashboardVm> => [
   {
     title: 'Name',
@@ -74,6 +76,7 @@ export const createUserDashboardColumns = ({
             type="text"
             icon={<CaretRightOutlined style={{ color: '#52c41a' }} />}
             onClick={() => onStart(record.name)}
+            disabled={!canMutateVm}
           />
         )}
         {record.phase === 'Running' && (
@@ -81,12 +84,13 @@ export const createUserDashboardColumns = ({
             type="text"
             icon={<PoweroffOutlined style={{ color: '#d9363e' }} />}
             onClick={() => onStop(record.name)}
+            disabled={!canMutateVm}
           >
             Stop
           </Button>
         )}
-        <Popconfirm title="정말 이 VM을 삭제하시겠습니까? 데이터가 모두 날아갑니다." onConfirm={() => onDelete(record.name)}>
-          <Button type="text" danger icon={<DeleteOutlined />} />
+        <Popconfirm title="정말 이 VM을 삭제하시겠습니까? 데이터가 모두 날아갑니다." onConfirm={() => onDelete(record.name)} disabled={!canMutateVm}>
+          <Button type="text" danger icon={<DeleteOutlined />} disabled={!canMutateVm} />
         </Popconfirm>
       </Space>
     )

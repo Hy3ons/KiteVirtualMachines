@@ -42,7 +42,7 @@ type vmPowerRequest struct {
 // Level 0 users are not allowed to use VM APIs.
 // This function is used by RegisterV1 for frontend dashboard VM operations.
 func RegisterVirtualMachines(api *gin.RouterGroup, deps Dependencies) {
-	vms := api.Group("/vms", RequireAccessLevel(deps, auth.AccessLevelUser))
+	vms := api.Group("/vms", RequireAccessLevel(deps, auth.AccessLevelReadOnly))
 	vms.GET("", vmListHandler(deps))
 	vms.POST("", vmCreateHandler(deps))
 	vms.GET("/:name", vmGetHandler(deps))
@@ -89,8 +89,8 @@ func vmCreateHandler(deps Dependencies) gin.HandlerFunc {
 		if !ok {
 			return
 		}
-		if user.AccessLevel < int64(auth.AccessLevelUser) {
-			c.JSON(http.StatusForbidden, gin.H{"message": "VM creation requires access level 1 or higher"})
+		if !canMutateOwnVM(user.AccessLevel) {
+			c.JSON(http.StatusForbidden, gin.H{"message": "VM creation requires access level 1 or higher. Contact the administrator."})
 			return
 		}
 
@@ -108,8 +108,8 @@ func vmCreateHandler(deps Dependencies) gin.HandlerFunc {
 				writeVMError(c, err, "failed to list virtual machines")
 				return
 			}
-			if len(vms) >= levelOneVMQuota {
-				c.JSON(http.StatusForbidden, gin.H{"message": "Level 1 users can create up to 3 virtual machines"})
+			if activeVMCount(vms) >= levelOneVMQuota {
+				c.JSON(http.StatusForbidden, gin.H{"message": "Level 1 users can create up to 2 active virtual machines"})
 				return
 			}
 		}
@@ -167,6 +167,10 @@ func vmUpdateHandler(deps Dependencies) gin.HandlerFunc {
 		if !ok {
 			return
 		}
+		if !canMutateOwnVM(user.AccessLevel) {
+			c.JSON(http.StatusForbidden, gin.H{"message": "VM update requires access level 1 or higher"})
+			return
+		}
 
 		var req vmUpdateRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -205,6 +209,10 @@ func vmDeleteHandler(deps Dependencies) gin.HandlerFunc {
 		if !ok {
 			return
 		}
+		if !canMutateOwnVM(user.AccessLevel) {
+			c.JSON(http.StatusForbidden, gin.H{"message": "VM delete requires access level 1 or higher"})
+			return
+		}
 
 		vm, err := vmServiceFromDependencies(deps).MarkDelete(c.Request.Context(), user.Namespace, c.Param("name"))
 		if err != nil {
@@ -224,6 +232,10 @@ func vmPowerHandler(deps Dependencies, powerState string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user, ok := currentUser(c, deps)
 		if !ok {
+			return
+		}
+		if !canMutateOwnVM(user.AccessLevel) {
+			c.JSON(http.StatusForbidden, gin.H{"message": "VM power control requires access level 1 or higher"})
 			return
 		}
 

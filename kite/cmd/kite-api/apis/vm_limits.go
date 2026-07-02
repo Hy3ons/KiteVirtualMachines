@@ -5,8 +5,8 @@ import "kite/internal/auth"
 const (
 	levelOneFixedCPU    = 2
 	levelOneFixedMemory = "4Gi"
-	levelOneFixedDisk   = "20Gi"
-	levelOneVMQuota     = 3
+	levelOneFixedDisk   = "25Gi"
+	levelOneVMQuota     = 2
 )
 
 // applyAccessLevelCreateLimits enforces VM create-time resource limits from the authenticated user.

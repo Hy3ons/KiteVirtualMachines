@@ -16,3 +16,10 @@ export type VmCreateFormValues = {
 export type VmCreatePayload = CreateVmPayload;
 
 export type VmCreateForm = FormInstance<VmCreateFormValues>;
+
+export type VmOfferClaimFormValues = {
+  readonly vmName: string;
+  readonly domainPrefix?: string;
+  readonly sshId: string;
+  readonly initialLoginPassword: string;
+};

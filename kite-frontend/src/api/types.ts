@@ -38,6 +38,7 @@ export type ConfigResponse = {
   readonly config: {
     readonly baseDomain: string;
     readonly forceHttps: boolean;
+    readonly adminContact: string;
     readonly hasJWTSecret: boolean;
     readonly hasPasswordSalt: boolean;
     readonly hasTLSCertificate: boolean;
@@ -73,6 +74,49 @@ export type VmsResponse = {
 
 export type VmResponse = {
   readonly vm: UserVm;
+};
+
+export type VmOfferPhase = 'Available' | 'Claimed' | 'Expired';
+
+export type VmOffer = {
+  readonly id: string;
+  readonly name: string;
+  readonly namespace: string;
+  readonly cpu: number;
+  readonly memory: string;
+  readonly disk: string;
+  readonly image: string;
+  readonly expiresAt: string;
+  readonly createdBy: string;
+  readonly phase: VmOfferPhase;
+  readonly claimedBy: string;
+  readonly message: string;
+};
+
+export type VmOffersResponse = {
+  readonly offers: readonly VmOffer[];
+};
+
+export type ClaimVmOfferPayload = {
+  readonly vmName: string;
+  readonly domainPrefix?: string;
+  readonly sshId: string;
+  readonly initialLoginPassword: string;
+  readonly powerState?: 'On' | 'Off';
+};
+
+export type AdminCreateVmOfferPayload = {
+  readonly targetUser?: string;
+  readonly targetNamespace?: string;
+  readonly cpu: number;
+  readonly memory: string;
+  readonly disk: string;
+  readonly image?: string;
+  readonly expiresAt?: string;
+};
+
+export type VmOfferResponse = {
+  readonly offer: VmOffer;
 };
 
 export type ConsoleTicketResponse = {

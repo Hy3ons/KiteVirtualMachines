@@ -7,6 +7,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"kite/internal/account"
+	"kite/internal/auth"
 	vmservice "kite/internal/vm"
 )
 
@@ -50,6 +51,26 @@ func currentUser(c *gin.Context, deps Dependencies) (account.PublicUser, bool) {
 // The returned service reads and writes KiteVirtualMachine CRDs.
 func vmServiceFromDependencies(deps Dependencies) *vmservice.Service {
 	return vmservice.NewService(deps.DynamicClient, deps.Config.PasswordSalt)
+}
+
+// canMutateOwnVM reports whether an access level may change VMs in its own namespace.
+// accessLevel is read from the current KiteUser object rather than trusting only token claims.
+// The result is used by VM create, update, delete, and power handlers.
+func canMutateOwnVM(accessLevel int64) bool {
+	return accessLevel >= int64(auth.AccessLevelUser)
+}
+
+// activeVMCount counts VMs that still represent active user allocations.
+// vms are already scoped to one user's namespace.
+// Deleting VMs are skipped so a pending cleanup does not permanently consume Level 1 quota.
+func activeVMCount(vms []vmservice.VirtualMachine) int {
+	count := 0
+	for _, vm := range vms {
+		if !vm.Delete {
+			count++
+		}
+	}
+	return count
 }
 
 // normalizeOptionalDisk converts PATCH disk input to an optional string pointer.

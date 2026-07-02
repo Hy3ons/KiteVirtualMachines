@@ -14,7 +14,6 @@ import { KiteDocsPage } from './pages/KiteDocsPage';
 import { DEBUG_DIRECT_ROUTES_ENABLED } from './config/debug';
 import { GlobalFooter } from './components/GlobalFooter';
 
-// 인증 가드 (로그인 안된 유저 튕겨내기)
 const RequireAuth = ({ children }: { children: ReactElement }) => {
   const authenticated = useAuthStore((state) => state.authenticated);
   const location = useLocation();
@@ -22,14 +21,13 @@ const RequireAuth = ({ children }: { children: ReactElement }) => {
   return children;
 };
 
-// 관리자 가드 (레벨 2 이상만 접근)
-const RequireAdmin = ({ children }: { children: ReactElement }) => {
+const RequireAdmin = ({ children, minimumAccessLevel = 2 }: { children: ReactElement; minimumAccessLevel?: number }) => {
   const authenticated = useAuthStore((state) => state.authenticated);
   const accessLevel = useAuthStore((state) => state.accessLevel);
   const location = useLocation();
   
   if (!authenticated && !DEBUG_DIRECT_ROUTES_ENABLED) return <Navigate to="/" state={{ requireLogin: true, path: location.pathname }} replace />;
-  if (!DEBUG_DIRECT_ROUTES_ENABLED && (accessLevel === null || accessLevel < 2)) return <Navigate to="/dashboard" replace />;
+  if (!DEBUG_DIRECT_ROUTES_ENABLED && (accessLevel === null || accessLevel < minimumAccessLevel)) return <Navigate to="/dashboard" replace />;
   return children;
 };
 
@@ -39,13 +37,11 @@ function App() {
       <AntdApp>
         <BrowserRouter>
           <Routes>
-            {/* 랜딩 겸 로그인 페이지 */}
             <Route path="/" element={<LandingPage />} />
             <Route path="/kite-docs" element={<KiteDocsPage />} />
             <Route path="/signup" element={<SignupPage />} />
             <Route path="/login" element={<Navigate to="/" replace />} />
 
-            {/* User Routes */}
             <Route path="/dashboard" element={
               <RequireAuth>
                 <UserDashboard />
@@ -62,9 +58,8 @@ function App() {
               </RequireAuth>
             } />
 
-            {/* Admin Routes */}
             <Route path="/admin/settings" element={
-              <RequireAdmin>
+              <RequireAdmin minimumAccessLevel={3}>
                 <AdminSettings />
               </RequireAdmin>
             } />

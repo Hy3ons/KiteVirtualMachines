@@ -638,6 +638,27 @@ html, body {
   flex-wrap: wrap;
 }
 
+.dashboard-offer-card {
+  margin-top: 24px;
+}
+
+.dashboard-offer-head {
+  margin-bottom: 16px;
+}
+
+.dashboard-offer-icon {
+  color: #8B7355;
+  font-size: 22px;
+}
+
+.dashboard-offer-copy {
+  color: #594E46;
+  font-size: 13px;
+  line-height: 1.55;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
 .vm-detail-heading {
   display: flex;
   justify-content: space-between;
@@ -798,6 +819,30 @@ html, body {
 
 .admin-settings-card:last-child {
   margin-bottom: 0;
+}
+
+.admin-offer-card {
+  width: 100%;
+}
+
+.admin-offer-heading {
+  margin-bottom: 12px;
+}
+
+.admin-offer-heading .docs-card-icon {
+  margin-bottom: 0;
+}
+
+.admin-offer-spec-row {
+  width: 100%;
+}
+
+.admin-offer-spec-row .ant-form-item {
+  flex: 1 1 160px;
+}
+
+.admin-offer-spec-row .ant-input-number {
+  width: 100%;
 }
 
 .docs-content {

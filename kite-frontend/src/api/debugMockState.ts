@@ -11,13 +11,17 @@ const isDebugState = (value: unknown): value is DebugState => {
   return (
     hasKey(value, 'users') &&
     hasKey(value, 'vms') &&
+    hasKey(value, 'offers') &&
     hasKey(value, 'config') &&
     hasKey(value, 'nextVmId') &&
+    hasKey(value, 'nextOfferId') &&
     Array.isArray(value.users) &&
     Array.isArray(value.vms) &&
+    Array.isArray(value.offers) &&
     typeof value.config === 'object' &&
     value.config !== null &&
-    typeof value.nextVmId === 'number'
+    typeof value.nextVmId === 'number' &&
+    typeof value.nextOfferId === 'number'
   );
 };
 
@@ -91,7 +95,7 @@ export const makeSyntheticVm = (name: string, state: DebugState): UserVm => {
     cpu: 2,
     memory: '4Gi',
     image: 'ubuntu-22.04',
-    disk: '20Gi',
+    disk: '25Gi',
     domainPrefix,
     sshId: 'ubuntu',
     delete: false,

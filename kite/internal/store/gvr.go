@@ -13,3 +13,9 @@ var kiteVirtualMachineGVR = schema.GroupVersionResource{
 	Version:  "v1",
 	Resource: "kitevirtualmachines",
 }
+
+var kiteVirtualMachineOfferGVR = schema.GroupVersionResource{
+	Group:    "hy3ons.github.io",
+	Version:  "v1",
+	Resource: "kitevirtualmachineoffers",
+}

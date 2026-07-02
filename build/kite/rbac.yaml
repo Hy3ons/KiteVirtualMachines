@@ -4,7 +4,7 @@ metadata:
   name: kite-control-plane-role
 rules:
   - apiGroups: ["hy3ons.github.io"]
-    resources: ["kiteusers", "kiteusers/status", "kitevirtualmachines", "kitevirtualmachines/status"]
+    resources: ["kiteusers", "kiteusers/status", "kitevirtualmachines", "kitevirtualmachines/status", "kitevirtualmachineoffers", "kitevirtualmachineoffers/status"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: [""]
     resources: ["namespaces", "persistentvolumeclaims", "services", "secrets", "configmaps", "resourcequotas", "limitranges"]

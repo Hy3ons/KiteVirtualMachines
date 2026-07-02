@@ -70,6 +70,7 @@ func RegisterV1(api *gin.RouterGroup, deps Dependencies) {
 	authGroup.POST("/signup", userSignUpHandler(deps))
 
 	RegisterVirtualMachines(api, deps)
+	RegisterVirtualMachineOffers(api, deps)
 	RegisterAdmin(api, deps)
 }
 

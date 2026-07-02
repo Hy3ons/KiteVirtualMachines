@@ -44,6 +44,7 @@ var secretGVR = schema.GroupVersionResource{
 type Settings struct {
 	BaseDomain        string `json:"baseDomain"`
 	ForceHTTPS        bool   `json:"forceHttps"`
+	AdminContact      string `json:"adminContact"`
 	HasJWTSecret      bool   `json:"hasJWTSecret"`
 	HasPasswordSalt   bool   `json:"hasPasswordSalt"`
 	HasTLSCertificate bool   `json:"hasTLSCertificate"`
@@ -80,6 +81,7 @@ func (s *Service) Get(ctx context.Context) (Settings, error) {
 	return Settings{
 		BaseDomain:        data[BaseDomainConfigKey],
 		ForceHTTPS:        strings.EqualFold(data[config.ForceHTTPSConfigKey], "true"),
+		AdminContact:      data[config.AdminContactKey],
 		HasJWTSecret:      data[config.JWTSecretKey] != "",
 		HasPasswordSalt:   data[config.PasswordSaltKey] != "",
 		HasTLSCertificate: hasTLS,
@@ -117,6 +119,14 @@ func (s *Service) UpdateBaseDomain(ctx context.Context, baseDomain string) (Sett
 // The returned Settings value reflects the updated config.
 func (s *Service) UpdateForceHTTPS(ctx context.Context, forceHTTPS bool) (Settings, error) {
 	return s.updateRuntimeConfigValue(ctx, config.ForceHTTPSConfigKey, strconv.FormatBool(forceHTTPS))
+}
+
+// UpdateAdminContact stores the operator contact string in kite/kite-runtime-config.
+// ctx controls Kubernetes API create or update requests.
+// adminContact is a free-form email, phone number, chat handle, or URL shown to users without VM create access.
+// The returned Settings value reflects the updated config.
+func (s *Service) UpdateAdminContact(ctx context.Context, adminContact string) (Settings, error) {
+	return s.updateRuntimeConfigValue(ctx, config.AdminContactKey, strings.TrimSpace(adminContact))
 }
 
 // RotateRuntimeSecrets replaces JWT and password salt values in kite/kite-runtime-config.

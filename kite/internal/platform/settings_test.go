@@ -42,6 +42,21 @@ func TestUpdateForceHTTPSStoresRuntimeConfig(t *testing.T) {
 	}
 }
 
+func TestUpdateAdminContactStoresRuntimeConfig(t *testing.T) {
+	dynamicClient := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
+		configMapGVR: "ConfigMapList",
+	}, newPlatformSettingsRuntimeConfig("apps.example.com", "false"))
+
+	settings, err := NewService(dynamicClient).UpdateAdminContact(context.Background(), "ops@example.com")
+	if err != nil {
+		t.Fatalf("failed to update admin contact: %v", err)
+	}
+
+	if settings.AdminContact != "ops@example.com" {
+		t.Fatalf("expected admin contact to be stored, got %q", settings.AdminContact)
+	}
+}
+
 func newPlatformSettingsRuntimeConfig(baseDomain string, forceHTTPS string) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
 		Object: map[string]any{
@@ -54,6 +69,7 @@ func newPlatformSettingsRuntimeConfig(baseDomain string, forceHTTPS string) *uns
 			"data": map[string]any{
 				BaseDomainConfigKey:        baseDomain,
 				config.ForceHTTPSConfigKey: forceHTTPS,
+				config.AdminContactKey:     "",
 				config.JWTSecretKey:        "jwt",
 				config.PasswordSaltKey:     "salt",
 			},

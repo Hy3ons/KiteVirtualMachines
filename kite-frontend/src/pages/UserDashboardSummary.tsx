@@ -92,7 +92,7 @@ export const UserDashboardSummary: React.FC<UserDashboardSummaryProps> = ({
               <Text type="secondary">{vms.length} / {quotaLimit}</Text>
             </div>
             <Progress percent={quotaPercent} strokeColor="#8B7355" showInfo={false} />
-            <Text type="secondary">CPU 2, RAM 4Gi, Disk 20Gi 스펙으로만 생성됩니다.</Text>
+            <Text type="secondary">CPU 2, RAM 4Gi, Disk 25Gi 스펙으로만 직접 생성됩니다.</Text>
           </Space>
         </Card>
       )}

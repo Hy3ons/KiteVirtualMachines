@@ -18,6 +18,10 @@ type CertificateSettingsForm = {
   readonly tlsKey: string;
 };
 
+type AdminContactForm = {
+  readonly adminContact: string;
+};
+
 const { Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -30,12 +34,14 @@ export const AdminSettings: React.FC = () => {
   
   const [loadingDomain, setLoadingDomain] = useState(false);
   const [loadingHTTPS, setLoadingHTTPS] = useState(false);
+  const [loadingContact, setLoadingContact] = useState(false);
   const [loadingRuntime, setLoadingRuntime] = useState(false);
   const [loadingCert, setLoadingCert] = useState(false);
   const [forceHTTPS, setForceHTTPS] = useState(false);
   const [runtimeStatus, setRuntimeStatus] = useState<{ hasJWTSecret?: boolean; hasPasswordSalt?: boolean }>({});
   
   const [domainForm] = Form.useForm();
+  const [contactForm] = Form.useForm();
   const [certForm] = Form.useForm();
 
   useEffect(() => {
@@ -43,6 +49,7 @@ export const AdminSettings: React.FC = () => {
     adminApi.getSettings().then(data => {
       if (data.config) {
         domainForm.setFieldsValue({ baseDomain: data.config.baseDomain });
+        contactForm.setFieldsValue({ adminContact: data.config.adminContact });
         setForceHTTPS(Boolean(data.config.forceHttps));
         setRuntimeStatus({
           hasJWTSecret: data.config.hasJWTSecret,
@@ -52,7 +59,7 @@ export const AdminSettings: React.FC = () => {
     }).catch(() => {
       // ignore
     });
-  }, [domainForm]);
+  }, [contactForm, domainForm]);
 
   const handleSaveDomain = async (values: DomainSettingsForm) => {
     try {
@@ -78,6 +85,18 @@ export const AdminSettings: React.FC = () => {
       message.error('HTTPS 강제 설정 변경에 실패했습니다.');
     } finally {
       setLoadingHTTPS(false);
+    }
+  };
+
+  const handleSaveAdminContact = async (values: AdminContactForm) => {
+    try {
+      setLoadingContact(true);
+      await adminApi.saveAdminContact(values.adminContact);
+      message.success('관리자 연락처가 저장되었습니다. Level 0 사용자 안내에 반영됩니다.');
+    } catch {
+      message.error('관리자 연락처 저장에 실패했습니다.');
+    } finally {
+      setLoadingContact(false);
     }
   };
 
@@ -159,6 +178,21 @@ export const AdminSettings: React.FC = () => {
             <Switch checked={forceHTTPS} loading={loadingHTTPS} onChange={handleToggleForceHTTPS} />
             <Text strong>{forceHTTPS ? 'HTTP 요청을 HTTPS로 강제 전환' : 'HTTP 접속 허용'}</Text>
           </Space>
+        </Card>
+
+        <Card hoverable className="admin-settings-card">
+          <Title level={4}>관리자 연락처</Title>
+          <Paragraph style={{ color: '#666' }}>
+            VM 생성 권한이 없는 사용자에게 보여줄 연락 창구입니다. 이메일, 전화번호, Slack 채널, URL처럼 운영팀이 실제로 받는 값을 입력하세요.
+          </Paragraph>
+          <Form form={contactForm} layout="vertical" onFinish={handleSaveAdminContact}>
+            <Form.Item name="adminContact" label="Contact">
+              <Input placeholder="ops@example.com / Slack #kite-help / https://..." size="large" />
+            </Form.Item>
+            <div style={{ textAlign: 'right' }}>
+              <Button type="primary" htmlType="submit" loading={loadingContact}>연락처 저장</Button>
+            </div>
+          </Form>
         </Card>
 
         <Card hoverable className="admin-settings-card">

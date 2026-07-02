@@ -98,3 +98,42 @@ type KiteVirtualMachineList struct {
 
 	Items []KiteVirtualMachine `json:"items"`
 }
+
+// KiteVirtualMachineOffer represents an admin-provided VM spec allocation.
+// This type maps to build/kite/crds.yaml and is used when converting
+// unstructured offer objects into typed controller or API values.
+type KiteVirtualMachineOffer struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   KiteVirtualMachineOfferSpec   `json:"spec,omitempty"`
+	Status KiteVirtualMachineOfferStatus `json:"status,omitempty"`
+}
+
+// KiteVirtualMachineOfferSpec contains the admin-provided VM capacity fields.
+// The user fills only identity and login fields when claiming the offer.
+type KiteVirtualMachineOfferSpec struct {
+	CPU       int         `json:"cpu,omitempty"`
+	Memory    string      `json:"memory,omitempty"`
+	Disk      string      `json:"disk,omitempty"`
+	Image     string      `json:"image,omitempty"`
+	ExpiresAt metav1.Time `json:"expiresAt,omitempty"`
+	CreatedBy string      `json:"createdBy,omitempty"`
+}
+
+// KiteVirtualMachineOfferStatus contains claim state for one VM offer.
+// Claimed offers are deleted after the corresponding KiteVirtualMachine is created.
+type KiteVirtualMachineOfferStatus struct {
+	Phase              string `json:"phase,omitempty"`
+	ClaimedBy          string `json:"claimedBy,omitempty"`
+	Message            string `json:"message,omitempty"`
+	ObservedGeneration int64  `json:"observedGeneration,omitempty"`
+}
+
+// KiteVirtualMachineOfferList represents a Kubernetes list response for VM offers.
+type KiteVirtualMachineOfferList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []KiteVirtualMachineOffer `json:"items"`
+}

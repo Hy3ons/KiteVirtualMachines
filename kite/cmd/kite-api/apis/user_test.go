@@ -250,6 +250,12 @@ func newVirtualMachineTestObject(name string, namespace string) *unstructured.Un
 	}
 }
 
+var secretTestGVR = schema.GroupVersionResource{
+	Group:    "",
+	Version:  "v1",
+	Resource: "secrets",
+}
+
 func newTestTokenService(t *testing.T) *auth.TokenService {
 	t.Helper()
 
@@ -259,6 +265,28 @@ func newTestTokenService(t *testing.T) *auth.TokenService {
 	}
 
 	return tokenService
+}
+
+func assertNestedInt64(t *testing.T, obj *unstructured.Unstructured, expected int64, fields ...string) {
+	t.Helper()
+	got, found, err := unstructured.NestedInt64(obj.Object, fields...)
+	if err != nil {
+		t.Fatalf("failed to read nested int64 %v: %v", fields, err)
+	}
+	if !found || got != expected {
+		t.Fatalf("expected nested int64 %v to be %d, got %d found=%v", fields, expected, got, found)
+	}
+}
+
+func assertNestedString(t *testing.T, obj *unstructured.Unstructured, expected string, fields ...string) {
+	t.Helper()
+	got, found, err := unstructured.NestedString(obj.Object, fields...)
+	if err != nil {
+		t.Fatalf("failed to read nested string %v: %v", fields, err)
+	}
+	if !found || got != expected {
+		t.Fatalf("expected nested string %v to be %q, got %q found=%v", fields, expected, got, found)
+	}
 }
 
 var userTestVirtualMachineGVR = schema.GroupVersionResource{

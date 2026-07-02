@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { SEO } from '../components/SEO';
 import { configApi, vmApi } from '../api';
-import { App as AntdApp, Layout, Typography, Button, Table, Space, Form, Avatar, Empty, Tooltip } from 'antd';
-import { PlusOutlined, LogoutOutlined, ReloadOutlined } from '@ant-design/icons';
+import { App as AntdApp, Layout, Typography, Button, Table, Space, Form, Avatar, Empty } from 'antd';
+import { PlusOutlined, LogoutOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../store/useAuthStore';
 import { useLogout } from '../hooks/useLogout';
 import { useNavigate } from 'react-router-dom';
@@ -10,12 +10,15 @@ import { GlobalHeader } from '../components/GlobalHeader';
 import { UserDashboardSummary } from './UserDashboardSummary';
 import { VmCreateModal } from './VmCreateModal';
 import { VmConnectionDrawer } from './VmConnectionDrawer';
+import { UserVmOffersSection } from './UserVmOffersSection';
+import { UserDashboardToolbar } from './UserDashboardToolbar';
 import { createUserDashboardColumns } from './UserDashboardColumns';
 import { LEVEL_1_FIXED_CPU, LEVEL_1_FIXED_DISK_GI, LEVEL_1_FIXED_MEMORY, LEVEL_1_VM_QUOTA, MIN_DISK_GI, getAccessLevelDescription } from './userDashboardAccess';
-import type { DashboardVm, VmCreateFormValues } from './UserDashboardTypes';
+import type { VmOffer } from '../api/types';
+import type { DashboardVm, VmCreateFormValues, VmOfferClaimFormValues } from './UserDashboardTypes';
 
 const { Content } = Layout;
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 export const UserDashboard: React.FC = () => {
   const { message } = AntdApp.useApp();
@@ -24,12 +27,14 @@ export const UserDashboard: React.FC = () => {
   const safeAccessLevel = accessLevel ?? 1;
   const navigate = useNavigate();
   const [vms, setVms] = useState<DashboardVm[]>([]);
+  const [offers, setOffers] = useState<VmOffer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingOffers, setLoadingOffers] = useState(true);
   const [baseDomain, setBaseDomain] = useState('');
+  const [adminContact, setAdminContact] = useState('');
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [form] = Form.useForm();
 
-  // Connection Drawer State
   const [isDrawerVisible, setIsDrawerVisible] = useState(false);
   const [selectedVm, setSelectedVm] = useState<DashboardVm | null>(null);
   const canCreateVm = safeAccessLevel >= 1 && (safeAccessLevel !== 1 || vms.length < LEVEL_1_VM_QUOTA);
@@ -50,15 +55,29 @@ export const UserDashboard: React.FC = () => {
     try {
       const data = await configApi.getConfig();
       setBaseDomain(data.config?.baseDomain || '');
+      setAdminContact(data.config?.adminContact || '');
     } catch {
       setBaseDomain('');
+      setAdminContact('');
       message.error('접속 도메인 설정을 불러오는데 실패했습니다.');
     }
   }, [message]);
 
+  const fetchOffers = useCallback(async () => {
+    try {
+      setLoadingOffers(true);
+      const data = await vmApi.getOffers();
+      setOffers(data.offers || []);
+    } catch {
+      message.error('VM offer 목록을 불러오는데 실패했습니다.');
+    } finally {
+      setLoadingOffers(false);
+    }
+  }, [message]);
+
   useEffect(() => {
-    void Promise.resolve().then(() => Promise.all([fetchVms(), fetchPlatformConfig()]));
-  }, [fetchPlatformConfig, fetchVms]);
+    void Promise.resolve().then(() => Promise.all([fetchVms(), fetchPlatformConfig(), fetchOffers()]));
+  }, [fetchOffers, fetchPlatformConfig, fetchVms]);
 
   const handleStart = async (name: string) => {
     try {
@@ -95,7 +114,7 @@ export const UserDashboard: React.FC = () => {
 
   const handleCreate = async (values: VmCreateFormValues) => {
     if (safeAccessLevel < 1) {
-      message.error('VM 생성 권한이 없습니다. 관리자에게 권한을 요청하세요.');
+      message.error(adminContact ? `VM 생성 권한이 없습니다. 관리자에게 문의하세요: ${adminContact}` : 'VM 생성 권한이 없습니다. 관리자에게 권한을 요청하세요.');
       return;
     }
 
@@ -130,6 +149,24 @@ export const UserDashboard: React.FC = () => {
     }
   };
 
+  const handleClaimOffer = async (offer: VmOffer, values: VmOfferClaimFormValues) => {
+    try {
+      message.loading({ content: 'Claiming VM offer...', key: 'claim-offer' });
+      await vmApi.claimOffer(offer.name, {
+        vmName: values.vmName,
+        domainPrefix: values.domainPrefix,
+        sshId: values.sshId,
+        initialLoginPassword: values.initialLoginPassword,
+        powerState: 'On',
+      });
+      message.success({ content: 'VM offer claim이 요청되었습니다.', key: 'claim-offer' });
+      await Promise.all([fetchVms(), fetchOffers()]);
+    } catch (error) {
+      const fallbackMessage = error instanceof Error ? error.message : 'VM offer claim 실패';
+      message.error({ content: fallbackMessage, key: 'claim-offer' });
+    }
+  };
+
   const showConnectGuide = (vm: DashboardVm) => {
     setSelectedVm(vm);
     setIsDrawerVisible(true);
@@ -141,7 +178,8 @@ export const UserDashboard: React.FC = () => {
     onOpenConsole: (name) => navigate(`/dashboard/kite-machine/${name}/console`),
     onStart: handleStart,
     onStop: handleStop,
-    onDelete: handleDelete
+    onDelete: handleDelete,
+    canMutateVm: safeAccessLevel >= 1
   });
 
   return (
@@ -172,25 +210,14 @@ export const UserDashboard: React.FC = () => {
           accessDescription={getAccessLevelDescription(safeAccessLevel)}
         />
 
-        <div className="dashboard-toolbar">
-          <Title level={2} style={{ margin: 0 }}>My Virtual Machines</Title>
-          <Space wrap>
-            <Tooltip title="목록 새로고침">
-              <Button icon={<ReloadOutlined />} onClick={fetchVms} loading={loading} />
-            </Tooltip>
-            <Tooltip title={!canCreateVm ? (safeAccessLevel < 1 ? 'VM 생성 권한이 없습니다.' : 'Level 1 VM 생성 한도에 도달했습니다.') : ''}>
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                size="large"
-                disabled={!canCreateVm}
-                onClick={() => setIsModalVisible(true)}
-              >
-                Create VM
-              </Button>
-            </Tooltip>
-          </Space>
-        </div>
+        <UserDashboardToolbar
+          canCreateVm={canCreateVm}
+          loading={loading}
+          accessLevel={safeAccessLevel}
+          adminContact={adminContact}
+          onRefresh={fetchVms}
+          onCreate={() => setIsModalVisible(true)}
+        />
         
         <Table 
           columns={columns} 
@@ -203,7 +230,7 @@ export const UserDashboard: React.FC = () => {
             emptyText: (
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={safeAccessLevel < 1 ? 'VM 생성 권한이 없습니다.' : '아직 생성된 VM이 없습니다.'}
+                description={safeAccessLevel < 1 ? `VM 생성 권한이 없습니다.${adminContact ? ` 관리자 연락처: ${adminContact}` : ''}` : '아직 생성된 VM이 없습니다.'}
               >
                 {canCreateVm && (
                   <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsModalVisible(true)}>
@@ -213,6 +240,12 @@ export const UserDashboard: React.FC = () => {
               </Empty>
             )
           }}
+        />
+
+        <UserVmOffersSection
+          offers={offers}
+          loading={loadingOffers}
+          onClaim={handleClaimOffer}
         />
       </Content>
 
@@ -227,6 +260,7 @@ export const UserDashboard: React.FC = () => {
         fixedMemory={LEVEL_1_FIXED_MEMORY}
         fixedDiskGi={LEVEL_1_FIXED_DISK_GI}
         minDiskGi={MIN_DISK_GI}
+        adminContact={adminContact}
       />
 
       <VmConnectionDrawer

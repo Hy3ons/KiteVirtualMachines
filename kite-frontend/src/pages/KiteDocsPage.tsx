@@ -1,108 +1,22 @@
 import React from 'react';
 import { SEO } from '../components/SEO';
 import { GlobalHeader } from '../components/GlobalHeader';
-import type { TimelineProps } from 'antd';
 import { Alert, Button, Card, Col, Divider, Layout, Row, Space, Tag, Timeline, Typography } from 'antd';
 import {
   ApartmentOutlined,
   BookOutlined,
   CloudServerOutlined,
   ControlOutlined,
+  GiftOutlined,
   LockOutlined,
   SafetyCertificateOutlined,
   UserSwitchOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import { accessLevelDocs, architectureTimelineItems } from './KiteDocsData';
 
 const { Content } = Layout;
 const { Title, Paragraph, Text } = Typography;
-
-type AccessLevelDoc = {
-  readonly level: string;
-  readonly title: string;
-  readonly tone: string;
-  readonly summary: string;
-  readonly rules: readonly string[];
-};
-
-const accessLevelDocs: readonly AccessLevelDoc[] = [
-  {
-    level: '0',
-    title: 'No VM Create',
-    tone: '권한 요청 단계',
-    summary: '로그인은 허용하지만 VM 생성과 제어는 제한합니다.',
-    rules: ['Dashboard는 계정 상태를 보여주고 VM 생성 흐름은 열지 않습니다.', 'API 직접 호출로 VM 생성/수정/전원/삭제를 시도하면 403을 반환합니다.'],
-  },
-  {
-    level: '1',
-    title: 'Fixed Self-service',
-    tone: '일반 사용자',
-    summary: '자기 namespace 안에서 고정 스펙 VM만 생성하고 관리할 수 있습니다.',
-    rules: ['CPU 2, Memory 4Gi, Disk 20Gi로 고정합니다.', 'Frontend에서는 직접 생성할 수 있는 VM을 최대 3개로 제한합니다.'],
-  },
-  {
-    level: '2',
-    title: 'Power User',
-    tone: '팀 운영자',
-    summary: '자기 VM은 자유 스펙으로 만들 수 있고, 전체 VM 조회와 전원/삭제 운영을 할 수 있습니다.',
-    rules: ['관리자 VM 목록에서 VM 상태를 보고 전원 변경과 삭제 요청을 처리할 수 있습니다.', '사용자 삭제, 권한 변경, 시스템 설정은 Level 3에 둡니다.'],
-  },
-  {
-    level: '3',
-    title: 'Full Admin',
-    tone: '전체 관리자',
-    summary: 'Kite의 모든 관리 작업을 수행할 수 있습니다.',
-    rules: ['전체 VM 제어, 사용자 삭제, 시스템 설정을 허용합니다.', '운영 위험이 큰 작업은 UI에서 명확히 구분합니다.'],
-  },
-];
-
-const architectureTimelineItems: TimelineProps['items'] = [
-  {
-    color: '#8B7355',
-    content: (
-      <div>
-        <Text strong>사용자가 화면에서 요청</Text>
-        <Paragraph className="docs-timeline-copy">사용자는 Dashboard에서 로그인, VM 생성, 전원 변경 같은 작업을 요청합니다. 화면은 API 응답과 VM 상태를 보여줍니다.</Paragraph>
-      </div>
-    ),
-  },
-  {
-    color: '#C9B59C',
-    content: (
-      <div>
-        <Text strong>API가 권한과 입력 확인</Text>
-        <Paragraph className="docs-timeline-copy">`kite-api`는 세션과 access level을 확인하고, 허용된 요청만 Kubernetes API 서버에 기록합니다.</Paragraph>
-      </div>
-    ),
-  },
-  {
-    color: '#7A9C74',
-    content: (
-      <div>
-        <Text strong>CRD가 원하는 상태 보관</Text>
-        <Paragraph className="docs-timeline-copy">`KiteUser`와 `KiteVirtualMachine` CRD의 spec에는 사용자가 원하는 계정과 VM 상태가 저장됩니다.</Paragraph>
-      </div>
-    ),
-  },
-  {
-    color: '#D4A373',
-    content: (
-      <div>
-        <Text strong>Controller가 실제 리소스 조정</Text>
-        <Paragraph className="docs-timeline-copy">`kite-controller`는 CRD spec을 읽고 KubeVirt VM, DataVolume, 서비스 같은 실제 Kubernetes 리소스를 맞춥니다.</Paragraph>
-      </div>
-    ),
-  },
-  {
-    color: '#8B7355',
-    content: (
-      <div>
-        <Text strong>상태가 다시 화면으로 반영</Text>
-        <Paragraph className="docs-timeline-copy">controller는 관측한 상태와 실패 이유를 CRD status에 기록하고, Frontend는 그 값을 사용자에게 보여줍니다.</Paragraph>
-      </div>
-    ),
-  },
-];
 
 export const KiteDocsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -170,13 +84,13 @@ export const KiteDocsPage: React.FC = () => {
                 <SafetyCertificateOutlined className="docs-card-icon" />
                 <Title level={3}>Level 1 제한</Title>
                 <Paragraph>
-                  일반 사용자는 직접 VM을 만들 수 있지만 스펙과 생성 한도가 고정됩니다. Frontend와 API가 모두 3대 초과 생성을 막습니다.
+                  일반 사용자는 직접 VM을 만들 수 있지만 스펙과 생성 한도가 고정됩니다. Frontend와 API가 모두 2대 초과 생성을 막습니다.
                 </Paragraph>
                 <div className="docs-policy-grid">
                   <span>CPU</span><strong>2</strong>
                   <span>Memory</span><strong>4Gi</strong>
-                  <span>Disk</span><strong>20Gi</strong>
-                  <span>Quota</span><strong>3 VMs</strong>
+                  <span>Disk</span><strong>25Gi</strong>
+                  <span>Quota</span><strong>2 VMs</strong>
                 </div>
               </Card>
             </Col>
@@ -185,9 +99,9 @@ export const KiteDocsPage: React.FC = () => {
                 <UserSwitchOutlined className="docs-card-icon" />
                 <Title level={3}>Level 2 범위</Title>
                 <Paragraph>
-                  Level 2는 자기 VM을 자유 스펙으로 만들 수 있고, 운영 화면에서 전체 VM을 조회하며 전원 변경과 삭제 요청을 처리할 수 있습니다.
+                  Level 2는 자기 VM을 자유 스펙으로 만들 수 있지만, admin API에서는 사용자 권한 0과 1만 조정합니다.
                 </Paragraph>
-                <Alert type="info" showIcon title="사용자 삭제, 권한 변경, 시스템 설정은 Level 3 관리자 작업으로 분리합니다." />
+                <Alert type="info" showIcon title="전체 VM 제어, settings, 사용자 삭제, offer 생성은 Level 3 관리자 작업입니다." />
               </Card>
             </Col>
             <Col xs={24} lg={8}>
@@ -195,9 +109,45 @@ export const KiteDocsPage: React.FC = () => {
                 <LockOutlined className="docs-card-icon" />
                 <Title level={3}>Level 0 제한</Title>
                 <Paragraph>
-                  Level 0 사용자는 로그인할 수 있지만 VM 생성과 제어 작업은 열리지 않습니다. 필요한 권한 안내는 운영자가 별도 채널에서 처리합니다.
+                  Level 0 사용자는 로그인할 수 있지만 VM 직접 생성과 제어 작업은 열리지 않습니다. Dashboard는 관리자 연락처를 보여줍니다.
                 </Paragraph>
-                <Alert type="warning" showIcon title="현재 Frontend와 API는 연락처 설정을 별도 필드로 읽지 않습니다." />
+                <Alert type="warning" showIcon title="관리자가 배정한 VM Offer는 직접 생성 제한과 분리된 명시적 배정 흐름입니다." />
+              </Card>
+            </Col>
+          </Row>
+        </section>
+
+        <section className="docs-section">
+          <div className="docs-section-heading">
+            <Title level={2}>VM Offer 흐름</Title>
+            <Text type="secondary">관리자가 스펙을 미리 배정하되, 실제 VM 생성은 사용자가 claim할 때만 일어납니다.</Text>
+          </div>
+          <Row gutter={[20, 20]}>
+            <Col xs={24} lg={8}>
+              <Card className="docs-policy-card" hoverable>
+                <GiftOutlined className="docs-card-icon" />
+                <Title level={3}>분리된 CRD</Title>
+                <Paragraph>
+                  Offer는 `KiteVirtualMachineOffer`로 저장됩니다. CPU, memory, disk, image, expiresAt만 보관하고 실제 VM 리소스는 만들지 않습니다.
+                </Paragraph>
+              </Card>
+            </Col>
+            <Col xs={24} lg={8}>
+              <Card className="docs-policy-card" hoverable>
+                <UserSwitchOutlined className="docs-card-icon" />
+                <Title level={3}>사용자 Claim</Title>
+                <Paragraph>
+                  사용자는 자기 namespace의 offer만 볼 수 있습니다. VM name, domain prefix, SSH ID, 초기 비밀번호를 채우면 offer 스펙과 합쳐 VM이 생성됩니다.
+                </Paragraph>
+              </Card>
+            </Col>
+            <Col xs={24} lg={8}>
+              <Card className="docs-policy-card" hoverable>
+                <SafetyCertificateOutlined className="docs-card-icon" />
+                <Title level={3}>만료 정리</Title>
+                <Paragraph>
+                  기본 TTL은 24시간입니다. claim되지 않은 offer는 controller가 주기적으로 정리해 더미 배정값이 남지 않게 합니다.
+                </Paragraph>
               </Card>
             </Col>
           </Row>

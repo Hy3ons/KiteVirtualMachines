@@ -1,10 +1,12 @@
-import type { AdminUser, ConfigResponse, UserVm } from './types';
+import type { AdminUser, ConfigResponse, UserVm, VmOffer } from './types';
 
 export type DebugState = {
   readonly users: readonly AdminUser[];
   readonly vms: readonly UserVm[];
+  readonly offers: readonly VmOffer[];
   readonly config: ConfigResponse['config'];
   readonly nextVmId: number;
+  readonly nextOfferId: number;
 };
 
 export const DEBUG_STATE_KEY = 'kite_debug_mock_state';
@@ -58,12 +60,30 @@ export const defaultDebugState: DebugState = {
       dataVolumeMessage: 'Debug DataVolume is ready',
     },
   ],
+  offers: [
+    {
+      id: 'hyeonseok-ns/offer-1',
+      name: 'offer-1',
+      namespace: 'hyeonseok-ns',
+      cpu: 4,
+      memory: '8Gi',
+      disk: '30Gi',
+      image: 'ubuntu-22.04',
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      createdBy: 'admin',
+      phase: 'Available',
+      claimedBy: '',
+      message: 'Debug offer assigned by admin',
+    },
+  ],
   config: {
     baseDomain: DEFAULT_DEBUG_DOMAIN,
     forceHttps: false,
+    adminContact: 'ops@example.com / Slack #kite-help',
     hasJWTSecret: true,
     hasPasswordSalt: true,
     hasTLSCertificate: true,
   },
   nextVmId: 3,
+  nextOfferId: 2,
 };

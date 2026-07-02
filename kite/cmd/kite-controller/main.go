@@ -23,6 +23,7 @@ func main() {
 	go apps.RunKubeVirtVirtualMachineStatusReconciler(clientManager, stopCh)
 	go apps.RunKiteVirtualMachineServiceReconciler(clientManager, stopCh)
 	go apps.RunKiteVirtualMachineDataVolumeReconciler(clientManager, stopCh)
+	go apps.RunKiteVirtualMachineOfferCleanup(clientManager, stopCh)
 	go apps.RunKitePlatformIngressReconciler(clientManager, stopCh)
 
 	select {}

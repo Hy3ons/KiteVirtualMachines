@@ -16,6 +16,7 @@ type VmCreateModalProps = {
   readonly fixedMemory: string;
   readonly fixedDiskGi: number;
   readonly minDiskGi: number;
+  readonly adminContact: string;
 };
 
 export const VmCreateModal: React.FC<VmCreateModalProps> = ({
@@ -29,6 +30,7 @@ export const VmCreateModal: React.FC<VmCreateModalProps> = ({
   fixedMemory,
   fixedDiskGi,
   minDiskGi,
+  adminContact,
 }) => (
   <Modal
     title={<Title level={4} className="modal-title">Create Virtual Machine</Title>}
@@ -41,7 +43,7 @@ export const VmCreateModal: React.FC<VmCreateModalProps> = ({
       {accessLevel === 0 && (
         <Alert
           title="VM 생성 권한 없음"
-          description="Level 0 계정은 VM을 생성할 수 없습니다. 관리자에게 권한을 요청하세요."
+          description={`Level 0 계정은 VM을 직접 생성할 수 없습니다. 관리자에게 권한을 요청하세요.${adminContact ? ` 연락처: ${adminContact}` : ''}`}
           type="warning"
           showIcon
           className="form-alert"
@@ -84,7 +86,7 @@ export const VmCreateModal: React.FC<VmCreateModalProps> = ({
 
       <div className="form-note">
         {accessLevel === 1
-          ? '* Level 1 계정은 CPU 2, Memory 4Gi, Disk 20Gi, OS Image ubuntu-22.04로 고정 생성됩니다.'
+          ? `* Level 1 계정은 CPU ${fixedCpu}, Memory ${fixedMemory}, Disk ${fixedDiskGi}Gi, OS Image ubuntu-22.04로 고정 생성됩니다.`
           : '* 최소 Disk는 20Gi입니다. CPU, Memory, OS Image를 입력하지 않으면 기본값 CPU 2, Memory 4Gi, ubuntu-22.04가 적용됩니다.'}
       </div>
 
