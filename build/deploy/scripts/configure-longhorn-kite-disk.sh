@@ -130,7 +130,7 @@ tag_existing_longhorn_disks() {
   local next_tags
 
   # go-template로 spec/status를 한 번에 뽑아 patch 가능한 디스크만 골라낸다.
-  disks="$(kubectl -n longhorn-system get "nodes.longhorn.io/${node}" -o 'go-template={{ range $name, $disk := .spec.disks }}{{ $status := index $.status.diskStatus $name }}{{ $name }}|{{ $disk.allowScheduling }}|{{ if $status }}{{ range $status.conditions }}{{ if eq .type "Ready" }}{{ .status }}{{ end }}{{ end }}{{ end }}|{{ if $status }}{{ range $status.conditions }}{{ if eq .type "Schedulable" }}{{ .status }}{{ end }}{{ end }}{{ end }}|{{ range $disk.tags }}{{ . }} {{ end }}{{ "\n" }}{{ end }}')"
+  disks="$(kubectl -n longhorn-system get "nodes.longhorn.io/${node}" -o 'go-template={{ range $name, $disk := .spec.disks }}{{ $name }}|{{ $disk.allowScheduling }}|{{ if $.status.diskStatus }}{{ $status := index $.status.diskStatus $name }}{{ if $status }}{{ range $status.conditions }}{{ if eq .type "Ready" }}{{ .status }}{{ end }}{{ end }}{{ end }}{{ end }}|{{ if $.status.diskStatus }}{{ $status := index $.status.diskStatus $name }}{{ if $status }}{{ range $status.conditions }}{{ if eq .type "Schedulable" }}{{ .status }}{{ end }}{{ end }}{{ end }}{{ end }}|{{ range $disk.tags }}{{ . }} {{ end }}{{ "\n" }}{{ end }}')"
   if [[ -z "${disks}" ]]; then
     log "no Longhorn disks found on node/${node}; waiting for Longhorn to report a Ready disk"
     return
@@ -154,7 +154,7 @@ tag_existing_longhorn_disks() {
 }
 
 longhorn_disk_status_lines() {
-  kubectl -n longhorn-system get nodes.longhorn.io -o 'go-template={{ range $node := .items }}{{ range $name, $disk := $node.spec.disks }}{{ $status := index $node.status.diskStatus $name }}{{ $node.metadata.name }}|{{ $name }}|{{ $disk.allowScheduling }}|{{ if $status }}{{ range $status.conditions }}{{ if eq .type "Ready" }}{{ .status }}{{ end }}{{ end }}{{ end }}|{{ if $status }}{{ range $status.conditions }}{{ if eq .type "Schedulable" }}{{ .status }}{{ end }}{{ end }}{{ end }}|{{ range $disk.tags }}{{ . }} {{ end }}|{{ if $status }}{{ range $status.conditions }}{{ if ne .status "True" }}{{ .type }}={{ .status }}:{{ .reason }}:{{ .message }}; {{ end }}{{ end }}{{ end }}{{ "\n" }}{{ end }}{{ end }}'
+  kubectl -n longhorn-system get nodes.longhorn.io -o 'go-template={{ range $node := .items }}{{ range $name, $disk := $node.spec.disks }}{{ $node.metadata.name }}|{{ $name }}|{{ $disk.allowScheduling }}|{{ if $node.status.diskStatus }}{{ $status := index $node.status.diskStatus $name }}{{ if $status }}{{ range $status.conditions }}{{ if eq .type "Ready" }}{{ .status }}{{ end }}{{ end }}{{ end }}{{ end }}|{{ if $node.status.diskStatus }}{{ $status := index $node.status.diskStatus $name }}{{ if $status }}{{ range $status.conditions }}{{ if eq .type "Schedulable" }}{{ .status }}{{ end }}{{ end }}{{ end }}{{ end }}|{{ range $disk.tags }}{{ . }} {{ end }}|{{ if $node.status.diskStatus }}{{ $status := index $node.status.diskStatus $name }}{{ if $status }}{{ range $status.conditions }}{{ if ne .status "True" }}{{ .type }}={{ .status }}:{{ .reason }}:{{ .message }}; {{ end }}{{ end }}{{ end }}{{ end }}{{ "\n" }}{{ end }}{{ end }}'
 }
 
 ready_kite_disk_count() {
