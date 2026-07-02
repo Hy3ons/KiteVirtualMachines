@@ -111,7 +111,7 @@ export const KiteDocsPage: React.FC = () => {
     <Layout style={{ minHeight: '100vh', backgroundColor: '#F9F8F6' }}>
       <SEO
         title="Kite Docs - 권한 모델과 아키텍처"
-        description="Kite 권한 레벨, VM 생성 제한, Frontend, API, CRD, controller, KubeVirt 흐름과 현재 한계를 정리한 문서입니다."
+        description="Kite 권한 레벨, VM 생성 제한, Frontend, API, CRD, controller, KubeVirt 흐름과 SSH Gateway 운영 주의를 정리한 문서입니다."
         url="/kite-docs"
       />
       <GlobalHeader />
@@ -121,6 +121,7 @@ export const KiteDocsPage: React.FC = () => {
           <Space size={8} wrap className="docs-kicker">
             <Tag>Access Control</Tag>
             <Tag>Architecture</Tag>
+            <Tag>SSH Gateway</Tag>
             <Tag>KubeVirt</Tag>
           </Space>
           <Title level={1} className="docs-title">Kite Docs</Title>
@@ -237,19 +238,19 @@ export const KiteDocsPage: React.FC = () => {
         <section className="docs-section">
           <Card className="docs-limit-card">
             <ControlOutlined className="docs-card-icon" />
-            <Title level={2}>현재 한계와 운영 주의</Title>
+            <Title level={2}>SSH Gateway</Title>
             <Row gutter={[20, 12]}>
               <Col xs={24} md={8}>
-                <Text strong>비밀번호 변경</Text>
-                <Paragraph>VM 생성 시 정한 초기 비밀번호만 Kite가 전달합니다. 생성 후 변경/복구는 guest OS 안에서 처리해야 합니다.</Paragraph>
+                <Text strong>도입한 이유</Text>
+                <Paragraph>VM마다 외부 SSH 포트를 따로 열지 않기 위해 Kite Gateway가 22번 진입점을 하나로 받습니다. Gateway는 SSH username을 `spec.sshId`와 매칭해 대상 VM을 찾습니다.</Paragraph>
               </Col>
               <Col xs={24} md={8}>
-                <Text strong>상태 반영</Text>
-                <Paragraph>VM 생성과 전원 변경은 controller reconcile을 거쳐 반영되므로 화면 상태가 잠시 처리 중으로 보일 수 있습니다.</Paragraph>
+                <Text strong>로그인 프록시 방식</Text>
+                <Paragraph>사용자는 VM 생성 시 입력한 초기 비밀번호로 Gateway에 로그인합니다. Gateway는 이 비밀번호를 VM에 전달하지 않습니다. 인증 후 Kite 관리 SSH key로 VM sshd에 접속하고 세션만 중계합니다. 외부 사용자 public key 인증은 아직 지원하지 않습니다.</Paragraph>
               </Col>
               <Col xs={24} md={8}>
-                <Text strong>최종 권한 판단</Text>
-                <Paragraph>Frontend는 안내와 UX를 담당하고, 실제 권한 차단은 반드시 API 서버에서 같은 규칙으로 강제합니다.</Paragraph>
+                <Text strong>host SSH 포트</Text>
+                <Paragraph>설치 스크립트가 Gateway에 외부 22번을 넘기면 기존 host sshd는 2222번으로 이동할 수 있습니다. VM `sshId`와 host Linux username이 같으면 22번은 VM route가 우선합니다. host 직접 접속은 `ssh user@host -p 2222` 경로를 확인해야 합니다.</Paragraph>
               </Col>
             </Row>
           </Card>
