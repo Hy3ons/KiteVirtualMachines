@@ -142,6 +142,32 @@ and the golden image using the existing deployment helpers. Default: `true`.
 When `true`, dependency setup may allow gateway host sshd handoff. Default:
 `false` because remote server access can be affected.
 
+`./test/all-test-k3s-ssh-handoff.sh`
+
+This is the dangerous SSH acceptance gate for k3s hosts. It intentionally
+checks the full external SSH handoff:
+
+- host sshd is moved away from port `22` to port `2222`,
+- `svc/kite-gateway` is exposed as a `LoadBalancer` on external port `22`,
+- port `22` returns the `kite-gateway` SSH banner,
+- port `2222` returns the host sshd banner,
+- a username that is not a Kite VM route can still log into the host through
+  gateway fallback using the host account password.
+
+Run it only from a place where you can recover the server console or connect
+with `ssh -p 2222` if something goes wrong:
+
+```sh
+TEST_HOST_SSH_USER=hhs2003 \
+TEST_HOST_SSH_PASSWORD='<host-password>' \
+./test/all-test-k3s-ssh-handoff.sh
+```
+
+The general cluster E2E scripts do not perform this check. They patch
+`kite-gateway` to `ClusterIP` and verify the gateway through `kubectl
+port-forward`, because normal deploy-before-release testing must not steal the
+operator's SSH session.
+
 `TEST_CLEANUP`
 
 When `true`, the script deletes the test VM, test KiteUser, and generated user
@@ -375,4 +401,3 @@ Dry-run preview:
 ```sh
 KITE_ASSUME_DEFAULTS=true TEST_DRY_RUN=true ./test/all-test-k3s.sh
 ```
-
