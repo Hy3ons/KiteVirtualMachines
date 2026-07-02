@@ -715,15 +715,15 @@ cleanup() {
 
   if [[ "${TEST_DRY_RUN}" != "true" && "${TEST_CLEANUP}" == "true" ]]; then
     if [[ -n "${TEST_USER_NAMESPACE}" && -n "${TEST_VM_NAME}" ]]; then
-      kubectl -n "${TEST_USER_NAMESPACE}" delete "kitevirtualmachines.hy3ons.github.io/${TEST_VM_NAME}" --ignore-not-found=true >/dev/null 2>&1 || true
-      kubectl -n "${TEST_USER_NAMESPACE}" delete "virtualmachines.kubevirt.io/${TEST_VM_NAME}" --ignore-not-found=true >/dev/null 2>&1 || true
-      kubectl -n "${TEST_USER_NAMESPACE}" delete "datavolumes.cdi.kubevirt.io/${TEST_VM_NAME}-disk" --ignore-not-found=true >/dev/null 2>&1 || true
+      kubectl -n "${TEST_USER_NAMESPACE}" delete "kitevirtualmachines.hy3ons.github.io/${TEST_VM_NAME}" --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
+      kubectl -n "${TEST_USER_NAMESPACE}" delete "virtualmachines.kubevirt.io/${TEST_VM_NAME}" --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
+      kubectl -n "${TEST_USER_NAMESPACE}" delete "datavolumes.cdi.kubevirt.io/${TEST_VM_NAME}-disk" --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
     fi
     if [[ -n "${TEST_USER_NAME}" ]]; then
-      kubectl delete "kiteusers.hy3ons.github.io/${TEST_USER_NAME}" --ignore-not-found=true >/dev/null 2>&1 || true
+      kubectl delete "kiteusers.hy3ons.github.io/${TEST_USER_NAME}" --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
     fi
     if [[ -n "${TEST_USER_NAMESPACE}" ]]; then
-      kubectl delete namespace "${TEST_USER_NAMESPACE}" --ignore-not-found=true >/dev/null 2>&1 || true
+      kubectl delete namespace "${TEST_USER_NAMESPACE}" --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
     fi
   fi
 
