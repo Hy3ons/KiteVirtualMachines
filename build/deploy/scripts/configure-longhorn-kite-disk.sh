@@ -31,8 +31,8 @@ KITE_LONGHORN_USE_DEDICATED_DISK="${KITE_LONGHORN_USE_DEDICATED_DISK:-false}"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-180}"
 PATCH_RETRY_INTERVAL_SECONDS="${PATCH_RETRY_INTERVAL_SECONDS:-5}"
 
-# shellcheck source=build/scripts/prompt.sh
-source "${ROOT_DIR}/build/scripts/prompt.sh"
+# shellcheck source=build/lib/prompt.sh
+source "${ROOT_DIR}/build/lib/prompt.sh"
 
 log_color_enabled() {
   [[ "${KITE_LOG_COLOR:-auto}" != "false" && -z "${NO_COLOR:-}" && -t 1 ]]

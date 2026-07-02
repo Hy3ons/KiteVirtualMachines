@@ -44,8 +44,8 @@ APPLY_GOLDEN_IMAGE="${APPLY_GOLDEN_IMAGE:-true}"
 MANAGE_HOST_SSHD="${MANAGE_HOST_SSHD:-true}"
 RUN_VERIFY="${RUN_VERIFY:-true}"
 
-# shellcheck source=build/scripts/prompt.sh
-source "${ROOT_DIR}/build/scripts/prompt.sh"
+# shellcheck source=build/lib/prompt.sh
+source "${ROOT_DIR}/build/lib/prompt.sh"
 
 log_color_enabled() {
   [[ "${KITE_LOG_COLOR:-auto}" != "false" && -z "${NO_COLOR:-}" && -t 1 ]]

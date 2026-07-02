@@ -30,8 +30,8 @@ KITE_GATEWAY_HOST_KEY_REFRESH="${KITE_GATEWAY_HOST_KEY_REFRESH:-false}"
 KITE_GATEWAY_HOST_KEY_FILE_NAME="${KITE_GATEWAY_HOST_KEY_FILE_NAME:-ssh_host_rsa_key}"
 GATEWAY_HOST_KEY_TMPDIR=""
 
-# shellcheck source=build/scripts/prompt.sh
-source "${ROOT_DIR}/build/scripts/prompt.sh"
+# shellcheck source=build/lib/prompt.sh
+source "${ROOT_DIR}/build/lib/prompt.sh"
 
 log_color_enabled() {
   [[ "${KITE_LOG_COLOR:-auto}" != "false" && -z "${NO_COLOR:-}" && -t 1 ]]

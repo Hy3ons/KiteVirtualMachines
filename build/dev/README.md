@@ -133,7 +133,9 @@ build/dev/clear-frontend.sh
 Set `CLEAR_IMAGES=false` to keep local Docker and k3s images while deleting only
 the Kubernetes resources.
 
-`./clear.sh` is the root cleanup wrapper. When it runs in a terminal, it asks
+`./clear.sh` is the root development cleanup wrapper. It always targets the
+local checkout flow under `build/dev`, while `./clean.sh` is reserved for
+pull-based deployment uninstall. When `./clear.sh` runs in a terminal, it asks
 which cleanup scope to use with numbered choices.
 
 ```sh
@@ -149,6 +151,10 @@ The prompt separately asks whether to delete local images, uninstall Longhorn,
 delete Kite Longhorn host data, or restore host sshd back to port 22. Longhorn
 cleanup is disabled by default because it can delete VM disk data. Non-terminal
 automation can still set the existing environment variables directly.
+
+Use `./clean.sh` or `build/deploy/scripts/uninstall-kite.sh` when the target is
+a pull-based install that should follow the production uninstall path. The
+folder-level map and naming rules are documented in `build/README.md`.
 
 ## Gateway
 
