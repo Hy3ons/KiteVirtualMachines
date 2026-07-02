@@ -664,10 +664,21 @@ verify_gateway() {
   python3 - "${TEST_GATEWAY_LOCAL_PORT}" <<'PY'
 import socket
 import sys
+import time
 
 port = int(sys.argv[1])
-with socket.create_connection(("127.0.0.1", port), timeout=10) as conn:
-    banner = conn.recv(64)
+last_error = None
+for _ in range(60):
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=2) as conn:
+            banner = conn.recv(64)
+        break
+    except OSError as exc:
+        last_error = exc
+        time.sleep(1)
+else:
+    raise SystemExit(f"gateway SSH port did not become ready: {last_error}")
+
 if not banner.startswith(b"SSH-"):
     raise SystemExit(f"gateway did not return an SSH banner: {banner!r}")
 PY
