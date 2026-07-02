@@ -132,8 +132,8 @@ tag_existing_longhorn_disks() {
   # go-template로 spec/status를 한 번에 뽑아 patch 가능한 디스크만 골라낸다.
   disks="$(kubectl -n longhorn-system get "nodes.longhorn.io/${node}" -o 'go-template={{ range $name, $disk := .spec.disks }}{{ $status := index $.status.diskStatus $name }}{{ $name }}|{{ $disk.allowScheduling }}|{{ if $status }}{{ range $status.conditions }}{{ if eq .type "Ready" }}{{ .status }}{{ end }}{{ end }}{{ end }}|{{ if $status }}{{ range $status.conditions }}{{ if eq .type "Schedulable" }}{{ .status }}{{ end }}{{ end }}{{ end }}|{{ range $disk.tags }}{{ . }} {{ end }}{{ "\n" }}{{ end }}')"
   if [[ -z "${disks}" ]]; then
-    echo "[kite-deploy] no Longhorn disks found on node/${node}" >&2
-    return 1
+    log "no Longhorn disks found on node/${node}; waiting for Longhorn to report a Ready disk"
+    return
   fi
 
   log "tagging existing Ready Longhorn disks on node/${node} with ${KITE_LONGHORN_DISK_TAG}"
