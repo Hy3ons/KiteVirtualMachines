@@ -19,6 +19,7 @@ set -euo pipefail
 #   DEPLOY_KITE: default true
 #   RUN_VERIFY: default true
 #   MANAGE_HOST_SSHD: default true
+#   KITE_HOST_SSHD_PORT: default 2222
 #   KITE_LOG_COLOR: default auto
 #   NO_COLOR: default (unset)
 #
@@ -46,6 +47,8 @@ APPLY_GOLDEN_IMAGE="${APPLY_GOLDEN_IMAGE:-true}"
 DEPLOY_KITE="${DEPLOY_KITE:-true}"
 RUN_VERIFY="${RUN_VERIFY:-true}"
 MANAGE_HOST_SSHD="${MANAGE_HOST_SSHD:-true}"
+KITE_HOST_SSHD_PORT="${KITE_HOST_SSHD_PORT:-2222}"
+KITE_HOST_SSHD_STATE="${KITE_HOST_SSHD_STATE:-/etc/kite/host-sshd/state.env}"
 
 # shellcheck source=build/lib/prompt.sh
 source "${ROOT_DIR}/build/lib/prompt.sh"
@@ -111,6 +114,39 @@ ensure_kite_namespace() {
   kubectl apply -f "${ROOT_DIR}/build/kite/namespace.yaml"
 }
 
+# Kite-managed host sshd state is written by manage-host-sshd.sh and tells the gateway where fallback SSH lives.
+managed_host_sshd_port() {
+  local state
+  local port
+
+  if [[ -f "${KITE_HOST_SSHD_STATE}" ]]; then
+    state="$(cat "${KITE_HOST_SSHD_STATE}")"
+  elif command -v sudo >/dev/null 2>&1 && sudo test -f "${KITE_HOST_SSHD_STATE}" 2>/dev/null; then
+    state="$(sudo cat "${KITE_HOST_SSHD_STATE}")"
+  else
+    port="$("${ROOT_DIR}/build/deploy/scripts/manage-host-sshd.sh" print-port 2>/dev/null || true)"
+    echo "${port:-${KITE_HOST_SSHD_PORT}}"
+    return 0
+  fi
+
+  port="$(printf '%s\n' "${state}" | awk -F= '$1 == "PORT" { print $2; exit }')"
+  echo "${port:-${KITE_HOST_SSHD_PORT}}"
+}
+
+# The gateway pod needs the same host sshd port that the host handoff selected.
+patch_gateway_host_sshd_address() {
+  local port
+
+  if [[ "${MANAGE_HOST_SSHD}" != "true" ]]; then
+    return 0
+  fi
+
+  port="$(managed_host_sshd_port)"
+  log "configuring kite-gateway host fallback address with host sshd port ${port}"
+  kubectl -n kite set env deployment/kite-gateway "KITE_GATEWAY_HOST_SSHD_ADDRESS=\$(KITE_NODE_IP):${port}"
+  kubectl -n kite rollout status deployment/kite-gateway --timeout=180s
+}
+
 configure_interactive_install_options() {
   kite_prompt_interactive || return 0
 
@@ -125,7 +161,7 @@ configure_interactive_install_options() {
   kite_prompt_configure_bool DEPLOY_KITE "${DEPLOY_KITE_WAS_SET}" "Kite API/controller/gateway/frontend를 빌드하고 배포할까요?"
   kite_prompt_configure_bool RUN_VERIFY "${RUN_VERIFY_WAS_SET}" "설치 후 verify 스크립트를 실행할까요?"
 
-  log "install choices: MANAGE_HOST_SSHD=${MANAGE_HOST_SSHD}, INSTALL_LONGHORN=${INSTALL_LONGHORN}, CONFIGURE_LONGHORN=${CONFIGURE_LONGHORN}, APPLY_STORAGECLASS=${APPLY_STORAGECLASS}, INSTALL_KUBEVIRT=${INSTALL_KUBEVIRT}, INSTALL_CDI=${INSTALL_CDI}, APPLY_GOLDEN_IMAGE=${APPLY_GOLDEN_IMAGE}, DEPLOY_KITE=${DEPLOY_KITE}, RUN_VERIFY=${RUN_VERIFY}"
+  log "install choices: MANAGE_HOST_SSHD=${MANAGE_HOST_SSHD}, KITE_HOST_SSHD_PORT=${KITE_HOST_SSHD_PORT}, INSTALL_LONGHORN=${INSTALL_LONGHORN}, CONFIGURE_LONGHORN=${CONFIGURE_LONGHORN}, APPLY_STORAGECLASS=${APPLY_STORAGECLASS}, INSTALL_KUBEVIRT=${INSTALL_KUBEVIRT}, INSTALL_CDI=${INSTALL_CDI}, APPLY_GOLDEN_IMAGE=${APPLY_GOLDEN_IMAGE}, DEPLOY_KITE=${DEPLOY_KITE}, RUN_VERIFY=${RUN_VERIFY}"
 }
 
 # 개발용 전체 설치 순서다. 각 단계는 run_step으로 감싸져 있어 환경변수로 on/off할 수 있다.
@@ -155,6 +191,7 @@ main() {
   run_step "${APPLY_GOLDEN_IMAGE}" "waiting for Ubuntu golden image" "${ROOT_DIR}/build/deploy/scripts/wait-golden-image.sh" ubuntu-22.04
 
   run_step "${DEPLOY_KITE}" "building local Kite images and deploying Kite" "${ROOT_DIR}/build/dev/dev.sh"
+  run_step "${DEPLOY_KITE}" "configuring gateway host sshd fallback port" patch_gateway_host_sshd_address
   run_step "${RUN_VERIFY}" "verifying Kite installation" "${ROOT_DIR}/build/deploy/scripts/verify.sh"
 
   log "all-in-one install complete"

@@ -135,16 +135,20 @@ KITE_GATEWAY_HOST_KEY_REFRESH=true KITE_GATEWAY_HOST_KEY_SOURCE=host ./install.s
 ```
 
 When the host is Linux with systemd OpenSSH, `install.sh` asks before moving
-host sshd away from port `22`. If confirmed, it backs up
-`/etc/ssh/sshd_config` under `/etc/kite/host-sshd`, configures host sshd to
-listen on `2222`, and restarts the service so the gateway can own port `22`.
-`build/deploy/scripts/uninstall-kite.sh` asks before restoring that backup. Set
-`KITE_MANAGE_HOST_SSHD=true` or `KITE_RESTORE_HOST_SSHD=true` for
+host sshd away from port `22`. If host sshd already listens on another global
+port, Kite leaves it there and patches gateway fallback to that detected port.
+If it must move, Kite backs up `/etc/ssh/sshd_config` under
+`/etc/kite/host-sshd`, asks which port host sshd should use, checks that the
+port is free, and requires typing the same port again before restarting the
+service so the gateway can own port `22`. `build/deploy/scripts/uninstall-kite.sh`
+asks before restoring that backup. Set `KITE_MANAGE_HOST_SSHD=true` and
+`KITE_HOST_SSHD_PORT=<port>` or `KITE_RESTORE_HOST_SSHD=true` for
 non-interactive opt-in, and set `MANAGE_HOST_SSHD=false` or
 `RESTORE_HOST_SSHD=false` to skip these host changes.
 
 When no Kite VM uses the SSH login username, `kite-gateway` falls back to the
-host sshd at the node IP on port `2222`. This lets existing host accounts keep
-using `ssh <host-user>@<node-ip>` on port `22` after the gateway is installed.
-If a Kite VM `sshId` conflicts with a host user, the VM route has priority and
-host administration should use `ssh <host-user>@<node-ip> -p 2222`.
+host sshd at the node IP on the selected host sshd port. This lets existing host
+accounts keep using `ssh <host-user>@<node-ip>` on port `22` after the gateway
+is installed. If a Kite VM `sshId` conflicts with a host user, the VM route has
+priority and host administration should use
+`ssh <host-user>@<node-ip> -p <selected-host-sshd-port>`.

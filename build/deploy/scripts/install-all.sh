@@ -17,6 +17,7 @@ set -euo pipefail
 #   INSTALL_CDI: default true
 #   APPLY_GOLDEN_IMAGE: default true
 #   MANAGE_HOST_SSHD: default true
+#   KITE_HOST_SSHD_PORT: default 2222
 #   RUN_VERIFY: default true
 #   KITE_LOG_COLOR: default auto
 #   NO_COLOR: default (unset)
@@ -42,6 +43,8 @@ INSTALL_KUBEVIRT="${INSTALL_KUBEVIRT:-true}"
 INSTALL_CDI="${INSTALL_CDI:-true}"
 APPLY_GOLDEN_IMAGE="${APPLY_GOLDEN_IMAGE:-true}"
 MANAGE_HOST_SSHD="${MANAGE_HOST_SSHD:-true}"
+KITE_HOST_SSHD_PORT="${KITE_HOST_SSHD_PORT:-2222}"
+KITE_HOST_SSHD_STATE="${KITE_HOST_SSHD_STATE:-/etc/kite/host-sshd/state.env}"
 RUN_VERIFY="${RUN_VERIFY:-true}"
 
 # shellcheck source=build/lib/prompt.sh
@@ -87,6 +90,38 @@ require_command() {
   fi
 }
 
+# Kite-managed host sshd state is written by manage-host-sshd.sh and tells the gateway where fallback SSH lives.
+managed_host_sshd_port() {
+  local state
+  local port
+
+  if [[ -f "${KITE_HOST_SSHD_STATE}" ]]; then
+    state="$(cat "${KITE_HOST_SSHD_STATE}")"
+  elif command -v sudo >/dev/null 2>&1 && sudo test -f "${KITE_HOST_SSHD_STATE}" 2>/dev/null; then
+    state="$(sudo cat "${KITE_HOST_SSHD_STATE}")"
+  else
+    port="$("${ROOT_DIR}/build/deploy/scripts/manage-host-sshd.sh" print-port 2>/dev/null || true)"
+    echo "${port:-${KITE_HOST_SSHD_PORT}}"
+    return 0
+  fi
+
+  port="$(printf '%s\n' "${state}" | awk -F= '$1 == "PORT" { print $2; exit }')"
+  echo "${port:-${KITE_HOST_SSHD_PORT}}"
+}
+
+# The gateway pod needs the same host sshd port that the host handoff selected.
+patch_gateway_host_sshd_address() {
+  local port
+
+  if [[ "${MANAGE_HOST_SSHD}" != "true" ]]; then
+    return 0
+  fi
+
+  port="$(managed_host_sshd_port)"
+  log "configuring kite-gateway host fallback address with host sshd port ${port}"
+  kubectl -n "${KITE_NAMESPACE}" set env deployment/kite-gateway "KITE_GATEWAY_HOST_SSHD_ADDRESS=\$(KITE_NODE_IP):${port}"
+}
+
 configure_interactive_install_options() {
   kite_prompt_interactive || return 0
 
@@ -100,7 +135,7 @@ configure_interactive_install_options() {
   kite_prompt_configure_bool APPLY_GOLDEN_IMAGE "${APPLY_GOLDEN_IMAGE_WAS_SET}" "Ubuntu golden image DataVolume을 적용할까요?"
   kite_prompt_configure_bool RUN_VERIFY "${RUN_VERIFY_WAS_SET}" "설치 후 verify 스크립트를 실행할까요?"
 
-  log "install choices: MANAGE_HOST_SSHD=${MANAGE_HOST_SSHD}, INSTALL_LONGHORN=${INSTALL_LONGHORN}, CONFIGURE_LONGHORN=${CONFIGURE_LONGHORN}, APPLY_STORAGECLASS=${APPLY_STORAGECLASS}, INSTALL_KUBEVIRT=${INSTALL_KUBEVIRT}, INSTALL_CDI=${INSTALL_CDI}, APPLY_GOLDEN_IMAGE=${APPLY_GOLDEN_IMAGE}, RUN_VERIFY=${RUN_VERIFY}"
+  log "install choices: MANAGE_HOST_SSHD=${MANAGE_HOST_SSHD}, KITE_HOST_SSHD_PORT=${KITE_HOST_SSHD_PORT}, INSTALL_LONGHORN=${INSTALL_LONGHORN}, CONFIGURE_LONGHORN=${CONFIGURE_LONGHORN}, APPLY_STORAGECLASS=${APPLY_STORAGECLASS}, INSTALL_KUBEVIRT=${INSTALL_KUBEVIRT}, INSTALL_CDI=${INSTALL_CDI}, APPLY_GOLDEN_IMAGE=${APPLY_GOLDEN_IMAGE}, RUN_VERIFY=${RUN_VERIFY}"
 }
 
 # pull 기반 설치의 전체 순서다. host sshd handoff, Longhorn/KubeVirt/CDI 준비,
@@ -150,6 +185,7 @@ main() {
   "${ROOT_DIR}/build/deploy/scripts/ensure-gateway-host-key-secret.sh"
   # build/kite kustomization에는 API/controller/gateway/frontend 런타임 리소스가 모여 있다.
   kubectl apply -k "${ROOT_DIR}/build/kite"
+  patch_gateway_host_sshd_address
 
   log "waiting for Kite workloads"
   kubectl -n "${KITE_NAMESPACE}" rollout status deployment/kite-api --timeout=180s

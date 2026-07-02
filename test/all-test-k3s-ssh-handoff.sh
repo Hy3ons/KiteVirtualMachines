@@ -19,7 +19,7 @@ TEST_SSH_HOST="${TEST_SSH_HOST:-}"
 TEST_HOST_SSH_USER="${TEST_HOST_SSH_USER:-${USER:-}}"
 TEST_HOST_SSH_PASSWORD="${TEST_HOST_SSH_PASSWORD:-}"
 TEST_GATEWAY_PORT="${TEST_GATEWAY_PORT:-22}"
-TEST_HOST_SSHD_PORT="${TEST_HOST_SSHD_PORT:-2222}"
+TEST_HOST_SSHD_PORT="${TEST_HOST_SSHD_PORT:-2022}"
 TEST_MANAGE_HOST_SSHD="${TEST_MANAGE_HOST_SSHD:-true}"
 TEST_APPLY_GATEWAY_LOADBALANCER="${TEST_APPLY_GATEWAY_LOADBALANCER:-true}"
 TEST_SSH_PROBE_RUNNER="${TEST_SSH_PROBE_RUNNER:-auto}"
@@ -103,6 +103,14 @@ prompt_value() {
   export "${variable_name}"
 }
 
+# valid_tcp_port validates user-entered SSH ports before they are used in sshd and Kubernetes patches.
+valid_tcp_port() {
+  local port="$1"
+
+  [[ "${port}" =~ ^[0-9]+$ ]] || return 1
+  (( port >= 1 && port <= 65535 ))
+}
+
 default_node_ip() {
   kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || true
 }
@@ -120,11 +128,11 @@ configure_options() {
     prompt_value KITE_NAMESPACE "${KITE_NAMESPACE_WAS_SET}" "KITE_NAMESPACE 값을 정합니다." "kite-gateway Service와 Deployment가 있는 Kubernetes namespace입니다."
     prompt_value TEST_SSH_HOST "${TEST_SSH_HOST_WAS_SET}" "TEST_SSH_HOST 값을 정합니다." "테스트가 SSH로 접속할 노드 주소입니다. 보통 k3s 노드의 내부 IP 또는 외부 도메인입니다."
     prompt_value TEST_HOST_SSH_USER "${TEST_HOST_SSH_USER_WAS_SET}" "TEST_HOST_SSH_USER 값을 정합니다." "VM route가 없는 일반 Linux host 계정입니다. 이 사용자로 gateway fallback 로그인을 검증합니다."
-    prompt_value TEST_HOST_SSH_PASSWORD "${TEST_HOST_SSH_PASSWORD_WAS_SET}" "TEST_HOST_SSH_PASSWORD 값을 정합니다." "위 host 계정의 SSH 비밀번호입니다. 2222 직접 로그인과 22 gateway fallback 로그인을 검증할 때만 사용합니다." true
+    prompt_value TEST_HOST_SSH_PASSWORD "${TEST_HOST_SSH_PASSWORD_WAS_SET}" "TEST_HOST_SSH_PASSWORD 값을 정합니다." "위 host 계정의 SSH 비밀번호입니다. host sshd 직접 로그인과 gateway fallback 로그인을 검증할 때만 사용합니다." true
     prompt_value TEST_GATEWAY_PORT "${TEST_GATEWAY_PORT_WAS_SET}" "TEST_GATEWAY_PORT 값을 정합니다." "외부에서 kite-gateway가 받아야 하는 SSH 포트입니다. 운영 기본값은 22입니다."
-    prompt_value TEST_HOST_SSHD_PORT "${TEST_HOST_SSHD_PORT_WAS_SET}" "TEST_HOST_SSHD_PORT 값을 정합니다." "host sshd가 handoff 후 직접 들을 포트입니다. 운영 기본값은 2222입니다."
+    prompt_value TEST_HOST_SSHD_PORT "${TEST_HOST_SSHD_PORT_WAS_SET}" "TEST_HOST_SSHD_PORT 값을 정합니다." "host sshd가 handoff 후 직접 들을 포트입니다. 테스트 기본값은 2022입니다."
     prompt_value TEST_SSH_PROBE_RUNNER "${TEST_SSH_PROBE_RUNNER_WAS_SET}" "TEST_SSH_PROBE_RUNNER 값을 정합니다." "SSH password probe 실행 방식입니다. auto는 go가 있으면 go run, 없으면 Docker golang image를 사용합니다. 값: auto, go, docker."
-    kite_prompt_configure_bool TEST_MANAGE_HOST_SSHD "${TEST_MANAGE_HOST_SSHD_WAS_SET}" $'TEST_MANAGE_HOST_SSHD 값을 정합니다.\n  예를 고르면 /etc/ssh/sshd_config를 백업하고 host sshd를 2222로 옮깁니다.'
+    kite_prompt_configure_bool TEST_MANAGE_HOST_SSHD "${TEST_MANAGE_HOST_SSHD_WAS_SET}" $'TEST_MANAGE_HOST_SSHD 값을 정합니다.\n  예를 고르면 /etc/ssh/sshd_config를 백업하고 host sshd를 선택한 포트로 옮깁니다.'
     kite_prompt_configure_bool TEST_APPLY_GATEWAY_LOADBALANCER "${TEST_APPLY_GATEWAY_LOADBALANCER_WAS_SET}" $'TEST_APPLY_GATEWAY_LOADBALANCER 값을 정합니다.\n  예를 고르면 kite-gateway Service를 LoadBalancer로 바꿔 22번을 gateway가 받게 합니다.'
     kite_prompt_configure_bool TEST_DRY_RUN "${TEST_DRY_RUN_WAS_SET}" $'TEST_DRY_RUN 값을 정합니다.\n  예를 고르면 host sshd와 Kubernetes Service를 바꾸지 않고 실행 계획만 출력합니다.'
   fi
@@ -139,6 +147,18 @@ configure_options() {
   fi
   if [[ -z "${TEST_HOST_SSH_PASSWORD}" && "${TEST_DRY_RUN}" != "true" ]]; then
     warn "TEST_HOST_SSH_PASSWORD is required for password login checks"
+    exit 1
+  fi
+  if ! valid_tcp_port "${TEST_GATEWAY_PORT}"; then
+    warn "TEST_GATEWAY_PORT must be a number between 1 and 65535"
+    exit 1
+  fi
+  if ! valid_tcp_port "${TEST_HOST_SSHD_PORT}"; then
+    warn "TEST_HOST_SSHD_PORT must be a number between 1 and 65535"
+    exit 1
+  fi
+  if [[ "${TEST_GATEWAY_PORT}" == "${TEST_HOST_SSHD_PORT}" ]]; then
+    warn "TEST_GATEWAY_PORT and TEST_HOST_SSHD_PORT must be different"
     exit 1
   fi
 }
@@ -197,17 +217,29 @@ preflight() {
 }
 
 ensure_host_sshd_handoff() {
+  local manage_mode
+
   if [[ "${TEST_MANAGE_HOST_SSHD}" != "true" ]]; then
     log "skipping host sshd handoff because TEST_MANAGE_HOST_SSHD=${TEST_MANAGE_HOST_SSHD}"
     return
   fi
 
+  manage_mode=true
+  if kite_prompt_interactive; then
+    manage_mode=ask
+  fi
+
   log "moving host sshd to port ${TEST_HOST_SSHD_PORT}"
   run_cmd env \
-    KITE_MANAGE_HOST_SSHD=true \
+    KITE_MANAGE_HOST_SSHD="${manage_mode}" \
     KITE_HOST_SSHD_PORT="${TEST_HOST_SSHD_PORT}" \
     KITE_GATEWAY_EXTERNAL_PORT="${TEST_GATEWAY_PORT}" \
     "${ROOT_DIR}/build/deploy/scripts/manage-host-sshd.sh" ensure
+}
+
+patch_gateway_host_sshd_address() {
+  log "configuring kite-gateway host fallback address with host sshd port ${TEST_HOST_SSHD_PORT}"
+  run_cmd kubectl -n "${KITE_NAMESPACE}" set env deployment/kite-gateway "KITE_GATEWAY_HOST_SSHD_ADDRESS=\$(KITE_NODE_IP):${TEST_HOST_SSHD_PORT}"
 }
 
 apply_gateway_loadbalancer() {
@@ -217,6 +249,7 @@ apply_gateway_loadbalancer() {
   fi
 
   log "exposing kite-gateway Service on external port ${TEST_GATEWAY_PORT}"
+  patch_gateway_host_sshd_address
   run_cmd kubectl -n "${KITE_NAMESPACE}" patch service/kite-gateway --type=merge -p "{
     \"spec\": {
       \"type\": \"LoadBalancer\",

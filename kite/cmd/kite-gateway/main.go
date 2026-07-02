@@ -49,6 +49,7 @@ func main() {
 		HostKeyPath:          envString("KITE_GATEWAY_HOST_KEY_PATH", ""),
 		BackendTimeout:       time.Duration(envInt("KITE_GATEWAY_BACKEND_TIMEOUT_SECONDS", defaultBackendTimeoutSecond)) * time.Second,
 		BackendRetryInterval: time.Duration(envInt("KITE_GATEWAY_BACKEND_RETRY_SECONDS", defaultBackendRetrySecond)) * time.Second,
+		LoginBanner:          envString("KITE_GATEWAY_LOGIN_BANNER", ""),
 		HostFallbackEnabled:  envBool("KITE_GATEWAY_HOST_FALLBACK_ENABLED", true),
 		HostFallbackAddress:  envString("KITE_GATEWAY_HOST_SSHD_ADDRESS", ""),
 		HostFallbackTimeout:  time.Duration(envInt("KITE_GATEWAY_HOST_FALLBACK_TIMEOUT_SECONDS", defaultHostFallbackTimeout)) * time.Second,

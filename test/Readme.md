@@ -147,19 +147,21 @@ When `true`, dependency setup may allow gateway host sshd handoff. Default:
 This is the dangerous SSH acceptance gate for k3s hosts. It intentionally
 checks the full external SSH handoff:
 
-- host sshd is moved away from port `22` to port `2222`,
+- host sshd is moved away from port `22` to `TEST_HOST_SSHD_PORT` (default `2022`),
+- the selected host sshd port is rejected before any config change when another process already uses it,
 - `svc/kite-gateway` is exposed as a `LoadBalancer` on external port `22`,
 - port `22` returns the `kite-gateway` SSH banner,
-- port `2222` returns the host sshd banner,
+- `TEST_HOST_SSHD_PORT` returns the host sshd banner,
 - a username that is not a Kite VM route can still log into the host through
   gateway fallback using the host account password.
 
 Run it only from a place where you can recover the server console or connect
-with `ssh -p 2222` if something goes wrong:
+with `ssh -p <TEST_HOST_SSHD_PORT>` if something goes wrong:
 
 ```sh
 TEST_HOST_SSH_USER=hhs2003 \
 TEST_HOST_SSH_PASSWORD='<host-password>' \
+TEST_HOST_SSHD_PORT=2022 \
 ./test/all-test-k3s-ssh-handoff.sh
 ```
 
