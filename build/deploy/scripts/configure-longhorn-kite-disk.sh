@@ -196,6 +196,14 @@ wait_for_ready_kite_disk() {
 
   deadline=$((SECONDS + TIMEOUT_SECONDS))
   while true; do
+    if [[ "${KITE_LONGHORN_USE_DEDICATED_DISK}" != "true" ]]; then
+      kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' \
+        | while read -r node; do
+            [[ -z "${node}" ]] && continue
+            tag_existing_longhorn_disks "${node}"
+          done
+    fi
+
     count="$(ready_kite_disk_count)"
     if [[ "${count}" != "0" ]]; then
       log "found ${count} Ready/Schedulable Longhorn disk(s) tagged ${KITE_LONGHORN_DISK_TAG}"
