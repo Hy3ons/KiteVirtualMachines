@@ -389,6 +389,11 @@ The workflow logs in with the `GHCR_TOKEN` GitHub secret. `./ghcr-install.sh` us
 the GHCR images by default, while `./build-install.sh` builds images locally and imports
 or loads them into the selected development cluster.
 
+Before production publishing, `Test GHCR Image Builds` runs on `dev`, `stage`,
+and pull requests. It uses the same image matrix, Dockerfiles, and build args as
+the publish workflow, but sets `push: false` so Dockerfile or production build
+breakage is caught before `main` attempts to publish GHCR tags.
+
 ## Release E2E Tests
 
 Release validation lives under `test/`. These scripts build the current

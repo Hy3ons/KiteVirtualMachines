@@ -1,22 +1,23 @@
-name: Publish GHCR Images
+name: Test GHCR Image Builds
 
 on:
+  pull_request:
   push:
     branches:
-      - main
+      - dev
+      - stage
   workflow_dispatch:
 
 permissions:
   contents: read
-  packages: write
 
 env:
   REGISTRY: ghcr.io
   IMAGE_OWNER: hy3ons
 
 jobs:
-  publish:
-    name: Build and publish production images
+  build:
+    name: Build ${{ matrix.component }} image
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -48,30 +49,16 @@ jobs:
         with:
           driver: docker
 
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_TOKEN }}
-
-      - name: Build and push ${{ matrix.component }}
+      - name: Build ${{ matrix.component }} without push
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
-          push: true
+          push: false
           platforms: linux/amd64
           build-args: |
             VITE_BUILD_MODE=production
             VITE_API_BASE_URL=/api/v1
             VITE_USE_MOCK=false
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image }}:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image }}:main
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image }}:production
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image }}:sha-${{ github.sha }}
-          labels: |
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=production
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image }}:ci-${{ github.sha }}
