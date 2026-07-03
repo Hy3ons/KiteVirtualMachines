@@ -390,7 +390,7 @@
 | 소분류 | 테스트해야 하는 것 |
 | --- | --- |
 | Image tag trace | E2E 로그에 build한 image tag와 배포된 pod image가 같이 남는지 확인한다. |
-| GHCR build workflow | `dev`/`stage` push와 PR에서 publish workflow와 같은 image matrix, Dockerfile, build args로 네 이미지를 `push:false` buildx build 하는지 확인한다. |
+| GHCR build workflow | `stage` push와 PR에서 publish workflow와 같은 image matrix, Dockerfile, build args로 네 이미지를 `push:false` buildx build 하고 결과물을 버리는지 확인한다. |
 | Pod diagnostics | rollout 실패 시 pod describe, logs, events를 출력하는지 확인한다. |
 | CRD diagnostics | VM/User 실패 시 CRD spec/status와 관련 resource 목록을 출력하는지 확인한다. |
 | Storage diagnostics | DataVolume/PVC/PV 실패 시 CDI event와 Longhorn volume 상태를 출력하는지 확인한다. |
