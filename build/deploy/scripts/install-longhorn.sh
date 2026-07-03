@@ -11,6 +11,7 @@ set -euo pipefail
 # Environment Variables:
 #   LONGHORN_VERSION: default (empty)
 #   LONGHORN_MANIFEST_URL: default (empty)
+#   KITE_LONGHORN_NAMESPACE_DELETE_TIMEOUT_SECONDS: default 300
 #   KITE_LOG_COLOR: default auto
 #   NO_COLOR: default (unset)
 #
@@ -20,6 +21,7 @@ set -euo pipefail
 
 LONGHORN_VERSION="${LONGHORN_VERSION:-}"
 LONGHORN_MANIFEST_URL="${LONGHORN_MANIFEST_URL:-}"
+KITE_LONGHORN_NAMESPACE_DELETE_TIMEOUT_SECONDS="${KITE_LONGHORN_NAMESPACE_DELETE_TIMEOUT_SECONDS:-300}"
 
 log_color_enabled() {
   [[ "${KITE_LOG_COLOR:-auto}" != "false" && -z "${NO_COLOR:-}" && -t 1 ]]
@@ -61,6 +63,28 @@ require_command() {
   fi
 }
 
+longhorn_namespace_deletion_timestamp() {
+  kubectl get namespace longhorn-system -o jsonpath='{.metadata.deletionTimestamp}' 2>/dev/null || true
+}
+
+wait_for_previous_longhorn_namespace_deletion() {
+  local deletion_timestamp
+  local deadline
+
+  deletion_timestamp="$(longhorn_namespace_deletion_timestamp)"
+  [[ -z "${deletion_timestamp}" ]] && return 0
+
+  log "waiting for previous longhorn-system namespace deletion to finish"
+  deadline=$((SECONDS + KITE_LONGHORN_NAMESPACE_DELETE_TIMEOUT_SECONDS))
+  while kubectl get namespace longhorn-system >/dev/null 2>&1; do
+    if [[ "${SECONDS}" -ge "${deadline}" ]]; then
+      warn "longhorn-system namespace is still terminating after ${KITE_LONGHORN_NAMESPACE_DELETE_TIMEOUT_SECONDS}s"
+      exit 1
+    fi
+    sleep 2
+  done
+}
+
 # Longhorn 기본 manifest를 설치한다. 이미 클러스터에 Longhorn이 있으면 apply로 수렴시킨다.
 main() {
   require_command kubectl
@@ -75,6 +99,7 @@ main() {
   fi
 
   log "installing Longhorn from ${LONGHORN_MANIFEST_URL}"
+  wait_for_previous_longhorn_namespace_deletion
   # Longhorn은 namespace, CRD, controller를 한 manifest에서 설치한다.
   kubectl apply -f "${LONGHORN_MANIFEST_URL}"
 }
