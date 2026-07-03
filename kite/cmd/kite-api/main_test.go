@@ -68,7 +68,7 @@ func newHealthTestRouter(t *testing.T, dynamicClient dynamic.Interface) http.Han
 		t.Fatalf("failed to create token service: %v", err)
 	}
 
-	return newRouter(cfg, tokenService, dynamicClient)
+	return newRouter(cfg, tokenService, dynamicClient, nil)
 }
 
 var healthTestKiteUserGVR = schema.GroupVersionResource{

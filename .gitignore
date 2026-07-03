@@ -5,3 +5,5 @@
 .gotmp/
 
 .cache
+.omo/
+kite-frontend/test-results/

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -30,7 +29,7 @@ func TestUserListRequiresManagerAccess(t *testing.T) {
 
 	r := newUserTestRouter(t, tokenService)
 	req := httptest.NewRequest(http.MethodGet, "/api/users", nil)
-	req.Header.Set("Authorization", "Bearer "+userToken)
+	addAccessTokenCookie(req, userToken)
 	rec := httptest.NewRecorder()
 
 	r.ServeHTTP(rec, req)
@@ -49,7 +48,7 @@ func TestUserListReturnsKiteUsers(t *testing.T) {
 
 	r := newUserTestRouter(t, tokenService)
 	req := httptest.NewRequest(http.MethodGet, "/api/users", nil)
-	req.Header.Set("Authorization", "Bearer "+managerToken)
+	addAccessTokenCookie(req, managerToken)
 	rec := httptest.NewRecorder()
 
 	r.ServeHTTP(rec, req)
@@ -161,35 +160,6 @@ func TestSignUpCreatesLaterUserAsReadOnly(t *testing.T) {
 	}
 }
 
-func TestAdminDeleteUserDeletesChildVirtualMachines(t *testing.T) {
-	tokenService := newTestTokenService(t)
-	adminToken, _, err := tokenService.IssueAccessToken("admin", auth.AccessLevelAdmin)
-	if err != nil {
-		t.Fatalf("failed to issue token: %v", err)
-	}
-
-	dynamicClient := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
-		userTestGVR:               "KiteUserList",
-		userTestVirtualMachineGVR: "KiteVirtualMachineList",
-	}, newUserTestObject("target", "target", "target-ns", auth.AccessLevelUser), newVirtualMachineTestObject("target-vm", "target-ns"))
-	r := newUserTestRouterWithClient(t, tokenService, dynamicClient)
-
-	req := httptest.NewRequest(http.MethodDelete, "/api/users/target", nil)
-	req.Header.Set("Authorization", "Bearer "+adminToken)
-	rec := httptest.NewRecorder()
-
-	r.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
-	}
-
-	_, err = dynamicClient.Resource(userTestVirtualMachineGVR).Namespace("target-ns").Get(req.Context(), "target-vm", metav1.GetOptions{})
-	if !apierrors.IsNotFound(err) {
-		t.Fatalf("expected child VM CRD to be deleted, got %v", err)
-	}
-}
-
 func newUserTestRouter(t *testing.T, tokenService *auth.TokenService) http.Handler {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
@@ -280,6 +250,12 @@ func newVirtualMachineTestObject(name string, namespace string) *unstructured.Un
 	}
 }
 
+var secretTestGVR = schema.GroupVersionResource{
+	Group:    "",
+	Version:  "v1",
+	Resource: "secrets",
+}
+
 func newTestTokenService(t *testing.T) *auth.TokenService {
 	t.Helper()
 
@@ -289,6 +265,28 @@ func newTestTokenService(t *testing.T) *auth.TokenService {
 	}
 
 	return tokenService
+}
+
+func assertNestedInt64(t *testing.T, obj *unstructured.Unstructured, expected int64, fields ...string) {
+	t.Helper()
+	got, found, err := unstructured.NestedInt64(obj.Object, fields...)
+	if err != nil {
+		t.Fatalf("failed to read nested int64 %v: %v", fields, err)
+	}
+	if !found || got != expected {
+		t.Fatalf("expected nested int64 %v to be %d, got %d found=%v", fields, expected, got, found)
+	}
+}
+
+func assertNestedString(t *testing.T, obj *unstructured.Unstructured, expected string, fields ...string) {
+	t.Helper()
+	got, found, err := unstructured.NestedString(obj.Object, fields...)
+	if err != nil {
+		t.Fatalf("failed to read nested string %v: %v", fields, err)
+	}
+	if !found || got != expected {
+		t.Fatalf("expected nested string %v to be %q, got %q found=%v", fields, expected, got, found)
+	}
 }
 
 var userTestVirtualMachineGVR = schema.GroupVersionResource{

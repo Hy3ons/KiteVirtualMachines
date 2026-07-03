@@ -19,14 +19,14 @@ kubectl get nodes
 Install without git or a repository clone:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/ghcr-install.sh | bash
 ```
 
 Use a specific branch or tag:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/install.sh \
-  | KITE_INSTALL_REF=stage bash
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/ghcr-install.sh \
+  | KITE_GHCR_INSTALL_REF=stage bash
 ```
 
 Install everything. Longhorn installation is opt-in because production nodes
@@ -34,14 +34,19 @@ must satisfy Longhorn prerequisites such as usable disks and required host
 packages.
 
 ```sh
-INSTALL_LONGHORN=true ./install.sh
+INSTALL_LONGHORN=true ./ghcr-install.sh
 ```
 
 If Longhorn is already installed:
 
 ```sh
-./install.sh
+./ghcr-install.sh
 ```
+
+`./ghcr-install.sh` asks all install choices near the start of the run. If a
+variable is already set in the environment, that value is used without asking.
+Set `KITE_ASSUME_DEFAULTS=true` for non-interactive automation that should use
+the documented defaults.
 
 ## Verify
 
@@ -69,17 +74,25 @@ CDI.
 build/deploy/scripts/uninstall-kite.sh
 ```
 
+`./uninstall.sh` is the public root wrapper for the same deploy cleanup
+path. Inside this directory, `build/deploy/scripts/clean.sh` is the bootstrap
+entrypoint and `build/deploy/scripts/uninstall-kite.sh` is the implementation.
+`KITE_UNINSTALL_PRESET=safe` keeps dangerous deletion off by default.
+`KITE_UNINSTALL_PRESET=full` enables golden image, Kite Longhorn host data, and
+Longhorn uninstall choices, while `DELETE_LONGHORN_FORCE` still defaults to
+`false`.
+
 Run the same cleanup without git or a repository clone:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/clean.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/uninstall.sh | bash
 ```
 
 Use a specific branch or tag:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/clean.sh \
-  | KITE_CLEAN_REF=stage bash
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/uninstall.sh \
+  | KITE_UNINSTALL_REF=stage bash
 ```
 
 Set `DELETE_GOLDEN_IMAGE=true` to explicitly delete the imported golden image
@@ -116,7 +129,7 @@ The host OS does not need Kite-managed Linux users for this path. The gateway
 authenticates from Kite VM state, reads the VM SSH key Secret, and proxies the
 SSH session to the VM access Service inside the cluster.
 
-`install.sh` creates `kite-gateway-host-key` automatically when it does not
+`./ghcr-install.sh` creates `kite-gateway-host-key` automatically when it does not
 exist. On Linux hosts it first tries to copy the existing OpenSSH host key from
 `/etc/ssh/ssh_host_ed25519_key`, `ssh_host_ecdsa_key`, or `ssh_host_rsa_key`.
 That keeps the SSH fingerprint consistent when Kite takes over port `22`. If no
@@ -127,20 +140,24 @@ every deploy. To intentionally replace an already-created gateway key from the
 host key, run:
 
 ```sh
-KITE_GATEWAY_HOST_KEY_REFRESH=true KITE_GATEWAY_HOST_KEY_SOURCE=host ./install.sh
+KITE_GATEWAY_HOST_KEY_REFRESH=true KITE_GATEWAY_HOST_KEY_SOURCE=host ./ghcr-install.sh
 ```
 
-When the host is Linux with systemd OpenSSH, `install.sh` asks before moving
-host sshd away from port `22`. If confirmed, it backs up
-`/etc/ssh/sshd_config` under `/etc/kite/host-sshd`, configures host sshd to
-listen on `2222`, and restarts the service so the gateway can own port `22`.
-`build/deploy/scripts/uninstall-kite.sh` asks before restoring that backup. Set
-`KITE_MANAGE_HOST_SSHD=true` or `KITE_RESTORE_HOST_SSHD=true` for
+When the host is Linux with systemd OpenSSH, `./ghcr-install.sh` asks before moving
+host sshd away from port `22`. If host sshd already listens on another global
+port, Kite leaves it there and patches gateway fallback to that detected port.
+If it must move, Kite backs up `/etc/ssh/sshd_config` under
+`/etc/kite/host-sshd`, asks which port host sshd should use, checks that the
+port is free, and requires typing the same port again before restarting the
+service so the gateway can own port `22`. `build/deploy/scripts/uninstall-kite.sh`
+asks before restoring that backup. Set `KITE_MANAGE_HOST_SSHD=true` and
+`KITE_HOST_SSHD_PORT=<port>` or `KITE_RESTORE_HOST_SSHD=true` for
 non-interactive opt-in, and set `MANAGE_HOST_SSHD=false` or
 `RESTORE_HOST_SSHD=false` to skip these host changes.
 
 When no Kite VM uses the SSH login username, `kite-gateway` falls back to the
-host sshd at the node IP on port `2222`. This lets existing host accounts keep
-using `ssh <host-user>@<node-ip>` on port `22` after the gateway is installed.
-If a Kite VM `sshId` conflicts with a host user, the VM route has priority and
-host administration should use `ssh <host-user>@<node-ip> -p 2222`.
+host sshd at the node IP on the selected host sshd port. This lets existing host
+accounts keep using `ssh <host-user>@<node-ip>` on port `22` after the gateway
+is installed. If a Kite VM `sshId` conflicts with a host user, the VM route has
+priority and host administration should use
+`ssh <host-user>@<node-ip> -p <selected-host-sshd-port>`.

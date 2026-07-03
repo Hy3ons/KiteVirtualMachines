@@ -46,3 +46,18 @@ func TestPlatformIngressRenderWithHost(t *testing.T) {
 		t.Fatalf("expected domain.com host, got %#v", rule["host"])
 	}
 }
+
+func TestPlatformIngressRenderWithForceHTTPS(t *testing.T) {
+	obj, err := (&PlatformIngressData{Namespace: "kite", Host: "domain.com", ForceHTTPS: true}).Render()
+	if err != nil {
+		t.Fatalf("failed to render platform ingress: %v", err)
+	}
+
+	annotations := obj.GetAnnotations()
+	if annotations["traefik.ingress.kubernetes.io/router.entrypoints"] != "websecure" {
+		t.Fatalf("expected websecure entrypoint, got %#v", annotations)
+	}
+	if annotations["traefik.ingress.kubernetes.io/router.tls"] != "true" {
+		t.Fatalf("expected TLS annotation, got %#v", annotations)
+	}
+}

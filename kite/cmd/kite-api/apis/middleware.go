@@ -2,7 +2,6 @@ package apis
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -17,9 +16,8 @@ const claimsContextKey = "authClaims"
 // This function is used to protect API routes that require specific privileges.
 func RequireAccessLevel(deps Dependencies, minimumAccessLevel int) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		token := bearerToken(c)
+		token := accessTokenCookieValue(c)
 
-		// 토큰 존재해야함.
 		if token == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"message": "access token is required",
@@ -27,8 +25,6 @@ func RequireAccessLevel(deps Dependencies, minimumAccessLevel int) gin.HandlerFu
 			return
 		}
 
-
-		
 		claims, err := deps.TokenService.VerifyAccessToken(token)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
@@ -49,12 +45,7 @@ func RequireAccessLevel(deps Dependencies, minimumAccessLevel int) gin.HandlerFu
 	}
 }
 
-func bearerToken(c *gin.Context) string {
-	header := c.GetHeader("Authorization")
-	if strings.HasPrefix(header, "Bearer ") {
-		return header
-	}
-
+func accessTokenCookieValue(c *gin.Context) string {
 	cookie, err := c.Cookie("accessToken")
 	if err != nil {
 		return ""

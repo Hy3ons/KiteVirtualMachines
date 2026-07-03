@@ -134,7 +134,7 @@ func ReconcileKubeVirtVirtualMachineStatus(ctx context.Context, dynamicClient dy
 		return err
 	}
 
-	phase, powerState, conditionStatus, message := kiteStatusFromKubeVirtVirtualMachine(kubeVirtVM)
+	phase, powerState, conditionStatus, message := kiteStatusFromKubeVirtVirtualMachine(kiteVM, kubeVirtVM)
 	nodeName := kiteNodeNameFromKubeVirtVirtualMachine(kubeVirtVM)
 	if err := updateKiteVirtualMachineStatus(ctx, dynamicClient, kiteVM, phase, powerState, domain, nodeName, conditionStatus, kiteVMReasonReconciled, message); err != nil {
 		return err
@@ -185,14 +185,11 @@ func kiteVirtualMachineFromUnstructured(resource *unstructured.Unstructured) (*k
 }
 
 // kiteStatusFromKubeVirtVirtualMachine converts KubeVirt VM status into Kite CRD status values.
+// kiteVM provides desired power intent so initial Stopped events can remain Provisioning when the VM should be on.
 // kubeVirtVM is the real kubevirt.io/v1 VirtualMachine object.
 // The returned phase, powerState, condition status, and message are written to KiteVirtualMachine status.
-func kiteStatusFromKubeVirtVirtualMachine(kubeVirtVM *unstructured.Unstructured) (string, string, metav1.ConditionStatus, string) {
+func kiteStatusFromKubeVirtVirtualMachine(kiteVM *kite.KiteVirtualMachine, kubeVirtVM *unstructured.Unstructured) (string, string, metav1.ConditionStatus, string) {
 	running := kubeVirtVirtualMachineRunning(kubeVirtVM)
-	powerState := "Off"
-	if running {
-		powerState = "On"
-	}
 
 	printableStatus, _, _ := unstructured.NestedString(kubeVirtVM.Object, "status", "printableStatus")
 	printableStatus = strings.TrimSpace(printableStatus)
@@ -207,17 +204,20 @@ func kiteStatusFromKubeVirtVirtualMachine(kubeVirtVM *unstructured.Unstructured)
 
 	switch printableStatus {
 	case kubeVirtStatusRunning:
-		return kiteVMPhaseRunning, powerState, metav1.ConditionTrue, "KubeVirt VirtualMachine is running"
+		return kiteVMPhaseRunning, "On", metav1.ConditionTrue, "KubeVirt VirtualMachine is running"
 	case kubeVirtStatusStopped:
-		return kiteVMPhaseStopped, powerState, metav1.ConditionTrue, "KubeVirt VirtualMachine is stopped"
+		if vmShouldRun(kiteVM) {
+			return kiteVMPhaseProvisioning, "Off", metav1.ConditionFalse, "VM start is pending while KubeVirt reports Stopped"
+		}
+		return kiteVMPhaseStopped, "Off", metav1.ConditionTrue, "KubeVirt VirtualMachine is stopped"
 	case kubeVirtStatusStarting:
-		return kiteVMPhaseProvisioning, powerState, metav1.ConditionFalse, "KubeVirt VirtualMachine is starting"
+		return kiteVMPhaseProvisioning, "On", metav1.ConditionFalse, "KubeVirt VirtualMachine is starting"
 	default:
 		if running {
-			return kiteVMPhaseProvisioning, powerState, metav1.ConditionFalse, "KubeVirt VirtualMachine status is " + printableStatus
+			return kiteVMPhaseProvisioning, "On", metav1.ConditionFalse, "KubeVirt VirtualMachine status is " + printableStatus
 		}
 
-		return kiteVMPhaseReady, powerState, metav1.ConditionTrue, "KubeVirt VirtualMachine status is " + printableStatus
+		return kiteVMPhaseReady, "Off", metav1.ConditionTrue, "KubeVirt VirtualMachine status is " + printableStatus
 	}
 }
 

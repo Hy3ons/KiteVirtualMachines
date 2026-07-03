@@ -12,14 +12,15 @@ import (
 var ubuntu2204CloudInitTemplate string
 
 type Ubuntu2204CloudInit struct {
-	VmName       string
-	Namespace    string
-	Id           string
-	SSHPublicKey string
+	VmName            string
+	Namespace         string
+	Id                string
+	SSHPublicKey      string
+	GuestPasswordHash string
 }
 
 // Render creates a cloud-init Secret object for an Ubuntu 22.04 virtual machine.
-// The receiver provides VM name, namespace, login id, and SSH public key values.
+// The receiver provides VM name, namespace, login id, SSH public key, and guest password hash values.
 // The returned object is applied by the KiteVirtualMachine reconcile flow.
 // This method uses an embedded template so the controller does not depend on source-tree files at runtime.
 func (s *Ubuntu2204CloudInit) Render() (*unstructured.Unstructured, error) {

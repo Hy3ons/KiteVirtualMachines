@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8080/api/v1} VITE_USE_MOCK=${VITE_USE_MOCK:-true} vite --mode development",
+    "dev": "VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8080/api/v1} VITE_USE_MOCK=${VITE_USE_MOCK:-true} VITE_DEBUG_DIRECT_ROUTES=${VITE_DEBUG_DIRECT_ROUTES:-true} vite --mode debug --host 127.0.0.1 --port 5173",
     "stage": "VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8080/api/v1} VITE_USE_MOCK=${VITE_USE_MOCK:-false} vite --mode staging",
     "typecheck": "tsc -b",
     "build": "npm run typecheck && vite build",
@@ -12,10 +12,14 @@
     "build:stage": "VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8080/api/v1} VITE_USE_MOCK=${VITE_USE_MOCK:-false} npm run build -- --mode staging",
     "build:prod": "VITE_API_BASE_URL=${VITE_API_BASE_URL:-/api/v1} VITE_USE_MOCK=${VITE_USE_MOCK:-false} npm run build -- --mode production",
     "lint": "eslint .",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
     "preview": "vite preview"
   },
   "dependencies": {
     "@ant-design/icons": "^6.2.5",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
     "antd": "^6.4.3",
     "axios": "^1.17.0",
     "react": "^19.2.6",
@@ -26,6 +30,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.61.0",
     "@types/node": "^24.12.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

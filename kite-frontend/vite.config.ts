@@ -9,4 +9,30 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url))
 export default defineConfig({
   envDir: path.join(rootDir, '.vite-env-disabled'),
   plugins: [react()],
+  build: {
+    chunkSizeWarningLimit: 1200,
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              name: 'terminal',
+              test: /node_modules[\\/]@xterm[\\/]/,
+              priority: 30,
+            },
+            {
+              name: 'antd',
+              test: /node_modules[\\/](@ant-design|antd|rc-|@rc-component)[\\/]/,
+              priority: 20,
+            },
+            {
+              name: 'react',
+              test: /node_modules[\\/](react|react-dom|react-router-dom|zustand)[\\/]/,
+              priority: 10,
+            },
+          ],
+        },
+      },
+    },
+  },
 })

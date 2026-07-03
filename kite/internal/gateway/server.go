@@ -40,6 +40,7 @@ const (
 // BackendTimeout controls how long one authenticated connection waits for the VM sshd.
 // BackendRetryInterval controls the wait between VM sshd dial attempts.
 // HandshakeTimeout limits how long a raw TCP client may take to complete SSH handshake.
+// LoginBanner is shown by SSH clients before authentication when it is not empty.
 // HostFallbackEnabled allows non-Kite SSH users to be proxied to the host sshd.
 // HostFallbackAddress is the host sshd address, usually the node IP on port 2222.
 // HostFallbackTimeout controls password auth timeout when checking the host sshd.
@@ -49,6 +50,7 @@ type ServerConfig struct {
 	BackendTimeout       time.Duration
 	BackendRetryInterval time.Duration
 	HandshakeTimeout     time.Duration
+	LoginBanner          string
 	HostFallbackEnabled  bool
 	HostFallbackAddress  string
 	HostFallbackTimeout  time.Duration
@@ -141,6 +143,11 @@ func NewServer(config ServerConfig, dynamicClient dynamic.Interface, routes *Rou
 			return nil, err
 		},
 		ServerVersion: "SSH-2.0-kite-gateway",
+	}
+	if config.LoginBanner != "" {
+		sshConfig.BannerCallback = func(_ ssh.ConnMetadata) string {
+			return config.LoginBanner
+		}
 	}
 	sshConfig.AddHostKey(signer)
 	server.sshConfig = sshConfig

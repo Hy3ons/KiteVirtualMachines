@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"strconv"
 	"strings"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -37,10 +38,13 @@ var secretGVR = schema.GroupVersionResource{
 
 // Settings contains cluster-wide frontend configuration values.
 // BaseDomain is used by platform and VM Ingress generation.
+// ForceHTTPS reports whether the platform Ingress should redirect HTTP traffic to HTTPS.
 // HasTLSCertificate reports whether kube-system/global-tls-secret contains TLS material.
 // This struct is returned by kite-api config endpoints.
 type Settings struct {
 	BaseDomain        string `json:"baseDomain"`
+	ForceHTTPS        bool   `json:"forceHttps"`
+	AdminContact      string `json:"adminContact"`
 	HasJWTSecret      bool   `json:"hasJWTSecret"`
 	HasPasswordSalt   bool   `json:"hasPasswordSalt"`
 	HasTLSCertificate bool   `json:"hasTLSCertificate"`
@@ -76,6 +80,8 @@ func (s *Service) Get(ctx context.Context) (Settings, error) {
 
 	return Settings{
 		BaseDomain:        data[BaseDomainConfigKey],
+		ForceHTTPS:        strings.EqualFold(data[config.ForceHTTPSConfigKey], "true"),
+		AdminContact:      data[config.AdminContactKey],
 		HasJWTSecret:      data[config.JWTSecretKey] != "",
 		HasPasswordSalt:   data[config.PasswordSaltKey] != "",
 		HasTLSCertificate: hasTLS,
@@ -105,6 +111,22 @@ func (s *Service) UpdateBaseDomain(ctx context.Context, baseDomain string) (Sett
 	}
 
 	return s.updateRuntimeConfigValue(ctx, BaseDomainConfigKey, baseDomain)
+}
+
+// UpdateForceHTTPS stores the platform HTTPS redirect policy in kite/kite-runtime-config.
+// ctx controls Kubernetes API create or update requests.
+// forceHTTPS determines whether the controller renders HTTPS redirect settings for platform Ingress.
+// The returned Settings value reflects the updated config.
+func (s *Service) UpdateForceHTTPS(ctx context.Context, forceHTTPS bool) (Settings, error) {
+	return s.updateRuntimeConfigValue(ctx, config.ForceHTTPSConfigKey, strconv.FormatBool(forceHTTPS))
+}
+
+// UpdateAdminContact stores the operator contact string in kite/kite-runtime-config.
+// ctx controls Kubernetes API create or update requests.
+// adminContact is a free-form email, phone number, chat handle, or URL shown to users without VM create access.
+// The returned Settings value reflects the updated config.
+func (s *Service) UpdateAdminContact(ctx context.Context, adminContact string) (Settings, error) {
+	return s.updateRuntimeConfigValue(ctx, config.AdminContactKey, strings.TrimSpace(adminContact))
 }
 
 // RotateRuntimeSecrets replaces JWT and password salt values in kite/kite-runtime-config.

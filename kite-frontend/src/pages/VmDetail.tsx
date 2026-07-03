@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { SEO } from '../components/SEO';
-import { vmApi } from '../api';
-import { Layout, Typography, Space, Tag, Breadcrumb, Card, Tabs, Button, Descriptions, message, Popconfirm, Spin, Avatar, Alert } from 'antd';
+import { configApi, vmApi } from '../api';
+import { App as AntdApp, Layout, Typography, Space, Tag, Breadcrumb, Card, Tabs, Button, Descriptions, Popconfirm, Spin, Avatar, Alert } from 'antd';
 import { useParams, useNavigate } from 'react-router-dom';
 import { PoweroffOutlined, DeleteOutlined, CodeOutlined, DesktopOutlined, SafetyCertificateOutlined, ArrowLeftOutlined, CaretRightOutlined, CopyOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../store/useAuthStore';
+import { useLogout } from '../hooks/useLogout';
 import { GlobalHeader } from '../components/GlobalHeader';
-import { MOCK_ENV } from '../config/mockEnv';
 
 const { Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
@@ -23,30 +23,37 @@ interface VM {
 }
 
 export const VmDetail: React.FC = () => {
+  const { message } = AntdApp.useApp();
   const { vmName } = useParams<{ vmName: string }>();
   const navigate = useNavigate();
-  const { username, namespace, accessLevel, logout, profileImage } = useAuthStore();
+  const { username, namespace, accessLevel, profileImage } = useAuthStore();
+  const logout = useLogout();
   const safeAccessLevel = accessLevel ?? 1;
   const [vm, setVm] = useState<VM | null>(null);
+  const [baseDomain, setBaseDomain] = useState('');
   const [loading, setLoading] = useState(true);
 
-  const fetchVmDetail = async () => {
+  const fetchVmDetail = useCallback(async () => {
     if (!vmName) return;
     try {
       setLoading(true);
-      const data = await vmApi.getVm(vmName);
-      setVm(data.vm);
-    } catch (error) {
+      const [vmData, configData] = await Promise.all([
+        vmApi.getVm(vmName),
+        configApi.getConfig().catch(() => null),
+      ]);
+      setVm(vmData.vm);
+      setBaseDomain(configData?.config?.baseDomain || '');
+    } catch {
       message.error('VM 정보를 불러오지 못했습니다.');
       navigate('/dashboard');
     } finally {
       setLoading(false);
     }
-  };
+  }, [message, navigate, vmName]);
 
   useEffect(() => {
-    fetchVmDetail();
-  }, [vmName]);
+    void Promise.resolve().then(fetchVmDetail);
+  }, [fetchVmDetail]);
 
   const handleStart = async () => {
     if (!vmName) return;
@@ -55,7 +62,7 @@ export const VmDetail: React.FC = () => {
       await vmApi.startVm(vmName);
       message.success({ content: 'VM Start Requested', key: 'start' });
       fetchVmDetail();
-    } catch (error) {
+    } catch {
       message.error({ content: '시작 요청 실패', key: 'start' });
     }
   };
@@ -67,14 +74,19 @@ export const VmDetail: React.FC = () => {
       await vmApi.stopVm(vmName);
       message.success({ content: 'VM Stop Requested', key: 'stop' });
       fetchVmDetail();
-    } catch (error) {
+    } catch {
       message.error({ content: '종료 요청 실패', key: 'stop' });
     }
   };
 
   const copySSHCommand = async () => {
     if (!vm) return;
-    await navigator.clipboard.writeText(`ssh ${vm.sshId}@${MOCK_ENV.BASE_DOMAIN}`);
+    const connectionHost = baseDomain.trim();
+    if (!connectionHost) {
+      message.warning('접속 도메인 설정을 불러온 뒤 다시 복사하세요.');
+      return;
+    }
+    await navigator.clipboard.writeText(`ssh ${vm.sshId}@${connectionHost}`);
     message.success('SSH 명령어를 복사했습니다.');
   };
 
@@ -85,7 +97,7 @@ export const VmDetail: React.FC = () => {
       await vmApi.deleteVm(vmName);
       message.success({ content: 'VM Delete Requested', key: 'delete' });
       navigate('/dashboard');
-    } catch (error) {
+    } catch {
       message.error({ content: '삭제 요청 실패', key: 'delete' });
     }
   };
@@ -102,6 +114,8 @@ export const VmDetail: React.FC = () => {
   }
 
   if (!vm) return null;
+  const connectionHost = baseDomain.trim();
+  const displayedHost = connectionHost || '<base-domain>';
 
   return (
     <Layout style={{ minHeight: '100vh', backgroundColor: '#F9F8F6' }}>
@@ -120,21 +134,24 @@ export const VmDetail: React.FC = () => {
         }
       />
       
-      <Content style={{ padding: '40px', maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
-        <Breadcrumb style={{ marginBottom: 24 }}>
-          <Breadcrumb.Item><a onClick={() => navigate('/dashboard')}>Dashboard</a></Breadcrumb.Item>
-          <Breadcrumb.Item>Kite Machine</Breadcrumb.Item>
-          <Breadcrumb.Item>{vm.name}</Breadcrumb.Item>
-        </Breadcrumb>
+      <Content className="app-main app-main--standard vm-detail-content">
+        <Breadcrumb
+          style={{ marginBottom: 24 }}
+          items={[
+            { title: <a onClick={() => navigate('/dashboard')}>Dashboard</a> },
+            { title: 'Kite Machine' },
+            { title: vm.name },
+          ]}
+        />
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
-          <Space align="center" size="middle">
+        <div className="vm-detail-heading">
+          <div className="vm-detail-title-group">
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/dashboard')} />
-            <Title level={2} style={{ margin: 0 }}>{vm.name}</Title>
+            <Title level={2} className="vm-detail-title">{vm.name}</Title>
             <Tag color={vm.phase === 'Running' ? 'success' : 'error'} style={{ fontSize: '14px', padding: '4px 8px' }}>
               {vm.phase}
             </Tag>
-          </Space>
+          </div>
           <Space>
             {vm.phase === 'Running' ? (
               <Button danger icon={<PoweroffOutlined />} onClick={handleStop}>Stop</Button>
@@ -179,14 +196,23 @@ export const VmDetail: React.FC = () => {
             },
             {
               key: '2',
-              label: <span><CodeOutlined /> SSH Connection</span>,
+              label: <span><CodeOutlined /> SSH</span>,
               children: (
                 <Card hoverable style={{ marginTop: 16 }}>
                   <Title level={4}>SSH 접속 방법</Title>
                   <Paragraph>Kite가 설치된 서버에 VM 생성 시 입력한 계정으로 접속합니다.</Paragraph>
+                  {!connectionHost && (
+                    <Alert
+                      title="베이스 도메인 설정 필요"
+                      description="관리자 설정의 baseDomain을 불러오지 못했거나 아직 설정되지 않았습니다. 도메인 설정 후 다시 SSH 안내를 확인하세요."
+                      type="warning"
+                      showIcon
+                      style={{ marginBottom: 24 }}
+                    />
+                  )}
                   {vm.phase !== 'Running' && (
                     <Alert
-                      message="VM이 실행 중이 아닙니다."
+                      title="VM이 실행 중이 아닙니다."
                       description="SSH 접속은 VM이 Running 상태가 된 뒤에 사용할 수 있습니다."
                       type="warning"
                       showIcon
@@ -200,7 +226,7 @@ export const VmDetail: React.FC = () => {
                       <Button icon={<CopyOutlined />} onClick={copySSHCommand}>Copy</Button>
                     </div>
                     <div style={{ marginTop: '8px', fontFamily: 'monospace', background: '#2d2d2d', color: '#fff', padding: '12px', borderRadius: 0 }}>
-                      ssh {vm.sshId}@{MOCK_ENV.BASE_DOMAIN}
+                      ssh {vm.sshId}@{displayedHost}
                     </div>
                   </div>
                 </Card>

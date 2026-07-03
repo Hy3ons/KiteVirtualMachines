@@ -2,6 +2,8 @@ package vm
 
 import (
 	"context"
+	"encoding/base64"
+	"errors"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -9,8 +11,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic/fake"
+	ktesting "k8s.io/client-go/testing"
 
 	"kite/internal/auth"
+	"kite/internal/guestlogin"
 )
 
 var kiteVirtualMachineTestGVR = schema.GroupVersionResource{
@@ -66,6 +70,7 @@ func TestServiceCreateStoresSSHPasswordHash(t *testing.T) {
 	passwordSalt := "vm-password-salt"
 	dynamicClient := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
 		kiteVirtualMachineTestGVR: "KiteVirtualMachineList",
+		secretGVR:                 "SecretList",
 	})
 
 	service := NewService(dynamicClient, passwordSalt)
@@ -93,6 +98,71 @@ func TestServiceCreateStoresSSHPasswordHash(t *testing.T) {
 	}
 	if !auth.VerifyPassword("pass word_123!", passwordSalt, passwordHash) {
 		t.Fatalf("stored password hash does not verify")
+	}
+
+	secret, err := dynamicClient.Resource(secretGVR).Namespace("tenant-a").Get(ctx, guestlogin.SecretName("vm-a"), metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("failed to read guest login Secret: %v", err)
+	}
+	encodedHash, _, _ := unstructured.NestedString(secret.Object, "data", guestlogin.PasswordHashKey)
+	guestPasswordHash, err := base64.StdEncoding.DecodeString(encodedHash)
+	if err != nil {
+		t.Fatalf("guest login Secret contains invalid base64 hash: %v", err)
+	}
+	if string(guestPasswordHash) == "" || string(guestPasswordHash) == "pass word_123!" {
+		t.Fatalf("expected guest password hash, got %q", string(guestPasswordHash))
+	}
+	if !guestlogin.VerifyPasswordHash("pass word_123!", string(guestPasswordHash)) {
+		t.Fatalf("guest password hash does not verify")
+	}
+}
+
+func TestServiceCreateRollsBackVMWhenGuestLoginSecretFails(t *testing.T) {
+	ctx := context.Background()
+	dynamicClient := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
+		kiteVirtualMachineTestGVR: "KiteVirtualMachineList",
+		secretGVR:                 "SecretList",
+	})
+	dynamicClient.PrependReactor("create", "secrets", func(_ ktesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("secret create failed")
+	})
+
+	service := NewService(dynamicClient, "vm-password-salt")
+	_, err := service.Create(ctx, CreateRequest{
+		Name:        "vm-a",
+		Namespace:   "tenant-a",
+		Disk:        "20Gi",
+		SSHID:       "asdf",
+		SSHPassword: "pass word_123!",
+	})
+	if err == nil {
+		t.Fatal("expected Create to fail when guest login Secret creation fails")
+	}
+	if _, err := dynamicClient.Resource(kiteVirtualMachineTestGVR).Namespace("tenant-a").Get(ctx, "vm-a", metav1.GetOptions{}); !IsNotFound(err) {
+		t.Fatalf("expected created VM to be rolled back, got %v", err)
+	}
+}
+
+func TestServiceUpdateRejectsSSHPasswordChange(t *testing.T) {
+	ctx := context.Background()
+	dynamicClient := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
+		kiteVirtualMachineTestGVR: "KiteVirtualMachineList",
+	}, newTestKiteVirtualMachine("tenant-a", "vm-a", "asdf"))
+
+	nextPassword := "new password"
+	service := NewService(dynamicClient, "vm-password-salt")
+	_, err := service.Update(ctx, "tenant-a", "vm-a", UpdateRequest{
+		SSHPassword: &nextPassword,
+	})
+	if err == nil {
+		t.Fatal("expected password update to be rejected")
+	}
+	requestErr, ok := err.(RequestError)
+	if !ok {
+		t.Fatalf("expected RequestError, got %T: %v", err, err)
+	}
+	if requestErr.Kind != ErrorKindInvalid {
+		t.Fatalf("expected invalid error, got %s: %s", requestErr.Kind, requestErr.Message)
 	}
 }
 

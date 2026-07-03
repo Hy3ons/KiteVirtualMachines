@@ -1,0 +1,13 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: kite-platform-https-redirect
+  namespace: {{ .Namespace }}
+  labels:
+    hy3ons.github.io/managed-by: kite-controller
+    hy3ons.github.io/platform-ingress: "true"
+
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
