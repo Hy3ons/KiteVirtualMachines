@@ -20,6 +20,7 @@ set -euo pipefail
 #   KITE_HOST_SSHD_PORT: default 2222
 #   KITE_LONGHORN_USE_DEDICATED_DISK: default false
 #   KITE_GATEWAY_HOST_KEY_REFRESH: default false
+#   KITE_ROLLOUT_TIMEOUT: default 15m
 #   RUN_VERIFY: default true
 #   KITE_LOG_COLOR: default auto
 #   NO_COLOR: default (unset)
@@ -52,6 +53,7 @@ KITE_HOST_SSHD_PORT="${KITE_HOST_SSHD_PORT:-2222}"
 KITE_HOST_SSHD_STATE="${KITE_HOST_SSHD_STATE:-/etc/kite/host-sshd/state.env}"
 KITE_LONGHORN_USE_DEDICATED_DISK="${KITE_LONGHORN_USE_DEDICATED_DISK:-false}"
 KITE_GATEWAY_HOST_KEY_REFRESH="${KITE_GATEWAY_HOST_KEY_REFRESH:-false}"
+KITE_ROLLOUT_TIMEOUT="${KITE_ROLLOUT_TIMEOUT:-15m}"
 RUN_VERIFY="${RUN_VERIFY:-true}"
 
 # shellcheck source=build/lib/prompt.sh
@@ -219,10 +221,10 @@ main() {
   patch_gateway_host_sshd_address
 
   log "waiting for Kite workloads"
-  kubectl -n "${KITE_NAMESPACE}" rollout status deployment/kite-api --timeout=180s
-  kubectl -n "${KITE_NAMESPACE}" rollout status deployment/kite-controller --timeout=180s
-  kubectl -n "${KITE_NAMESPACE}" rollout status deployment/kite-gateway --timeout=180s
-  kubectl -n "${KITE_NAMESPACE}" rollout status deployment/kite-frontend --timeout=180s
+  kubectl -n "${KITE_NAMESPACE}" rollout status deployment/kite-api --timeout="${KITE_ROLLOUT_TIMEOUT}"
+  kubectl -n "${KITE_NAMESPACE}" rollout status deployment/kite-controller --timeout="${KITE_ROLLOUT_TIMEOUT}"
+  kubectl -n "${KITE_NAMESPACE}" rollout status deployment/kite-gateway --timeout="${KITE_ROLLOUT_TIMEOUT}"
+  kubectl -n "${KITE_NAMESPACE}" rollout status deployment/kite-frontend --timeout="${KITE_ROLLOUT_TIMEOUT}"
 
   if [[ "${APPLY_GOLDEN_IMAGE}" == "true" ]]; then
     log "applying golden image"
