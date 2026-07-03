@@ -198,7 +198,7 @@ confirm_host_sshd_restore_before_gateway_delete() {
 prepare_host_sshd_restore_log() {
   local log_dir
 
-  if : >>"${KITE_HOST_SSHD_RESTORE_LOG}" 2>/dev/null; then
+  if { : >>"${KITE_HOST_SSHD_RESTORE_LOG}"; } 2>/dev/null; then
     return 0
   fi
 
