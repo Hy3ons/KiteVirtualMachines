@@ -395,6 +395,10 @@ the publish workflow, but sets `push: false` so Dockerfile or production build
 breakage is caught before `main` attempts to publish GHCR tags. The build result
 is only a validation artifact and is not pushed to GHCR.
 
+On slow or flaky registry networks, set `KITE_ROLLOUT_TIMEOUT=15m` or higher
+when running `./ghcr-install.sh`; this controls how long the installer waits for
+Kite workloads to pull GHCR images and become ready.
+
 ## Release E2E Tests
 
 Release validation lives under `test/`. These scripts build the current
