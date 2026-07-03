@@ -390,6 +390,7 @@
 | 소분류 | 테스트해야 하는 것 |
 | --- | --- |
 | Image tag trace | E2E 로그에 build한 image tag와 배포된 pod image가 같이 남는지 확인한다. |
+| GHCR build workflow | `dev`/`stage` push와 PR에서 publish workflow와 같은 image matrix, Dockerfile, build args로 네 이미지를 `push:false` buildx build 하는지 확인한다. |
 | Pod diagnostics | rollout 실패 시 pod describe, logs, events를 출력하는지 확인한다. |
 | CRD diagnostics | VM/User 실패 시 CRD spec/status와 관련 resource 목록을 출력하는지 확인한다. |
 | Storage diagnostics | DataVolume/PVC/PV 실패 시 CDI event와 Longhorn volume 상태를 출력하는지 확인한다. |
@@ -409,6 +410,6 @@
 | Host sshd script 변경 | bash syntax, occupied port, rollback, restore-after-clean 실제 host 테스트 |
 | Storage 변경 | Longhorn/CDI wait, golden image import, VM disk clone, cleanup safety 테스트 |
 | Frontend UI 변경 | typecheck/build, route/component E2E, visual QA, backend contract 확인 |
-| Dockerfile/build 변경 | buildx build, local load/push, deployed image tag 확인 |
+| Dockerfile/build 변경 | GHCR build workflow, buildx build, local load/push, deployed image tag 확인 |
 | install/uninstall 변경 | interactive/noninteractive, idempotency, failure propagation, 실제 install-uninstall roundtrip |
 | docs/example 변경 | 명령 실행 가능성, CRD apply 가능성, 최신 환경변수 일치 확인 |
