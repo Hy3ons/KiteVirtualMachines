@@ -350,6 +350,37 @@ longhorn_pv_count() {
     | tr -d ' '
 }
 
+delete_longhorn_webhook_configurations() {
+  kubectl get validatingwebhookconfigurations.admissionregistration.k8s.io -o name 2>/dev/null \
+    | grep 'longhorn' \
+    | xargs -r kubectl delete --ignore-not-found=true || true
+  kubectl get mutatingwebhookconfigurations.admissionregistration.k8s.io -o name 2>/dev/null \
+    | grep 'longhorn' \
+    | xargs -r kubectl delete --ignore-not-found=true || true
+}
+
+clear_longhorn_finalizers() {
+  kubectl api-resources --api-group=longhorn.io --verbs=list --namespaced=true -o name 2>/dev/null \
+    | while read -r resource; do
+        [[ -z "${resource}" ]] && continue
+        kubectl -n longhorn-system get "${resource}" -o name 2>/dev/null \
+          | xargs -r -n 1 kubectl -n longhorn-system patch --type=merge -p '{"metadata":{"finalizers":[]}}' || true
+      done
+
+  kubectl api-resources --api-group=longhorn.io --verbs=list --namespaced=false -o name 2>/dev/null \
+    | while read -r resource; do
+        [[ -z "${resource}" ]] && continue
+        kubectl get "${resource}" -o name 2>/dev/null \
+          | xargs -r -n 1 kubectl patch --type=merge -p '{"metadata":{"finalizers":[]}}' || true
+      done
+}
+
+delete_longhorn_crds() {
+  kubectl get crd -o name 2>/dev/null \
+    | grep 'longhorn.io' \
+    | xargs -r kubectl delete --wait=false || true
+}
+
 # 명시 확인이 있을 때만 host path의 Kite Longhorn 데이터를 DaemonSet으로 삭제한다.
 delete_kite_longhorn_host_data() {
   if [[ "${DELETE_LONGHORN_DATA}" != "true" ]]; then
@@ -397,15 +428,12 @@ delete_longhorn_resources() {
 
   log "deleting Longhorn resources"
   kubectl delete storageclass longhorn --ignore-not-found=true || true
+  delete_longhorn_webhook_configurations
   kubectl delete namespace longhorn-system --ignore-not-found=true --wait=false || true
 
   # namespace terminating에 걸린 Longhorn CR은 finalizer 때문에 남을 수 있어 강제로 비운다.
-  kubectl api-resources --api-group=longhorn.io --verbs=list -o name 2>/dev/null \
-    | while read -r resource; do
-        [[ -z "${resource}" ]] && continue
-        kubectl get "${resource}" -A -o name 2>/dev/null \
-          | xargs -r -n 1 kubectl patch --type=merge -p '{"metadata":{"finalizers":[]}}' || true
-      done
+  clear_longhorn_finalizers
+  delete_longhorn_crds
 }
 
 # 배포 제거의 전체 순서다. Kite 리소스, 선택적 storage 데이터, Longhorn, host sshd 복원을 처리한다.
