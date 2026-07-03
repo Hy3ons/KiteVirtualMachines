@@ -64,6 +64,14 @@ warn() {
 }
 
 
+sudo_cmd() {
+  if kite_prompt_interactive; then
+    sudo "$@"
+  else
+    sudo -n "$@"
+  fi
+}
+
 # kubectl/ssh-keygen 같은 필수 명령을 사용하는 지점 전에 명확히 실패시킨다.
 require_command() {
   local name="$1"
@@ -92,7 +100,7 @@ host_key_exists() {
 
   [[ -f "${path}" ]] && return 0
   if command -v sudo >/dev/null 2>&1; then
-    sudo test -f "${path}" 2>/dev/null
+    sudo_cmd test -f "${path}" 2>/dev/null
     return $?
   fi
   return 1
@@ -106,7 +114,7 @@ copy_key_file() {
   if [[ -r "${source}" ]]; then
     cp "${source}" "${target}"
   elif command -v sudo >/dev/null 2>&1; then
-    sudo cat "${source}" > "${target}"
+    sudo_cmd cat "${source}" > "${target}"
   else
     return 1
   fi

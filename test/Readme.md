@@ -93,6 +93,8 @@ The E2E gate must prove all of the following:
 - `KiteVirtualMachine.status.currentPowerState` becomes `On`.
 - The frontend serves HTML.
 - The gateway responds with an SSH banner.
+- On k3s, the gateway host key Secret and the running gateway SSH port both
+  reuse the host sshd fingerprint.
 
 ## Interactive Usage
 
@@ -145,9 +147,27 @@ When `true`, dependency setup may allow gateway host sshd handoff. Default:
 `TEST_GATEWAY_HOST_KEY_SOURCE`
 
 How the general cluster E2E scripts create the `kite-gateway` SSH host key
-Secret. Default: `generate`, which avoids reading `/etc/ssh` from the host and
-keeps noninteractive test runs free of sudo prompts. Use `host` only when the
-test must verify host key reuse.
+Secret. k3s default: `host`, so the gateway reuses the real host sshd key and
+the test verifies that the Secret fingerprint matches `/etc/ssh`. minikube and
+generic k8s default: `generate`, because those environments do not necessarily
+share the node host key with the test runner. `host` mode may need sudo access
+to read `/etc/ssh/ssh_host_*_key`; for noninteractive runs, cache sudo first or
+run as root. Some SSH non-TTY sudo configurations do not share the cached sudo
+timestamp with later `sudo -n` reads, so root execution is the more reliable
+automation path.
+
+`TEST_GATEWAY_HOST_KEY_REFRESH`
+
+Whether the E2E script replaces an existing `kite-gateway` host key Secret.
+Default: `true` when `TEST_GATEWAY_HOST_KEY_SOURCE=host`, otherwise `false`.
+This is important for k3s because an older generated Secret would keep the
+gateway working while silently breaking fingerprint preservation.
+
+`TEST_GATEWAY_HOST_KEY_FILE_NAME`
+
+The file name stored inside the gateway host key Secret and mounted into the
+gateway container. Default: `ssh_host_rsa_key`, matching the production
+manifest path `/etc/kite-gateway/ssh/ssh_host_rsa_key`.
 
 `./test/all-test-k3s-ssh-handoff.sh`
 
@@ -159,6 +179,8 @@ checks the full external SSH handoff:
 - `svc/kite-gateway` is exposed as a `LoadBalancer` on external port `22`,
 - port `22` returns the `kite-gateway` SSH banner,
 - `TEST_HOST_SSHD_PORT` returns the host sshd banner,
+- the external gateway port and the moved host sshd port expose the same SSH
+  host key fingerprint,
 - a username that is not a Kite VM route can still log into the host through
   gateway fallback using the host account password.
 

@@ -174,7 +174,7 @@
 | VM not ready | VM route는 있지만 Service/VM이 준비되지 않았을 때 명확히 실패하고 연결이 매달리지 않는지 확인한다. |
 | Host fallback | VM route가 없는 username은 configured host sshd 주소로 password/key 인증을 전달하는지 확인한다. |
 | Fallback priority | host username과 VM sshId가 충돌하면 VM route가 우선되는지 확인한다. |
-| Host key Secret | gateway host key Secret이 없으면 생성되고, 있으면 기본적으로 재사용되는지 확인한다. |
+| Host key Secret | gateway host key Secret이 없으면 생성되고, k3s E2E에서는 실제 host sshd key fingerprint와 Secret 및 실행 중 gateway fingerprint가 일치하는지 확인한다. |
 | Host sshd address env | `ghcr-install.sh`, `build-install.sh`, `uninstall.sh`, `build-clear.sh` 흐름에서 `KITE_GATEWAY_HOST_SSHD_ADDRESS`가 실제 host sshd 포트와 일치하는지 확인한다. |
 | Timeout | backend VM 또는 host sshd가 응답하지 않을 때 제한 시간 안에 실패하는지 확인한다. |
 | External port handoff | gateway Service가 외부 22번을 받고 host sshd는 선택 포트로 직접 접속 가능한지 확인한다. |
@@ -307,7 +307,7 @@
 
 | 소분류 | 테스트해야 하는 것 |
 | --- | --- |
-| k3s E2E | buildx build, docker load, k3s import, overlay deploy, API, VM Running, frontend, gateway port-forward가 통과하는지 확인한다. |
+| k3s E2E | buildx build, docker load, k3s import, host key fingerprint 재사용, overlay deploy, API, VM Running, frontend, gateway port-forward가 통과하는지 확인한다. |
 | minikube E2E | profile 시작/컨텍스트 설정, local image load, overlay deploy, 같은 API/VM 검증이 통과하는지 확인한다. |
 | generic k8s E2E | registry 미설정 시 빌드 전 실패하고, 설정 시 buildx push 후 cluster pull/deploy가 통과하는지 확인한다. |
 | Dependency setup | `TEST_INSTALL_DEPS=true`일 때 Longhorn/KubeVirt/CDI/golden image 준비가 누락 환경에서 동작하는지 확인한다. |
@@ -330,6 +330,7 @@
 | --- | --- |
 | Direct host port | 선택한 host sshd 포트가 OpenSSH banner를 반환하고 host 계정 password login이 되는지 확인한다. |
 | Gateway port 22 | 22번이 kite-gateway banner를 반환하고 host OpenSSH banner가 직접 노출되지 않는지 확인한다. |
+| Host key fingerprint | gateway 22번과 이동한 host sshd 포트가 같은 SSH host key fingerprint를 노출하는지 확인한다. |
 | Fallback login | VM route가 없는 host 계정이 gateway 22번을 통해 password login 되는지 확인한다. |
 | Domain path | node IP뿐 아니라 운영 도메인이 같은 22번 gateway/fallback 경로로 동작하는지 확인한다. |
 | Occupied port | 선택 포트가 점유되어 있으면 host sshd config, state, gateway env를 바꾸지 않는지 확인한다. |

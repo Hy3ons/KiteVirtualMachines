@@ -16,6 +16,8 @@ TEST_API_LOCAL_PORT_WAS_SET="${TEST_API_LOCAL_PORT+x}"
 TEST_FRONTEND_LOCAL_PORT_WAS_SET="${TEST_FRONTEND_LOCAL_PORT+x}"
 TEST_GATEWAY_LOCAL_PORT_WAS_SET="${TEST_GATEWAY_LOCAL_PORT+x}"
 TEST_GATEWAY_HOST_KEY_SOURCE_WAS_SET="${TEST_GATEWAY_HOST_KEY_SOURCE+x}"
+TEST_GATEWAY_HOST_KEY_REFRESH_WAS_SET="${TEST_GATEWAY_HOST_KEY_REFRESH+x}"
+TEST_GATEWAY_HOST_KEY_FILE_NAME_WAS_SET="${TEST_GATEWAY_HOST_KEY_FILE_NAME+x}"
 TEST_USERNAME_WAS_SET="${TEST_USERNAME+x}"
 TEST_EMAIL_WAS_SET="${TEST_EMAIL+x}"
 TEST_PASSWORD_WAS_SET="${TEST_PASSWORD+x}"
@@ -29,6 +31,28 @@ MINIKUBE_CPUS_WAS_SET="${MINIKUBE_CPUS+x}"
 MINIKUBE_MEMORY_WAS_SET="${MINIKUBE_MEMORY+x}"
 MINIKUBE_START_WAS_SET="${MINIKUBE_START+x}"
 
+default_gateway_host_key_source() {
+  case "${TEST_CLUSTER}" in
+    k3s)
+      echo "host"
+      ;;
+    *)
+      echo "generate"
+      ;;
+  esac
+}
+
+default_gateway_host_key_refresh() {
+  case "${TEST_GATEWAY_HOST_KEY_SOURCE}" in
+    host)
+      echo "true"
+      ;;
+    *)
+      echo "false"
+      ;;
+  esac
+}
+
 KITE_NAMESPACE="${KITE_NAMESPACE:-kite}"
 TEST_IMAGE_TAG="${TEST_IMAGE_TAG:-test-$(date +%Y%m%d%H%M%S)}"
 TEST_INSTALL_DEPS="${TEST_INSTALL_DEPS:-true}"
@@ -39,7 +63,9 @@ TEST_DRY_RUN="${TEST_DRY_RUN:-false}"
 TEST_API_LOCAL_PORT="${TEST_API_LOCAL_PORT:-18080}"
 TEST_FRONTEND_LOCAL_PORT="${TEST_FRONTEND_LOCAL_PORT:-18081}"
 TEST_GATEWAY_LOCAL_PORT="${TEST_GATEWAY_LOCAL_PORT:-10022}"
-TEST_GATEWAY_HOST_KEY_SOURCE="${TEST_GATEWAY_HOST_KEY_SOURCE:-generate}"
+TEST_GATEWAY_HOST_KEY_SOURCE="${TEST_GATEWAY_HOST_KEY_SOURCE:-$(default_gateway_host_key_source)}"
+TEST_GATEWAY_HOST_KEY_REFRESH="${TEST_GATEWAY_HOST_KEY_REFRESH:-$(default_gateway_host_key_refresh)}"
+TEST_GATEWAY_HOST_KEY_FILE_NAME="${TEST_GATEWAY_HOST_KEY_FILE_NAME:-ssh_host_rsa_key}"
 TEST_USERNAME="${TEST_USERNAME:-e2e-$(date +%s)}"
 TEST_EMAIL="${TEST_EMAIL:-${TEST_USERNAME}@example.com}"
 TEST_PASSWORD="${TEST_PASSWORD:-Kite-e2e-password-1}"
@@ -156,7 +182,11 @@ configure_interactive_test_options() {
   prompt_value TEST_API_LOCAL_PORT "${TEST_API_LOCAL_PORT_WAS_SET}" "TEST_API_LOCAL_PORT 값을 정합니다." "로컬 curl이 cluster 내부 kite-api Service에 접속하도록 port-forward할 내 PC/서버의 포트입니다. 이미 쓰는 포트면 다른 값을 고르세요."
   prompt_value TEST_FRONTEND_LOCAL_PORT "${TEST_FRONTEND_LOCAL_PORT_WAS_SET}" "TEST_FRONTEND_LOCAL_PORT 값을 정합니다." "frontend Service가 HTML을 내는지 확인할 때 port-forward할 로컬 포트입니다."
   prompt_value TEST_GATEWAY_LOCAL_PORT "${TEST_GATEWAY_LOCAL_PORT_WAS_SET}" "TEST_GATEWAY_LOCAL_PORT 값을 정합니다." "gateway Service의 SSH banner를 확인하기 위해 port-forward할 로컬 포트입니다. 22번 대신 높은 포트를 쓰는 게 안전합니다."
-  prompt_value TEST_GATEWAY_HOST_KEY_SOURCE "${TEST_GATEWAY_HOST_KEY_SOURCE_WAS_SET}" "TEST_GATEWAY_HOST_KEY_SOURCE 값을 정합니다." "gateway SSH host key Secret을 어디서 만들지 정합니다. E2E 기본값 generate는 host /etc/ssh key를 읽지 않아 sudo 없이 자동화하기 좋습니다."
+  prompt_value TEST_GATEWAY_HOST_KEY_SOURCE "${TEST_GATEWAY_HOST_KEY_SOURCE_WAS_SET}" "TEST_GATEWAY_HOST_KEY_SOURCE 값을 정합니다." "gateway SSH host key Secret을 어디서 만들지 정합니다. k3s 기본값 host는 실제 /etc/ssh host key를 재사용해 fingerprint 유지까지 검증합니다. minikube/k8s 기본값 generate는 클러스터 외부 host key를 읽지 않습니다."
+  if [[ -z "${TEST_GATEWAY_HOST_KEY_REFRESH_WAS_SET}" ]]; then
+    TEST_GATEWAY_HOST_KEY_REFRESH="$(default_gateway_host_key_refresh)"
+  fi
+  prompt_value TEST_GATEWAY_HOST_KEY_FILE_NAME "${TEST_GATEWAY_HOST_KEY_FILE_NAME_WAS_SET}" "TEST_GATEWAY_HOST_KEY_FILE_NAME 값을 정합니다." "gateway Deployment가 Secret에서 읽는 key 파일 이름입니다. 기본 manifest는 /etc/kite-gateway/ssh/ssh_host_rsa_key를 읽으므로 기본값을 유지하는 것이 안전합니다."
   prompt_value TEST_USERNAME "${TEST_USERNAME_WAS_SET}" "TEST_USERNAME 값을 정합니다." "테스트용 KiteUser의 로그인 username입니다. 테스트가 끝나면 TEST_CLEANUP=true일 때 이 사용자를 삭제합니다."
   TEST_EMAIL="${TEST_EMAIL:-${TEST_USERNAME}@example.com}"
   prompt_value TEST_EMAIL "${TEST_EMAIL_WAS_SET}" "TEST_EMAIL 값을 정합니다." "테스트 사용자가 API login에 사용할 email입니다. signup 후 이 email/password로 실제 API 로그인을 검증합니다."
@@ -180,10 +210,11 @@ configure_interactive_test_options() {
 
   kite_prompt_configure_bool TEST_INSTALL_DEPS "${TEST_INSTALL_DEPS_WAS_SET}" $'TEST_INSTALL_DEPS 값을 정합니다.\n  예를 고르면 Longhorn/KubeVirt/CDI/StorageClass/golden image를 기존 설치 스크립트로 준비합니다. 이미 완전히 준비된 클러스터만 확인하려면 아니오를 고르세요.'
   kite_prompt_configure_bool TEST_MANAGE_HOST_SSHD "${TEST_MANAGE_HOST_SSHD_WAS_SET}" $'TEST_MANAGE_HOST_SSHD 값을 정합니다.\n  예를 고르면 gateway가 22번을 쓰도록 host sshd handoff를 허용합니다. 원격 서버 접속 경로가 바뀔 수 있어 기본값은 아니오입니다.'
+  kite_prompt_configure_bool TEST_GATEWAY_HOST_KEY_REFRESH "${TEST_GATEWAY_HOST_KEY_REFRESH_WAS_SET}" $'TEST_GATEWAY_HOST_KEY_REFRESH 값을 정합니다.\n  예를 고르면 기존 gateway host key Secret이 있어도 다시 만듭니다. host key 재사용 테스트에서는 예여야 예전 generate key가 남아 fingerprint 검증을 속이지 않습니다.'
   kite_prompt_configure_bool TEST_CLEANUP "${TEST_CLEANUP_WAS_SET}" $'TEST_CLEANUP 값을 정합니다.\n  예를 고르면 테스트가 만든 VM, KiteUser, 사용자 namespace를 끝나고 삭제합니다. 실패 상태를 직접 조사하려면 아니오가 좋습니다.'
   kite_prompt_configure_bool TEST_DRY_RUN "${TEST_DRY_RUN_WAS_SET}" $'TEST_DRY_RUN 값을 정합니다.\n  예를 고르면 실제 빌드/배포/VM 생성 없이 어떤 명령을 실행할지 계획만 출력합니다.'
 
-  log "e2e choices: cluster=${TEST_CLUSTER}, namespace=${KITE_NAMESPACE}, image=${TEST_IMAGE_REGISTRY}/<component>:${TEST_IMAGE_TAG}, install_deps=${TEST_INSTALL_DEPS}, manage_host_sshd=${TEST_MANAGE_HOST_SSHD}, gateway_host_key_source=${TEST_GATEWAY_HOST_KEY_SOURCE}, cleanup=${TEST_CLEANUP}, vm_timeout=${TEST_VM_TIMEOUT}, dry_run=${TEST_DRY_RUN}"
+  log "e2e choices: cluster=${TEST_CLUSTER}, namespace=${KITE_NAMESPACE}, image=${TEST_IMAGE_REGISTRY}/<component>:${TEST_IMAGE_TAG}, install_deps=${TEST_INSTALL_DEPS}, manage_host_sshd=${TEST_MANAGE_HOST_SSHD}, gateway_host_key_source=${TEST_GATEWAY_HOST_KEY_SOURCE}, gateway_host_key_refresh=${TEST_GATEWAY_HOST_KEY_REFRESH}, cleanup=${TEST_CLEANUP}, vm_timeout=${TEST_VM_TIMEOUT}, dry_run=${TEST_DRY_RUN}"
 }
 
 validate_static_options() {
@@ -393,6 +424,9 @@ patches:
             containers:
               - name: kite-gateway
                 imagePullPolicy: ${policy}
+                env:
+                  - name: KITE_GATEWAY_HOST_KEY_PATH
+                    value: /etc/kite-gateway/ssh/${TEST_GATEWAY_HOST_KEY_FILE_NAME}
   - target:
       group: apps
       version: v1
@@ -466,10 +500,161 @@ prepare_dependencies() {
     "${ROOT_DIR}/build/dev/all-in-one.sh"
 }
 
+sudo_cmd() {
+  if kite_prompt_interactive; then
+    sudo "$@"
+  else
+    sudo -n "$@"
+  fi
+}
+
+host_key_candidates() {
+  printf '%s\n' \
+    /etc/ssh/ssh_host_ed25519_key \
+    /etc/ssh/ssh_host_ecdsa_key \
+    /etc/ssh/ssh_host_rsa_key
+}
+
+copy_host_key_file() {
+  local source="$1"
+  local target="$2"
+
+  if [[ -r "${source}" ]]; then
+    cp "${source}" "${target}"
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo_cmd cat "${source}" > "${target}"
+  else
+    return 1
+  fi
+  chmod 0600 "${target}"
+}
+
+copy_selected_host_key_file() {
+  local target="$1"
+  local candidate
+
+  if [[ "$(uname -s 2>/dev/null || true)" != "Linux" ]]; then
+    warn "TEST_GATEWAY_HOST_KEY_SOURCE=host requires Linux host SSH keys under /etc/ssh"
+    return 1
+  fi
+
+  while IFS= read -r candidate; do
+    if [[ -f "${candidate}" ]] || { command -v sudo >/dev/null 2>&1 && sudo_cmd test -f "${candidate}" 2>/dev/null; }; then
+      log "using host SSH key ${candidate} as fingerprint reference"
+      copy_host_key_file "${candidate}" "${target}"
+      return 0
+    fi
+  done < <(host_key_candidates)
+
+  warn "no host SSH private key was found under /etc/ssh"
+  return 1
+}
+
+private_key_fingerprint() {
+  local key_path="$1"
+
+  ssh-keygen -y -f "${key_path}" | ssh-keygen -lf - | awk 'NR == 1 { print $2 }'
+}
+
+scan_ssh_fingerprints() {
+  local host="$1"
+  local port="$2"
+
+  ssh-keyscan -T 10 -p "${port}" "${host}" 2>/dev/null \
+    | ssh-keygen -lf - 2>/dev/null \
+    | awk '{ print $2 }' \
+    | sort -u \
+    || true
+}
+
+decode_base64_to_file() {
+  local payload="$1"
+  local target="$2"
+
+  KITE_E2E_BASE64_PAYLOAD="${payload}" python3 - "${target}" <<'PY'
+import base64
+import os
+import sys
+
+target = sys.argv[1]
+payload = os.environ["KITE_E2E_BASE64_PAYLOAD"].strip()
+with open(target, "wb") as handle:
+    handle.write(base64.b64decode(payload))
+PY
+}
+
+verify_gateway_host_key_secret() {
+  local tmpdir
+  local host_key
+  local secret_key
+  local secret_payload
+  local host_fingerprint
+  local secret_fingerprint
+
+  if [[ "${TEST_GATEWAY_HOST_KEY_SOURCE}" != "host" ]]; then
+    return
+  fi
+  if [[ "${TEST_DRY_RUN}" == "true" ]]; then
+    log "dry-run: would compare host /etc/ssh fingerprint with gateway host key Secret"
+    return
+  fi
+
+  require_command ssh-keygen
+  tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/kite-gateway-key-check.XXXXXX")"
+  host_key="${tmpdir}/host_key"
+  secret_key="${tmpdir}/secret_key"
+
+  if ! copy_selected_host_key_file "${host_key}"; then
+    rm -rf "${tmpdir}"
+    exit 1
+  fi
+
+  if ! secret_payload="$(kubectl -n "${KITE_NAMESPACE}" get secret kite-gateway-host-key -o "go-template={{ index .data \"${TEST_GATEWAY_HOST_KEY_FILE_NAME}\" }}")"; then
+    rm -rf "${tmpdir}"
+    warn "gateway host key Secret ${KITE_NAMESPACE}/kite-gateway-host-key does not contain ${TEST_GATEWAY_HOST_KEY_FILE_NAME}"
+    exit 1
+  fi
+  if [[ -z "${secret_payload}" ]]; then
+    rm -rf "${tmpdir}"
+    warn "gateway host key Secret ${KITE_NAMESPACE}/kite-gateway-host-key has empty ${TEST_GATEWAY_HOST_KEY_FILE_NAME}"
+    exit 1
+  fi
+  decode_base64_to_file "${secret_payload}" "${secret_key}"
+  chmod 0600 "${secret_key}"
+
+  host_fingerprint="$(private_key_fingerprint "${host_key}")"
+  secret_fingerprint="$(private_key_fingerprint "${secret_key}")"
+  rm -rf "${tmpdir}"
+
+  if [[ -z "${host_fingerprint}" || -z "${secret_fingerprint}" || "${host_fingerprint}" != "${secret_fingerprint}" ]]; then
+    warn "gateway host key fingerprint does not match host sshd fingerprint: host=${host_fingerprint:-empty}, secret=${secret_fingerprint:-empty}"
+    exit 1
+  fi
+
+  log "gateway host key Secret reuses host sshd fingerprint ${host_fingerprint}"
+}
+
+restart_gateway_when_host_key_changes() {
+  if [[ "${TEST_GATEWAY_HOST_KEY_REFRESH}" != "true" ]]; then
+    return
+  fi
+
+  log "restarting kite-gateway so the refreshed host key is loaded"
+  run_cmd kubectl -n "${KITE_NAMESPACE}" rollout restart deployment/kite-gateway
+}
+
 apply_kite_runtime() {
   log "applying Kite runtime manifest"
-  run_cmd env KITE_ASSUME_DEFAULTS=true KITE_NAMESPACE="${KITE_NAMESPACE}" KITE_GATEWAY_HOST_KEY_SOURCE="${TEST_GATEWAY_HOST_KEY_SOURCE}" "${ROOT_DIR}/build/deploy/scripts/ensure-gateway-host-key-secret.sh"
+  run_cmd env \
+    KITE_ASSUME_DEFAULTS=true \
+    KITE_NAMESPACE="${KITE_NAMESPACE}" \
+    KITE_GATEWAY_HOST_KEY_SOURCE="${TEST_GATEWAY_HOST_KEY_SOURCE}" \
+    KITE_GATEWAY_HOST_KEY_REFRESH="${TEST_GATEWAY_HOST_KEY_REFRESH}" \
+    KITE_GATEWAY_HOST_KEY_FILE_NAME="${TEST_GATEWAY_HOST_KEY_FILE_NAME}" \
+    "${ROOT_DIR}/build/deploy/scripts/ensure-gateway-host-key-secret.sh"
+  verify_gateway_host_key_secret
   run_cmd kubectl apply -f "${RENDERED_MANIFEST}"
+  restart_gateway_when_host_key_changes
 
   log "waiting for Kite rollouts"
   run_cmd kubectl -n "${KITE_NAMESPACE}" rollout status deployment/kite-api --timeout=180s
@@ -682,6 +867,49 @@ else:
 if not banner.startswith(b"SSH-"):
     raise SystemExit(f"gateway did not return an SSH banner: {banner!r}")
 PY
+  verify_gateway_runtime_fingerprint
+}
+
+verify_gateway_runtime_fingerprint() {
+  local tmpdir
+  local host_key
+  local host_fingerprint
+  local gateway_fingerprints
+
+  if [[ "${TEST_GATEWAY_HOST_KEY_SOURCE}" != "host" ]]; then
+    return
+  fi
+  if [[ "${TEST_DRY_RUN}" == "true" ]]; then
+    log "dry-run: would compare gateway port-forward fingerprint with host sshd fingerprint"
+    return
+  fi
+
+  require_command ssh-keygen
+  require_command ssh-keyscan
+  tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/kite-gateway-runtime-key-check.XXXXXX")"
+  host_key="${tmpdir}/host_key"
+
+  if ! copy_selected_host_key_file "${host_key}"; then
+    rm -rf "${tmpdir}"
+    exit 1
+  fi
+
+  host_fingerprint="$(private_key_fingerprint "${host_key}")"
+  gateway_fingerprints="$(scan_ssh_fingerprints 127.0.0.1 "${TEST_GATEWAY_LOCAL_PORT}")"
+  rm -rf "${tmpdir}"
+
+  if [[ -z "${gateway_fingerprints}" ]]; then
+    warn "could not read gateway fingerprints from forwarded port 127.0.0.1:${TEST_GATEWAY_LOCAL_PORT}"
+    exit 1
+  fi
+  if ! grep -Fxq "${host_fingerprint}" <(printf '%s\n' "${gateway_fingerprints}"); then
+    warn "running gateway fingerprint does not match host sshd fingerprint"
+    warn "host sshd fingerprint: ${host_fingerprint:-empty}"
+    warn "gateway fingerprints: ${gateway_fingerprints//$'\n'/, }"
+    exit 1
+  fi
+
+  log "running gateway exposes host sshd fingerprint ${host_fingerprint}"
 }
 
 run_e2e_checks() {
@@ -737,6 +965,10 @@ preflight() {
   require_command docker
   require_command curl
   require_command python3
+  if [[ "${TEST_GATEWAY_HOST_KEY_SOURCE}" == "host" ]]; then
+    require_command ssh-keygen
+    require_command ssh-keyscan
+  fi
   docker buildx version >/dev/null
 
   case "${TEST_CLUSTER}" in
@@ -770,6 +1002,8 @@ print_plan() {
   install deps:   ${TEST_INSTALL_DEPS}
   host sshd:      ${TEST_MANAGE_HOST_SSHD}
   gateway key:    ${TEST_GATEWAY_HOST_KEY_SOURCE}
+  key refresh:    ${TEST_GATEWAY_HOST_KEY_REFRESH}
+  key file:       ${TEST_GATEWAY_HOST_KEY_FILE_NAME}
   cleanup:        ${TEST_CLEANUP}
   vm timeout:     ${TEST_VM_TIMEOUT}
   test user:      ${TEST_USERNAME} <${TEST_EMAIL}>

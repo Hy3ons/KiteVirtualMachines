@@ -204,6 +204,8 @@ preflight() {
 
   require_command kubectl
   require_command ssh
+  require_command ssh-keygen
+  require_command ssh-keyscan
   require_command python3
   runner="$(selected_probe_runner)"
   require_command "${runner}"
@@ -266,6 +268,50 @@ apply_gateway_loadbalancer() {
   run_cmd kubectl -n "${KITE_NAMESPACE}" rollout status deployment/kite-gateway --timeout=180s
 }
 
+scan_ssh_fingerprints() {
+  local host="$1"
+  local port="$2"
+
+  ssh-keyscan -T 10 -p "${port}" "${host}" 2>/dev/null \
+    | ssh-keygen -lf - 2>/dev/null \
+    | awk '{ print $2 }' \
+    | sort -u \
+    || true
+}
+
+verify_gateway_reuses_host_fingerprint() {
+  local host_fingerprints
+  local gateway_fingerprints
+  local matched_fingerprint
+
+  log "checking gateway host key fingerprint reuse"
+  if [[ "${TEST_DRY_RUN}" == "true" ]]; then
+    printf '[kite-ssh-handoff] dry-run: compare ssh-keyscan fingerprints for %q:%q and %q:%q\n' "${TEST_SSH_HOST}" "${TEST_HOST_SSHD_PORT}" "${TEST_SSH_HOST}" "${TEST_GATEWAY_PORT}"
+    return
+  fi
+
+  host_fingerprints="$(scan_ssh_fingerprints "${TEST_SSH_HOST}" "${TEST_HOST_SSHD_PORT}")"
+  gateway_fingerprints="$(scan_ssh_fingerprints "${TEST_SSH_HOST}" "${TEST_GATEWAY_PORT}")"
+  if [[ -z "${host_fingerprints}" ]]; then
+    warn "could not read host sshd fingerprints from ${TEST_SSH_HOST}:${TEST_HOST_SSHD_PORT}"
+    exit 1
+  fi
+  if [[ -z "${gateway_fingerprints}" ]]; then
+    warn "could not read gateway fingerprints from ${TEST_SSH_HOST}:${TEST_GATEWAY_PORT}"
+    exit 1
+  fi
+
+  matched_fingerprint="$(grep -Fxf <(printf '%s\n' "${host_fingerprints}") <(printf '%s\n' "${gateway_fingerprints}") | head -n 1 || true)"
+  if [[ -z "${matched_fingerprint}" ]]; then
+    warn "gateway fingerprints do not match host sshd fingerprints"
+    warn "host sshd fingerprints: ${host_fingerprints//$'\n'/, }"
+    warn "gateway fingerprints: ${gateway_fingerprints//$'\n'/, }"
+    exit 1
+  fi
+
+  log "gateway reuses host sshd fingerprint ${matched_fingerprint}"
+}
+
 probe() {
   local runner
 
@@ -298,6 +344,8 @@ verify_ports_and_fallback() {
 
   log "checking gateway banner on ${TEST_SSH_HOST}:${TEST_GATEWAY_PORT}"
   probe -mode=banner -host="${TEST_SSH_HOST}" -port="${TEST_GATEWAY_PORT}" -want-contains=kite-gateway
+
+  verify_gateway_reuses_host_fingerprint
 
   log "checking direct host password login on ${TEST_SSH_HOST}:${TEST_HOST_SSHD_PORT}"
   probe -mode=password -host="${TEST_SSH_HOST}" -port="${TEST_HOST_SSHD_PORT}" -user="${TEST_HOST_SSH_USER}"
