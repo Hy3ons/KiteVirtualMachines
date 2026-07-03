@@ -11,6 +11,7 @@ set -euo pipefail
 # Environment Variables:
 #   KITE_NAMESPACE: default kite
 #   KITE_LONGHORN_DISK_TAG: default kite
+#   KITE_ROLLOUT_TIMEOUT: default 15m
 #   KITE_LOG_COLOR: default auto
 #   NO_COLOR: default (unset)
 #
@@ -20,6 +21,7 @@ set -euo pipefail
 
 KITE_NAMESPACE="${KITE_NAMESPACE:-kite}"
 KITE_LONGHORN_DISK_TAG="${KITE_LONGHORN_DISK_TAG:-kite}"
+KITE_ROLLOUT_TIMEOUT="${KITE_ROLLOUT_TIMEOUT:-15m}"
 
 log_color_enabled() {
   [[ "${KITE_LOG_COLOR:-auto}" != "false" && -z "${NO_COLOR:-}" && -t 1 ]]
@@ -106,10 +108,10 @@ main() {
   kubectl get crd kitevirtualmachines.hy3ons.github.io
 
   log "checking Kite workloads"
-  kubectl -n "${KITE_NAMESPACE}" rollout status deployment/kite-api --timeout=180s
-  kubectl -n "${KITE_NAMESPACE}" rollout status deployment/kite-controller --timeout=180s
-  kubectl -n "${KITE_NAMESPACE}" rollout status deployment/kite-gateway --timeout=180s
-  kubectl -n "${KITE_NAMESPACE}" rollout status deployment/kite-frontend --timeout=180s
+  kubectl -n "${KITE_NAMESPACE}" rollout status deployment/kite-api --timeout="${KITE_ROLLOUT_TIMEOUT}"
+  kubectl -n "${KITE_NAMESPACE}" rollout status deployment/kite-controller --timeout="${KITE_ROLLOUT_TIMEOUT}"
+  kubectl -n "${KITE_NAMESPACE}" rollout status deployment/kite-gateway --timeout="${KITE_ROLLOUT_TIMEOUT}"
+  kubectl -n "${KITE_NAMESPACE}" rollout status deployment/kite-frontend --timeout="${KITE_ROLLOUT_TIMEOUT}"
   kubectl -n "${KITE_NAMESPACE}" get service kite-gateway
 
   log "checking golden image"
