@@ -195,6 +195,17 @@ confirm_host_sshd_restore_before_gateway_delete() {
   esac
 }
 
+prepare_host_sshd_restore_log() {
+  local log_dir
+
+  if : >>"${KITE_HOST_SSHD_RESTORE_LOG}" 2>/dev/null; then
+    return 0
+  fi
+
+  log_dir="${TMPDIR:-/tmp}"
+  KITE_HOST_SSHD_RESTORE_LOG="$(mktemp "${log_dir%/}/kite-host-sshd-restore.XXXXXX.log")"
+}
+
 # schedule_host_sshd_restore_before_gateway_delete starts a nohup restore worker before gateway deletion.
 # This keeps the port-22 recovery alive even if deleting the gateway drops the current SSH session.
 schedule_host_sshd_restore_before_gateway_delete() {
@@ -221,6 +232,7 @@ schedule_host_sshd_restore_before_gateway_delete() {
     restore_cmd=(sudo -n env)
   fi
 
+  prepare_host_sshd_restore_log
   log "scheduling detached host sshd restore after port 22 is released"
   nohup "${restore_cmd[@]}" \
     KITE_RESTORE_HOST_SSHD=true \
