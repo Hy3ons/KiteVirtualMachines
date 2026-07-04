@@ -67,6 +67,8 @@ warn() {
 sudo_cmd() {
   if kite_prompt_interactive; then
     sudo "$@"
+  elif [[ -n "${SUDO_ASKPASS:-}" ]]; then
+    sudo -A "$@"
   else
     sudo -n "$@"
   fi
