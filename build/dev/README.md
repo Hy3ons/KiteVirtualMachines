@@ -164,9 +164,9 @@ folder-level map and naming rules are documented in `build/README.md`.
 
 ## Gateway
 
-`build/dev/dev.sh` also builds and deploys `kite-gateway`. The Service is a
-`LoadBalancer` that exposes external SSH on port `22` and forwards it to the
-pod's internal `2222` port.
+`build/dev/dev.sh` also builds and deploys `kite-gateway`. The base Service is
+internal by default; `build-install.sh` only promotes it to `LoadBalancer` port
+`22` when host sshd handoff is explicitly enabled.
 
 ```sh
 ssh <sshId>@<node-ip>
@@ -180,7 +180,8 @@ VM SSH key Secret created by `kite-controller`.
 On Linux hosts it first tries to copy the existing OpenSSH host key from
 `/etc/ssh/ssh_host_ed25519_key`, `ssh_host_ecdsa_key`, or `ssh_host_rsa_key`.
 That keeps the SSH fingerprint consistent when Kite takes over port `22`. If no
-host key is available, the script generates a gateway key instead.
+host key is available, or automatic mode cannot read it, the script generates a
+gateway key instead.
 
 Existing Secrets are kept by default so client fingerprints do not change on
 every deploy. To intentionally replace an already-created gateway key from the
@@ -201,9 +202,10 @@ port `22`. `./build-clear.sh` asks before restoring that backup. Set
 `KITE_RESTORE_HOST_SSHD=true` for non-interactive opt-in, and set
 `MANAGE_HOST_SSHD=false` or `RESTORE_HOST_SSHD=false` to skip these host changes.
 
-When no Kite VM uses the SSH login username, `kite-gateway` falls back to the
-host sshd at the node IP on the selected host sshd port. This lets existing host
-accounts keep using `ssh <host-user>@<node-ip>` on port `22` after the gateway
-is installed. If a Kite VM `sshId` conflicts with a host user, the VM route has
-priority and host administration should use
+When external SSH handoff is enabled and no Kite VM uses the SSH login username,
+`kite-gateway` falls back to the host sshd at the node IP on the selected host
+sshd port. This lets existing host accounts keep using
+`ssh <host-user>@<node-ip>` on port `22` after the gateway is installed. If a
+Kite VM `sshId` conflicts with a host user, the VM route has priority and host
+administration should use
 `ssh <host-user>@<node-ip> -p <selected-host-sshd-port>`.

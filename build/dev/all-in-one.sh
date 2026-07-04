@@ -172,6 +172,39 @@ patch_gateway_host_sshd_address() {
   kubectl -n kite rollout status deployment/kite-gateway --timeout=180s
 }
 
+configure_gateway_service_exposure() {
+  local node_port
+
+  if [[ "${MANAGE_HOST_SSHD}" == "true" ]]; then
+    log "exposing kite-gateway Service on external SSH port 22"
+    kubectl -n kite patch service kite-gateway --type=merge -p '{
+      "spec": {
+        "type": "LoadBalancer",
+        "ports": [
+          {
+            "name": "ssh",
+            "port": 22,
+            "targetPort": "ssh",
+            "protocol": "TCP"
+          }
+        ]
+      }
+    }'
+    return
+  fi
+
+  log "keeping kite-gateway Service internal because MANAGE_HOST_SSHD=false"
+  node_port="$(kubectl -n kite get service kite-gateway -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || true)"
+  if [[ -n "${node_port}" ]]; then
+    kubectl -n kite patch service kite-gateway --type=json -p='[
+      {"op":"replace","path":"/spec/type","value":"ClusterIP"},
+      {"op":"remove","path":"/spec/ports/0/nodePort"}
+    ]'
+  else
+    kubectl -n kite patch service kite-gateway --type=merge -p '{"spec":{"type":"ClusterIP"}}'
+  fi
+}
+
 configure_interactive_install_options() {
   kite_prompt_interactive || return 0
 
@@ -266,6 +299,7 @@ main() {
   run_step "${APPLY_GOLDEN_IMAGE}" "waiting for Ubuntu golden image" "${ROOT_DIR}/build/deploy/scripts/wait-golden-image.sh" ubuntu-22.04
 
   run_step "${DEPLOY_KITE}" "building local Kite images and deploying Kite" "${ROOT_DIR}/build/dev/dev.sh"
+  run_step "${DEPLOY_KITE}" "configuring gateway Service exposure" configure_gateway_service_exposure
   run_step "${DEPLOY_KITE}" "configuring gateway host sshd fallback port" patch_gateway_host_sshd_address
   run_step "${RUN_VERIFY}" "verifying Kite installation" "${ROOT_DIR}/build/deploy/scripts/verify.sh"
 

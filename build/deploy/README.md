@@ -115,9 +115,10 @@ DELETE_LONGHORN_DATA=true DELETE_LONGHORN_DATA_CONFIRM=true build/deploy/scripts
 
 ## Gateway
 
-Kite installs `kite-gateway` as a Kubernetes Deployment and exposes it with
-the `kite-gateway` LoadBalancer Service. External SSH uses port `22` and is
-forwarded to the pod's internal `2222` port.
+Kite installs `kite-gateway` as a Kubernetes Deployment behind an internal
+`ClusterIP` Service by default. External SSH on port `22` is only enabled when
+host sshd handoff is explicitly enabled; then the Service is promoted to
+`LoadBalancer` and forwarded to the pod's internal `2222` port.
 
 ```sh
 ssh <sshId>@<node-ip>
@@ -154,9 +155,10 @@ asks before restoring that backup. Set `KITE_MANAGE_HOST_SSHD=true` and
 non-interactive opt-in, and set `MANAGE_HOST_SSHD=false` or
 `RESTORE_HOST_SSHD=false` to skip these host changes.
 
-When no Kite VM uses the SSH login username, `kite-gateway` falls back to the
-host sshd at the node IP on the selected host sshd port. This lets existing host
-accounts keep using `ssh <host-user>@<node-ip>` on port `22` after the gateway
-is installed. If a Kite VM `sshId` conflicts with a host user, the VM route has
-priority and host administration should use
+When external SSH handoff is enabled and no Kite VM uses the SSH login username,
+`kite-gateway` falls back to the host sshd at the node IP on the selected host
+sshd port. This lets existing host accounts keep using
+`ssh <host-user>@<node-ip>` on port `22` after the gateway is installed. If a
+Kite VM `sshId` conflicts with a host user, the VM route has priority and host
+administration should use
 `ssh <host-user>@<node-ip> -p <selected-host-sshd-port>`.

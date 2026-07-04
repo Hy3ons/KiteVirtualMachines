@@ -132,6 +132,39 @@ patch_gateway_host_sshd_address() {
   kubectl -n "${KITE_NAMESPACE}" set env deployment/kite-gateway "KITE_GATEWAY_HOST_SSHD_ADDRESS=\$(KITE_NODE_IP):${port}"
 }
 
+configure_gateway_service_exposure() {
+  local node_port
+
+  if [[ "${MANAGE_HOST_SSHD}" == "true" ]]; then
+    log "exposing kite-gateway Service on external SSH port 22"
+    kubectl -n "${KITE_NAMESPACE}" patch service kite-gateway --type=merge -p '{
+      "spec": {
+        "type": "LoadBalancer",
+        "ports": [
+          {
+            "name": "ssh",
+            "port": 22,
+            "targetPort": "ssh",
+            "protocol": "TCP"
+          }
+        ]
+      }
+    }'
+    return
+  fi
+
+  log "keeping kite-gateway Service internal because MANAGE_HOST_SSHD=false"
+  node_port="$(kubectl -n "${KITE_NAMESPACE}" get service kite-gateway -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || true)"
+  if [[ -n "${node_port}" ]]; then
+    kubectl -n "${KITE_NAMESPACE}" patch service kite-gateway --type=json -p='[
+      {"op":"replace","path":"/spec/type","value":"ClusterIP"},
+      {"op":"remove","path":"/spec/ports/0/nodePort"}
+    ]'
+  else
+    kubectl -n "${KITE_NAMESPACE}" patch service kite-gateway --type=merge -p '{"spec":{"type":"ClusterIP"}}'
+  fi
+}
+
 ensure_longhorn_available_for_configuration() {
   if kubectl get namespace longhorn-system >/dev/null 2>&1; then
     return 0
@@ -230,6 +263,7 @@ main() {
   "${ROOT_DIR}/build/deploy/scripts/ensure-gateway-host-key-secret.sh"
   # build/kite kustomization에는 API/controller/gateway/frontend 런타임 리소스가 모여 있다.
   kubectl apply -k "${ROOT_DIR}/build/kite"
+  configure_gateway_service_exposure
   patch_gateway_host_sshd_address
 
   log "waiting for Kite workloads"

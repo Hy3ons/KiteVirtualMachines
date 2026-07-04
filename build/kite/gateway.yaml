@@ -76,7 +76,7 @@ metadata:
   labels:
     app: kite-gateway
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: kite-gateway
   ports:

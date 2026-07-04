@@ -76,10 +76,11 @@ public key and disables password SSH login inside the VM.
 
 ## Host Port Handoff
 
-The gateway listens on container port `2222`, while the Kubernetes Service
-exposes external SSH on port `22`. On Linux hosts that already run OpenSSH on
-port `22`, `./build-install.sh` and `./ghcr-install.sh` can move the host sshd listener to
-an operator-selected port after user confirmation.
+The gateway listens on container port `2222`. The base Kubernetes Service is
+internal by default so a normal install does not steal host SSH port `22`. On
+Linux hosts that should expose Kite SSH on port `22`, `./build-install.sh` and
+`./ghcr-install.sh` can move the host sshd listener to an operator-selected port
+after user confirmation and then promote the gateway Service to `LoadBalancer`.
 If host sshd already listens on another global port, the scripts do not move it;
 they patch `KITE_GATEWAY_HOST_SSHD_ADDRESS` to that detected port instead.
 
@@ -117,7 +118,8 @@ The Secret stores `ssh_host_rsa_key`, which is the SSH server host key seen by
 external clients. The installer first tries to copy the existing Linux host
 OpenSSH key from `/etc/ssh/ssh_host_ed25519_key`, `ssh_host_ecdsa_key`, or
 `ssh_host_rsa_key` so the gateway can preserve the host fingerprint after taking
-over port `22`. If no host key is available, it generates a gateway key.
+over port `22`. If no host key is available, or automatic mode cannot read it,
+it generates a gateway key.
 
 Keeping the key in a Secret prevents SSH host key warnings after gateway pod
 restarts. Existing Secrets are not replaced unless

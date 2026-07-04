@@ -35,12 +35,13 @@ legacy ConfigMap secret values into that Secret on startup.
 
 ## SSH Gateway
 
-`gateway.yaml` deploys `kite-gateway` and exposes it through the
-`kite-gateway` LoadBalancer Service.
+`gateway.yaml` deploys `kite-gateway` behind an internal `ClusterIP` Service.
+Install scripts only promote that Service to `LoadBalancer` port `22` after the
+operator enables host sshd handoff.
 
 ```text
-external SSH :22
-  -> service/kite-gateway port 22
+kubectl port-forward or handoff-enabled external SSH :22
+  -> service/kite-gateway port 22 when exposed
   -> deployment/kite-gateway container port 2222
   -> vps-access-<vmName>.<namespace>.svc.cluster.local:22
 ```
