@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layout, Space, Button } from 'antd';
+import { Layout } from 'antd';
 import { Link, useNavigate } from 'react-router-dom';
 import { GithubOutlined, BookOutlined } from '@ant-design/icons';
 
@@ -23,18 +23,19 @@ export const GlobalHeader: React.FC<GlobalHeaderProps> = ({ rightContent }) => {
         </span>
       </div>
 
-      <Space size="large" wrap className="global-header-actions">
-        <Space size="middle" wrap className={rightContent ? 'global-header-links with-session' : 'global-header-links'}>
-          <Button type="link" icon={<GithubOutlined />} href="https://github.com/Hy3ons/KiteVirtualMachines" target="_blank" style={{ color: '#8B7355' }}>
+      <div className="global-header-actions">
+        <nav className={rightContent ? 'global-header-links with-session' : 'global-header-links'} aria-label="Kite resources">
+          <a href="https://github.com/Hy3ons/KiteVirtualMachines" target="_blank" rel="noreferrer" className="global-header-docs-link">
+            <GithubOutlined />
             Repository
-          </Button>
+          </a>
           <Link to="/kite-docs" className="global-header-docs-link">
             <BookOutlined />
             Kite Docs
           </Link>
-        </Space>
+        </nav>
         <div className="global-header-session">{rightContent}</div>
-      </Space>
+      </div>
     </Header>
   );
 };

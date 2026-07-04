@@ -7,7 +7,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useLogout } from '../hooks/useLogout';
 import { useNavigate } from 'react-router-dom';
 import { GlobalHeader } from '../components/GlobalHeader';
-import { MOCK_ENV } from '../config/mockEnv';
+import { UI_EXAMPLE_BASE_DOMAIN } from '../config/uiDefaults';
 
 type DomainSettingsForm = {
   readonly baseDomain: string;
@@ -160,7 +160,7 @@ export const AdminSettings: React.FC = () => {
           
           <Form form={domainForm} layout="vertical" onFinish={handleSaveDomain}>
             <Form.Item name="baseDomain" rules={[{ required: true, message: '도메인을 입력하세요.' }]}>
-              <Input placeholder={MOCK_ENV.BASE_DOMAIN} size="large" />
+              <Input placeholder={UI_EXAMPLE_BASE_DOMAIN} size="large" />
             </Form.Item>
             <div style={{ textAlign: 'right' }}>
               <Button type="primary" htmlType="submit" loading={loadingDomain}>도메인 변경 및 전체 적용</Button>

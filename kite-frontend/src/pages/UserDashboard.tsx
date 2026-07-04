@@ -261,6 +261,7 @@ export const UserDashboard: React.FC = () => {
         fixedDiskGi={LEVEL_1_FIXED_DISK_GI}
         minDiskGi={MIN_DISK_GI}
         adminContact={adminContact}
+        baseDomain={baseDomain}
       />
 
       <VmConnectionDrawer

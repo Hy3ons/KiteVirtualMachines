@@ -397,17 +397,19 @@ html, body {
   align-items: center;
   gap: 24px;
   min-height: 65px;
-  height: auto;
+  height: 65px;
   padding: 0 40px;
   border-bottom: 1px solid #EFE9E3;
   background: #FFFFFF;
   line-height: normal;
+  overflow: hidden;
 }
 
 .global-header-brand {
   display: inline-flex;
   align-items: center;
   gap: 24px;
+  flex: 0 1 320px;
   min-width: 0;
   cursor: pointer;
 }
@@ -457,9 +459,22 @@ html, body {
 }
 
 .global-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex: 1 1 auto;
   justify-content: flex-end;
   min-width: 0;
-  row-gap: 8px;
+  overflow: hidden;
+}
+
+.global-header-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+  flex: 0 0 auto;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .global-header-links.with-session {
@@ -484,12 +499,32 @@ html, body {
 }
 
 .global-header-session {
+  flex: 0 1 auto;
   min-width: 0;
+  overflow: hidden;
 }
 
 .global-header-session .ant-space {
-  flex-wrap: wrap;
-  row-gap: 8px;
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.global-header-session .ant-space-item {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.global-header-session .ant-typography {
+  display: inline-block;
+  max-width: min(28vw, 360px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
 }
 
 .global-footer {
@@ -1107,6 +1142,40 @@ html, body {
   transition: background-color 0.2s ease !important;
 }
 
+@media (max-width: 1120px) {
+  .global-header {
+    gap: 16px;
+    padding: 0 24px;
+  }
+
+  .global-header-brand {
+    flex-basis: auto;
+    gap: 18px;
+  }
+
+  .global-header-subtitle {
+    display: none;
+  }
+
+  .global-header-actions {
+    gap: 16px;
+  }
+
+  .global-header-links.with-session {
+    border-right: 0;
+    padding-right: 0;
+  }
+
+  .global-header-links.with-session .global-header-docs-link {
+    font-size: 0;
+    gap: 0;
+  }
+
+  .global-header-links.with-session .global-header-docs-link .anticon {
+    font-size: 16px;
+  }
+}
+
 @media (max-width: 640px) {
   .app-main,
   .app-main--wide,
@@ -1196,13 +1265,15 @@ html, body {
   }
 
   .global-header {
-    align-items: flex-start;
-    padding: 12px 20px;
-    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 0 16px;
+    flex-direction: row;
   }
 
   .global-header-brand {
-    gap: 22px;
+    flex: 0 1 auto;
+    gap: 14px;
   }
 
   .global-header-logo {
@@ -1214,14 +1285,39 @@ html, body {
     height: 38px;
   }
 
+  .global-header-subtitle {
+    display: none;
+  }
+
   .global-header-actions {
-    justify-content: flex-start;
-    width: 100%;
+    gap: 12px;
+    justify-content: flex-end;
   }
 
   .global-header-links.with-session {
     border-right: 0;
     padding-right: 0;
+  }
+
+  .global-header-links.with-session .global-header-docs-link {
+    font-size: 0;
+    gap: 0;
+  }
+
+  .global-header-links.with-session .global-header-docs-link .anticon {
+    font-size: 16px;
+  }
+
+  .global-header-session .ant-space {
+    gap: 8px !important;
+  }
+
+  .global-header-session .ant-typography {
+    max-width: 32vw;
+  }
+
+  .global-header-logo {
+    transform: scale(1.45);
   }
 
   .global-footer-inner {
@@ -1284,5 +1380,42 @@ html, body {
 
   .console-terminal {
     height: 384px;
+  }
+}
+
+@media (max-width: 480px) {
+  .global-header {
+    gap: 8px;
+    padding: 0 12px;
+  }
+
+  .global-header-brand {
+    flex: 0 0 auto;
+    gap: 0;
+  }
+
+  .global-header-logo {
+    width: 40px;
+    height: 40px;
+    transform: scale(1.25);
+  }
+
+  .global-header-divider,
+  .global-header-wordmark,
+  .global-header-links.with-session,
+  .global-header-session .ant-typography {
+    display: none;
+  }
+
+  .global-header-actions {
+    gap: 8px;
+  }
+
+  .global-header-session .ant-btn {
+    padding-inline: 8px;
+  }
+
+  .global-header-session .ant-btn-text .ant-btn-icon + span {
+    display: none;
   }
 }
