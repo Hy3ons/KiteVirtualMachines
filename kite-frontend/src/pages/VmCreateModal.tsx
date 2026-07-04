@@ -68,7 +68,12 @@ export const VmCreateModal: React.FC<VmCreateModalProps> = ({
           <Input placeholder="my-ubuntu-vm" />
         </Form.Item>
 
-        <Form.Item name="domainPrefix" label="Domain Prefix" extra={`.${domainExample} (예시)`}>
+        <Form.Item
+          name="domainPrefix"
+          label="Domain Prefix"
+          extra={`.${domainExample} (예시)`}
+          rules={[{ required: true, whitespace: true, message: '도메인 prefix를 입력하세요.' }]}
+        >
           <Input placeholder="my-web" />
         </Form.Item>
 

@@ -77,7 +77,7 @@ func TestUserClaimsVMOffer(t *testing.T) {
 	)
 	router := newUserTestRouterWithClient(t, tokenService, dynamicClient)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/vm-offers/offer-a/claim", strings.NewReader(`{"vmName":"vm-offered","sshId":"offered","initialLoginPassword":"secret-password","powerState":"On"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/vm-offers/offer-a/claim", strings.NewReader(`{"vmName":"vm-offered","domainPrefix":"vm-offered","sshId":"offered","initialLoginPassword":"secret-password","powerState":"On"}`))
 	req.Header.Set("Content-Type", "application/json")
 	addAccessTokenCookie(req, userToken)
 	rec := httptest.NewRecorder()
@@ -116,7 +116,7 @@ func TestUserCannotClaimSameVMOfferTwice(t *testing.T) {
 	)
 	router := newUserTestRouterWithClient(t, tokenService, dynamicClient)
 
-	firstReq := httptest.NewRequest(http.MethodPost, "/api/v1/vm-offers/offer-a/claim", strings.NewReader(`{"vmName":"vm-offered","sshId":"offered","initialLoginPassword":"secret-password","powerState":"On"}`))
+	firstReq := httptest.NewRequest(http.MethodPost, "/api/v1/vm-offers/offer-a/claim", strings.NewReader(`{"vmName":"vm-offered","domainPrefix":"vm-offered","sshId":"offered","initialLoginPassword":"secret-password","powerState":"On"}`))
 	firstReq.Header.Set("Content-Type", "application/json")
 	addAccessTokenCookie(firstReq, userToken)
 	firstRec := httptest.NewRecorder()
@@ -126,7 +126,7 @@ func TestUserCannotClaimSameVMOfferTwice(t *testing.T) {
 		t.Fatalf("expected first claim status %d, got %d: %s", http.StatusCreated, firstRec.Code, firstRec.Body.String())
 	}
 
-	secondReq := httptest.NewRequest(http.MethodPost, "/api/v1/vm-offers/offer-a/claim", strings.NewReader(`{"vmName":"vm-offered-again","sshId":"offered2","initialLoginPassword":"secret-password","powerState":"On"}`))
+	secondReq := httptest.NewRequest(http.MethodPost, "/api/v1/vm-offers/offer-a/claim", strings.NewReader(`{"vmName":"vm-offered-again","domainPrefix":"vm-offered-again","sshId":"offered2","initialLoginPassword":"secret-password","powerState":"On"}`))
 	secondReq.Header.Set("Content-Type", "application/json")
 	addAccessTokenCookie(secondReq, userToken)
 	secondRec := httptest.NewRecorder()

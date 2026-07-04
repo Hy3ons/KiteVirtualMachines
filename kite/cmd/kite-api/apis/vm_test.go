@@ -82,7 +82,7 @@ func TestVMCreateRejectsLevelOneUser_whenQuotaReached(t *testing.T) {
 		DynamicClient: dynamicClient,
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/vms", strings.NewReader(`{"name":"vm-d","cpu":8,"memory":"16Gi","image":"ubuntu-22.04","disk":"80Gi","sshId":"vm-d","sshPassword":"secret-password","powerState":"Off"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/vms", strings.NewReader(`{"name":"vm-d","domainPrefix":"vm-d","cpu":8,"memory":"16Gi","image":"ubuntu-22.04","disk":"80Gi","sshId":"vm-d","sshPassword":"secret-password","powerState":"Off"}`))
 	req.Header.Set("Content-Type", "application/json")
 	addAccessTokenCookie(req, token)
 	rec := httptest.NewRecorder()
@@ -135,7 +135,7 @@ func TestVMCreateForLevelOneUserUsesFixedSpec(t *testing.T) {
 		DynamicClient: dynamicClient,
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/vms", strings.NewReader(`{"name":"vm-fixed","cpu":8,"memory":"16Gi","image":"ubuntu-22.04","disk":"80Gi","sshId":"vmfixed","sshPassword":"secret-password","powerState":"Off"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/vms", strings.NewReader(`{"name":"vm-fixed","domainPrefix":"vm-fixed","cpu":8,"memory":"16Gi","image":"ubuntu-22.04","disk":"80Gi","sshId":"vmfixed","sshPassword":"secret-password","powerState":"Off"}`))
 	req.Header.Set("Content-Type", "application/json")
 	addAccessTokenCookie(req, token)
 	rec := httptest.NewRecorder()
@@ -152,6 +152,46 @@ func TestVMCreateForLevelOneUserUsesFixedSpec(t *testing.T) {
 	assertNestedInt64(t, created, int64(levelOneFixedCPU), "spec", "cpu")
 	assertNestedString(t, created, levelOneFixedMemory, "spec", "memory")
 	assertNestedString(t, created, levelOneFixedDisk, "spec", "disk")
+}
+
+func TestVMCreateRejectsMissingDomainPrefix(t *testing.T) {
+	tokenService := newTestTokenService(t)
+	token, _, err := tokenService.IssueAccessToken("alice", auth.AccessLevelAdmin)
+	if err != nil {
+		t.Fatalf("failed to issue access token: %v", err)
+	}
+
+	dynamicClient := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
+		userTestGVR:               "KiteUserList",
+		userTestVirtualMachineGVR: "KiteVirtualMachineList",
+		secretTestGVR:             "SecretList",
+	}, newUserTestObject("alice", "alice", "alice-ns", auth.AccessLevelAdmin))
+
+	gin.SetMode(gin.TestMode)
+	router := gin.Default()
+	api := router.Group("/api")
+	Register(api, Dependencies{
+		Config: config.Config{
+			PasswordSalt:   "test-salt",
+			AccessTokenTTL: time.Hour,
+		},
+		TokenService:  tokenService,
+		DynamicClient: dynamicClient,
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/vms", strings.NewReader(`{"name":"vm-no-domain","disk":"80Gi","sshId":"vmnodomain","sshPassword":"secret-password","powerState":"Off"}`))
+	req.Header.Set("Content-Type", "application/json")
+	addAccessTokenCookie(req, token)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusBadRequest, rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "domainPrefix is required") {
+		t.Fatalf("expected domainPrefix required message, got %s", rec.Body.String())
+	}
 }
 
 func TestVMMutationsRejectLevelZeroUser(t *testing.T) {
@@ -184,7 +224,7 @@ func TestVMMutationsRejectLevelZeroUser(t *testing.T) {
 		path   string
 		body   string
 	}{
-		{name: "create", method: http.MethodPost, path: "/api/v1/vms", body: `{"name":"vm-b","disk":"25Gi","sshId":"vmb","sshPassword":"secret-password"}`},
+		{name: "create", method: http.MethodPost, path: "/api/v1/vms", body: `{"name":"vm-b","domainPrefix":"vm-b","disk":"25Gi","sshId":"vmb","sshPassword":"secret-password"}`},
 		{name: "update", method: http.MethodPatch, path: "/api/v1/vms/vm-a", body: `{"domainPrefix":"vm-a"}`},
 		{name: "start", method: http.MethodPost, path: "/api/v1/vms/vm-a/start"},
 		{name: "delete", method: http.MethodDelete, path: "/api/v1/vms/vm-a"},

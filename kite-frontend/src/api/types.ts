@@ -99,7 +99,7 @@ export type VmOffersResponse = {
 
 export type ClaimVmOfferPayload = {
   readonly vmName: string;
-  readonly domainPrefix?: string;
+  readonly domainPrefix: string;
   readonly sshId: string;
   readonly initialLoginPassword: string;
   readonly powerState?: 'On' | 'Off';
@@ -126,7 +126,7 @@ export type ConsoleTicketResponse = {
 
 export type CreateVmPayload = {
   readonly name: string;
-  readonly domainPrefix?: string;
+  readonly domainPrefix: string;
   readonly sshId: string;
   readonly sshPassword: string;
   readonly cpu?: number;

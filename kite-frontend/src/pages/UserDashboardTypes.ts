@@ -5,7 +5,7 @@ export type DashboardVm = UserVm;
 
 export type VmCreateFormValues = {
   readonly name: string;
-  readonly domainPrefix?: string;
+  readonly domainPrefix: string;
   readonly sshId: string;
   readonly sshPassword: string;
   readonly disk: number;
@@ -19,7 +19,7 @@ export type VmCreateForm = FormInstance<VmCreateFormValues>;
 
 export type VmOfferClaimFormValues = {
   readonly vmName: string;
-  readonly domainPrefix?: string;
+  readonly domainPrefix: string;
   readonly sshId: string;
   readonly initialLoginPassword: string;
 };

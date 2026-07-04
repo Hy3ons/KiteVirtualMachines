@@ -90,7 +90,7 @@ export const UserVmOffersSection: React.FC<UserVmOffersSectionProps> = ({ offers
             <Form.Item name="vmName" label="VM Name" rules={[{ required: true, message: 'VM 이름을 입력하세요.' }]}>
               <Input placeholder="project-runner" />
             </Form.Item>
-            <Form.Item name="domainPrefix" label="Domain Prefix">
+            <Form.Item name="domainPrefix" label="Domain Prefix" rules={[{ required: true, whitespace: true, message: '도메인 prefix를 입력하세요.' }]}>
               <Input placeholder="project-runner" />
             </Form.Item>
             <Form.Item name="sshId" label="SSH User ID" rules={[{ required: true, message: '접속용 ID를 입력하세요.' }]}>

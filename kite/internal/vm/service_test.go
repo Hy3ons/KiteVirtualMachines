@@ -38,10 +38,11 @@ func TestCreateRecordRejectsUnsafeSSHPassword(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := createRecord(CreateRequest{
-				Namespace:   "tenant-a",
-				Disk:        "20Gi",
-				SSHID:       "asdf",
-				SSHPassword: tt.password,
+				Namespace:    "tenant-a",
+				Disk:         "20Gi",
+				DomainPrefix: "app-a",
+				SSHID:        "asdf",
+				SSHPassword:  tt.password,
 			})
 			if err == nil {
 				t.Fatalf("expected unsafe sshPassword %q to be rejected", tt.password)
@@ -52,10 +53,11 @@ func TestCreateRecordRejectsUnsafeSSHPassword(t *testing.T) {
 
 func TestCreateRecordAcceptsSafeSSHPassword(t *testing.T) {
 	record, err := createRecord(CreateRequest{
-		Namespace:   "tenant-a",
-		Disk:        "20Gi",
-		SSHID:       "asdf",
-		SSHPassword: "pass word_123!",
+		Namespace:    "tenant-a",
+		Disk:         "20Gi",
+		DomainPrefix: "app-a",
+		SSHID:        "asdf",
+		SSHPassword:  "pass word_123!",
 	})
 	if err != nil {
 		t.Fatalf("expected safe sshPassword to be accepted, got %v", err)
@@ -75,11 +77,12 @@ func TestServiceCreateStoresSSHPasswordHash(t *testing.T) {
 
 	service := NewService(dynamicClient, passwordSalt)
 	if _, err := service.Create(ctx, CreateRequest{
-		Name:        "vm-a",
-		Namespace:   "tenant-a",
-		Disk:        "20Gi",
-		SSHID:       "asdf",
-		SSHPassword: "pass word_123!",
+		Name:         "vm-a",
+		Namespace:    "tenant-a",
+		Disk:         "20Gi",
+		DomainPrefix: "app-a",
+		SSHID:        "asdf",
+		SSHPassword:  "pass word_123!",
 	}); err != nil {
 		t.Fatalf("Create returned error: %v", err)
 	}
@@ -129,11 +132,12 @@ func TestServiceCreateRollsBackVMWhenGuestLoginSecretFails(t *testing.T) {
 
 	service := NewService(dynamicClient, "vm-password-salt")
 	_, err := service.Create(ctx, CreateRequest{
-		Name:        "vm-a",
-		Namespace:   "tenant-a",
-		Disk:        "20Gi",
-		SSHID:       "asdf",
-		SSHPassword: "pass word_123!",
+		Name:         "vm-a",
+		Namespace:    "tenant-a",
+		Disk:         "20Gi",
+		DomainPrefix: "app-a",
+		SSHID:        "asdf",
+		SSHPassword:  "pass word_123!",
 	})
 	if err == nil {
 		t.Fatal("expected Create to fail when guest login Secret creation fails")
@@ -174,11 +178,12 @@ func TestServiceCreateRejectsDuplicateSSHID(t *testing.T) {
 
 	service := NewService(dynamicClient, "vm-password-salt")
 	_, err := service.Create(ctx, CreateRequest{
-		Name:        "vm-b",
-		Namespace:   "tenant-b",
-		Disk:        "20Gi",
-		SSHID:       "asdf",
-		SSHPassword: "pass word_123!",
+		Name:         "vm-b",
+		Namespace:    "tenant-b",
+		Disk:         "20Gi",
+		DomainPrefix: "app-b",
+		SSHID:        "asdf",
+		SSHPassword:  "pass word_123!",
 	})
 	if err == nil {
 		t.Fatal("expected duplicate sshId to be rejected")
@@ -267,6 +272,28 @@ func TestCreateRecordRejectsInvalidDomainPrefix(t *testing.T) {
 				t.Fatalf("expected invalid domainPrefix %q to be rejected", tt.domainPrefix)
 			}
 		})
+	}
+}
+
+func TestCreateRecordRejectsMissingDomainPrefix(t *testing.T) {
+	_, err := createRecord(CreateRequest{
+		Namespace:   "tenant-a",
+		Disk:        "20Gi",
+		SSHID:       "ssh-a",
+		SSHPassword: "pass word_123!",
+	})
+	if err == nil {
+		t.Fatal("expected missing domainPrefix to be rejected")
+	}
+	requestErr, ok := err.(RequestError)
+	if !ok {
+		t.Fatalf("expected RequestError, got %T: %v", err, err)
+	}
+	if requestErr.Kind != ErrorKindInvalid {
+		t.Fatalf("expected invalid error, got %s: %s", requestErr.Kind, requestErr.Message)
+	}
+	if requestErr.Message != "domainPrefix is required" {
+		t.Fatalf("expected domainPrefix required message, got %q", requestErr.Message)
 	}
 }
 

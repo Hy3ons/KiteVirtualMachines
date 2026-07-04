@@ -490,13 +490,13 @@ func applyUpdate(record *store.KiteVirtualMachineRecord, req UpdateRequest) erro
 }
 
 // validateDomainPrefix checks that a VM domain prefix is safe to combine with the platform base domain.
-// domainPrefix is optional; an empty value means the VM has no HTTP Ingress hostname.
+// domainPrefix is required so every VM has an explicit HTTP Ingress hostname.
 // A nil error means the value is a DNS label, not reserved for platform routes, and safe to store.
 // This function is used by create, update, and offer claim flows before writing CRDs.
 func validateDomainPrefix(domainPrefix string) error {
 	domainPrefix = strings.TrimSpace(domainPrefix)
 	if domainPrefix == "" {
-		return nil
+		return invalid("domainPrefix is required")
 	}
 	if len(domainPrefix) > maxDomainPrefixLen {
 		return invalid("domainPrefix must be at most 63 characters")
