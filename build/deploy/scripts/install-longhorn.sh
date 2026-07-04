@@ -12,6 +12,8 @@ set -euo pipefail
 #   LONGHORN_VERSION: default (empty)
 #   LONGHORN_MANIFEST_URL: default (empty)
 #   KITE_LONGHORN_NAMESPACE_DELETE_TIMEOUT_SECONDS: default 300
+#   KITE_LONGHORN_OWNER_LABEL_KEY: default hy3ons.github.io/kite-installed-longhorn
+#   KITE_LONGHORN_OWNER_LABEL_VALUE: default true
 #   KITE_LOG_COLOR: default auto
 #   NO_COLOR: default (unset)
 #
@@ -22,6 +24,8 @@ set -euo pipefail
 LONGHORN_VERSION="${LONGHORN_VERSION:-}"
 LONGHORN_MANIFEST_URL="${LONGHORN_MANIFEST_URL:-}"
 KITE_LONGHORN_NAMESPACE_DELETE_TIMEOUT_SECONDS="${KITE_LONGHORN_NAMESPACE_DELETE_TIMEOUT_SECONDS:-300}"
+KITE_LONGHORN_OWNER_LABEL_KEY="${KITE_LONGHORN_OWNER_LABEL_KEY:-hy3ons.github.io/kite-installed-longhorn}"
+KITE_LONGHORN_OWNER_LABEL_VALUE="${KITE_LONGHORN_OWNER_LABEL_VALUE:-true}"
 
 log_color_enabled() {
   [[ "${KITE_LOG_COLOR:-auto}" != "false" && -z "${NO_COLOR:-}" && -t 1 ]]
@@ -67,6 +71,10 @@ longhorn_namespace_deletion_timestamp() {
   kubectl get namespace longhorn-system -o jsonpath='{.metadata.deletionTimestamp}' 2>/dev/null || true
 }
 
+longhorn_namespace_exists() {
+  kubectl get namespace longhorn-system >/dev/null 2>&1
+}
+
 wait_for_previous_longhorn_namespace_deletion() {
   local deletion_timestamp
   local deadline
@@ -85,8 +93,15 @@ wait_for_previous_longhorn_namespace_deletion() {
   done
 }
 
+mark_longhorn_installed_by_kite() {
+  log "marking longhorn-system as installed by Kite"
+  kubectl label namespace longhorn-system "${KITE_LONGHORN_OWNER_LABEL_KEY}=${KITE_LONGHORN_OWNER_LABEL_VALUE}" --overwrite
+}
+
 # Longhorn 기본 manifest를 설치한다. 이미 클러스터에 Longhorn이 있으면 apply로 수렴시킨다.
 main() {
+  local kite_created_longhorn="false"
+
   require_command kubectl
 
   if [[ -z "${LONGHORN_MANIFEST_URL}" ]]; then
@@ -100,8 +115,14 @@ main() {
 
   log "installing Longhorn from ${LONGHORN_MANIFEST_URL}"
   wait_for_previous_longhorn_namespace_deletion
+  if ! longhorn_namespace_exists; then
+    kite_created_longhorn="true"
+  fi
   # Longhorn은 namespace, CRD, controller를 한 manifest에서 설치한다.
   kubectl apply -f "${LONGHORN_MANIFEST_URL}"
+  if [[ "${kite_created_longhorn}" == "true" ]]; then
+    mark_longhorn_installed_by_kite
+  fi
 }
 
 main "$@"

@@ -20,6 +20,7 @@ import (
 
 	"kite/internal/config"
 	"kite/internal/kube"
+	"kite/internal/platform"
 	platformhttpredirect "kite/internal/render/platform-http-redirect"
 	platformhttpsredirect "kite/internal/render/platform-https-redirect"
 	platformingress "kite/internal/render/platform-ingress"
@@ -51,11 +52,13 @@ func RunKitePlatformIngressReconciler(clientManager *kube.ClientManager, stopCh 
 		kiteGlobalConfigNamespace,
 		nil,
 	)
-	informer := factory.ForResource(configMapGVR).Informer()
-	RegisterKitePlatformIngressReconciler(informer, clientManager.DynamicClient)
+	configMapInformer := factory.ForResource(configMapGVR).Informer()
+	tlsSecretInformer := factory.ForResource(secretGVR).Informer()
+	RegisterKitePlatformIngressReconciler(configMapInformer, clientManager.DynamicClient)
+	RegisterKitePlatformTLSSecretReconciler(tlsSecretInformer, clientManager.DynamicClient)
 
 	factory.Start(stopCh)
-	if !cache.WaitForCacheSync(stopCh, informer.HasSynced) {
+	if !cache.WaitForCacheSync(stopCh, configMapInformer.HasSynced, tlsSecretInformer.HasSynced) {
 		log.Printf("failed to sync Kite platform Ingress informer cache")
 		return
 	}
@@ -82,6 +85,21 @@ func RegisterKitePlatformIngressReconciler(informer cache.SharedIndexInformer, d
 	})
 }
 
+// RegisterKitePlatformTLSSecretReconciler attaches TLS Secret event handlers.
+// informer watches Secrets in the kite namespace.
+// dynamicClient applies the platform Ingress when global TLS material changes.
+// This function is used by RunKitePlatformIngressReconciler.
+func RegisterKitePlatformTLSSecretReconciler(informer cache.SharedIndexInformer, dynamicClient dynamic.Interface) {
+	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			reconcilePlatformTLSSecretEvent(dynamicClient, obj)
+		},
+		UpdateFunc: func(oldObj interface{}, newObj interface{}) {
+			reconcilePlatformTLSSecretEvent(dynamicClient, newObj)
+		},
+	})
+}
+
 // ReconcileKitePlatformIngressFromConfigMap reads runtime config and applies kite-platform Ingress.
 // ctx controls Kubernetes API calls.
 // dynamicClient reads kite/kite-runtime-config and writes networking.k8s.io Ingress.
@@ -100,11 +118,30 @@ func ReconcileKitePlatformIngressFromConfigMap(ctx context.Context, dynamicClien
 	host = strings.Trim(strings.TrimSpace(host), ".")
 	forceHTTPS, _, _ := unstructured.NestedString(configMap.Object, "data", config.ForceHTTPSConfigKey)
 	shouldForceHTTPS := strings.EqualFold(forceHTTPS, "true")
+	if host == "" {
+		if err := deleteKitePlatformHTTPSRedirect(ctx, dynamicClient); err != nil {
+			return err
+		}
+		return deleteHostRoutedKitePlatformIngress(ctx, dynamicClient)
+	}
+
+	hasTLS, err := platform.NewService(dynamicClient).HasTLSCertificate(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to read Kite platform TLS Secret: %w", err)
+	}
+	if shouldForceHTTPS && !hasTLS {
+		return fmt.Errorf("cannot enable Kite platform HTTPS redirect without %s/%s", platform.GlobalTLSSecretNS, platform.GlobalTLSSecretName)
+	}
+	tlsSecretName := ""
+	if hasTLS {
+		tlsSecretName = platform.GlobalTLSSecretName
+	}
 
 	ingressObject, err := (&platformingress.PlatformIngressData{
-		Namespace:  kiteGlobalConfigNamespace,
-		Host:       host,
-		ForceHTTPS: shouldForceHTTPS,
+		Namespace:     kiteGlobalConfigNamespace,
+		Host:          host,
+		ForceHTTPS:    shouldForceHTTPS,
+		TLSSecretName: tlsSecretName,
 	}).Render()
 	if err != nil {
 		return fmt.Errorf("failed to render Kite platform Ingress: %w", err)
@@ -159,6 +196,25 @@ func reconcilePlatformIngressConfigEvent(dynamicClient dynamic.Interface, obj in
 	}
 }
 
+// reconcilePlatformTLSSecretEvent reconciles platform ingress for global TLS Secret changes.
+// dynamicClient applies the rendered Ingress object.
+// obj is a Secret informer event object.
+// Non-platform TLS Secrets are ignored.
+func reconcilePlatformTLSSecretEvent(dynamicClient dynamic.Interface, obj interface{}) {
+	resource, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		log.Printf("Kite platform TLS Secret event is not an unstructured Secret")
+		return
+	}
+	if resource.GetName() != platform.GlobalTLSSecretName || resource.GetNamespace() != platform.GlobalTLSSecretNS {
+		return
+	}
+
+	if err := ReconcileKitePlatformIngressFromConfigMap(context.Background(), dynamicClient); err != nil {
+		log.Printf("failed to reconcile Kite platform Ingress after TLS Secret change: %v", err)
+	}
+}
+
 // applyKitePlatformIngress applies the rendered platform Ingress with server-side apply.
 // ctx controls the Kubernetes API request lifetime.
 // dynamicClient writes the Ingress object in the kite namespace.
@@ -175,6 +231,19 @@ func applyKitePlatformIngress(ctx context.Context, dynamicClient dynamic.Interfa
 	})
 	if err != nil {
 		return fmt.Errorf("failed to apply Kite platform Ingress %s/%s: %w", ingressObject.GetNamespace(), ingressObject.GetName(), err)
+	}
+
+	return nil
+}
+
+// Used when no base domain is configured.
+// ctx controls the Kubernetes request lifetime.
+// dynamicClient is scoped to the Kite-managed platform Ingress.
+// Missing resources are ignored for first-time setup.
+func deleteHostRoutedKitePlatformIngress(ctx context.Context, dynamicClient dynamic.Interface) error {
+	err := dynamicClient.Resource(ingressGVR).Namespace(kiteGlobalConfigNamespace).Delete(ctx, "kite-platform", metav1.DeleteOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("failed to delete Kite platform Ingress: %w", err)
 	}
 
 	return nil

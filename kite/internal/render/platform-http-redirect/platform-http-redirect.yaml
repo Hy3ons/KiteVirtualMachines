@@ -13,8 +13,8 @@ metadata:
 
 spec:
   rules:
-    - {{ if .Host }}host: {{ .Host }}
-      {{ end }}http:
+    - host: {{ .Host }}
+      http:
         paths:
           - path: /api
             pathType: Prefix

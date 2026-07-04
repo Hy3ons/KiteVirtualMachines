@@ -27,7 +27,10 @@ func TestUserListRequiresManagerAccess(t *testing.T) {
 		t.Fatalf("failed to issue token: %v", err)
 	}
 
-	r := newUserTestRouter(t, tokenService)
+	dynamicClient := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
+		userTestGVR: "KiteUserList",
+	}, newUserTestObject("user", "user", "user-ns", auth.AccessLevelUser))
+	r := newUserTestRouterWithClient(t, tokenService, dynamicClient)
 	req := httptest.NewRequest(http.MethodGet, "/api/users", nil)
 	addAccessTokenCookie(req, userToken)
 	rec := httptest.NewRecorder()
@@ -46,7 +49,10 @@ func TestUserListReturnsKiteUsers(t *testing.T) {
 		t.Fatalf("failed to issue token: %v", err)
 	}
 
-	r := newUserTestRouter(t, tokenService)
+	dynamicClient := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
+		userTestGVR: "KiteUserList",
+	}, newUserTestObject("manager", "manager", "manager-ns", auth.AccessLevelManager))
+	r := newUserTestRouterWithClient(t, tokenService, dynamicClient)
 	req := httptest.NewRequest(http.MethodGet, "/api/users", nil)
 	addAccessTokenCookie(req, managerToken)
 	rec := httptest.NewRecorder()
@@ -69,7 +75,7 @@ func TestUserListReturnsKiteUsers(t *testing.T) {
 	}
 
 	user := res.Users[0]
-	if user.Username != "test" || user.Email != "test@gmail.com" || user.AccessLevel != 3 {
+	if user.Username != "manager" || user.Email != "manager@gmail.com" || user.AccessLevel != auth.AccessLevelManager {
 		t.Fatalf("unexpected user response: %+v", user)
 	}
 }

@@ -32,7 +32,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to create Kubernetes clients: %v", err)
 	}
-	cfg, err := config.Bootstrap(ctx, clientManager.DynamicClient)
+	cfg, err := config.Load(ctx, clientManager.DynamicClient)
 	if err != nil {
 		log.Fatalf("failed to load runtime config: %v", err)
 	}

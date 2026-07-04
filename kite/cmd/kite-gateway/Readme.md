@@ -78,7 +78,7 @@ public key and disables password SSH login inside the VM.
 
 The gateway listens on container port `2222`, while the Kubernetes Service
 exposes external SSH on port `22`. On Linux hosts that already run OpenSSH on
-port `22`, `./dev.sh` and `./install.sh` can move the host sshd listener to
+port `22`, `./build-install.sh` and `./ghcr-install.sh` can move the host sshd listener to
 an operator-selected port after user confirmation.
 If host sshd already listens on another global port, the scripts do not move it;
 they patch `KITE_GATEWAY_HOST_SSHD_ADDRESS` to that detected port instead.
@@ -91,7 +91,7 @@ The handoff is handled by `build/deploy/scripts/manage-host-sshd.sh`:
 - occupied target ports are rejected before any sshd config is changed,
 - interactive runs require typing the selected port again before applying it,
 - confirmed changes are backed up under `/etc/kite/host-sshd`,
-- `./clear.sh` and `uninstall-kite.sh` can restore that backup.
+- `./build-clear.sh`, `./uninstall.sh`, and `uninstall-kite.sh` can restore that backup.
 
 ## Environment
 
@@ -106,7 +106,7 @@ The handoff is handled by `build/deploy/scripts/manage-host-sshd.sh`:
 
 ## Host Key
 
-`dev.sh` and `install.sh` create `kite-gateway-host-key` automatically when it
+`./build-install.sh` and `./ghcr-install.sh` create `kite-gateway-host-key` automatically when it
 does not exist:
 
 ```sh

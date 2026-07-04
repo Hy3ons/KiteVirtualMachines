@@ -229,12 +229,21 @@ func newTestRouterWithRuntimeConfig(t *testing.T, forceHTTPS bool) http.Handler 
 			authConfigMapGVR: "ConfigMapList",
 			authSecretGVR:    "SecretList",
 		},
-			newLoginTestUser("admin", auth.HashPassword("admin", cfg.PasswordSalt), auth.AccessLevelAdmin),
+			newLoginTestUser("admin", mustHashLoginPassword(t, "admin", cfg.PasswordSalt), auth.AccessLevelAdmin),
 			newLoginRuntimeConfig(forceHTTPS),
 		),
 	})
 
 	return r
+}
+
+func mustHashLoginPassword(t *testing.T, password string, salt string) string {
+	t.Helper()
+	hash, err := auth.HashPassword(password, salt)
+	if err != nil {
+		t.Fatalf("failed to hash login password: %v", err)
+	}
+	return hash
 }
 
 var userTestGVR = schema.GroupVersionResource{

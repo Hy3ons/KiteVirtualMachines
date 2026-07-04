@@ -2,6 +2,8 @@ package platformhttpredirect
 
 import (
 	_ "embed"
+	"fmt"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
@@ -13,7 +15,7 @@ var platformHTTPRedirectTemplate string
 
 // PlatformHTTPRedirectData contains values for the Traefik HTTP redirect Ingress template.
 // Namespace is where kite-api, kite-frontend, and the redirect middleware live.
-// Host is optional; when empty the redirect Ingress accepts requests without host matching.
+// Host is required so HTTPS redirects cannot capture unrelated hostnames.
 // This renderer is used by kite-controller when platform HTTPS enforcement is enabled.
 type PlatformHTTPRedirectData struct {
 	Namespace string
@@ -25,6 +27,10 @@ type PlatformHTTPRedirectData struct {
 // The returned Ingress attaches the HTTPS redirect middleware to the web entrypoint.
 // This method uses an embedded template so the controller works from a container image.
 func (d *PlatformHTTPRedirectData) Render() (*unstructured.Unstructured, error) {
+	if strings.TrimSpace(d.Host) == "" {
+		return nil, fmt.Errorf("platform HTTP redirect host is required")
+	}
+
 	renderer := render.NewRendererFromTemplate("platform-http-redirect.yaml", platformHTTPRedirectTemplate)
 	return renderer.Render(d)
 }

@@ -18,6 +18,8 @@ set -euo pipefail
 #   KITE_UNINSTALL_PRESET: default safe
 #   KITE_LONGHORN_DISK_NAME: default kite-longhorn
 #   KITE_LONGHORN_DISK_TAG: default kite
+#   KITE_LONGHORN_OWNER_LABEL_KEY: default hy3ons.github.io/kite-installed-longhorn
+#   KITE_LONGHORN_OWNER_LABEL_VALUE: default true
 #   KITE_LONGHORN_DISK_REMOVE_TIMEOUT_SECONDS: default 180
 #   KITE_LONGHORN_DISK_REMOVE_RETRY_SECONDS: default 5
 #   RESTORE_HOST_SSHD: default true
@@ -62,6 +64,8 @@ esac
 DELETE_LONGHORN_FORCE="${DELETE_LONGHORN_FORCE:-false}"
 KITE_LONGHORN_DISK_NAME="${KITE_LONGHORN_DISK_NAME:-kite-longhorn}"
 KITE_LONGHORN_DISK_TAG="${KITE_LONGHORN_DISK_TAG:-kite}"
+KITE_LONGHORN_OWNER_LABEL_KEY="${KITE_LONGHORN_OWNER_LABEL_KEY:-hy3ons.github.io/kite-installed-longhorn}"
+KITE_LONGHORN_OWNER_LABEL_VALUE="${KITE_LONGHORN_OWNER_LABEL_VALUE:-true}"
 KITE_LONGHORN_DISK_REMOVE_TIMEOUT_SECONDS="${KITE_LONGHORN_DISK_REMOVE_TIMEOUT_SECONDS:-180}"
 KITE_LONGHORN_DISK_REMOVE_RETRY_SECONDS="${KITE_LONGHORN_DISK_REMOVE_RETRY_SECONDS:-5}"
 # RESTORE_HOST_SSHD=true이면 배포 제거 후 Kite gateway 때문에 옮겨 둔 host sshd
@@ -331,6 +335,19 @@ remove_longhorn_disk_from_node() {
   log "could not remove Longhorn disk ${disk} from ${node} after $((SECONDS - start_time))s (${reason}): ${output}"
 }
 
+remove_longhorn_disk_tag_from_node() {
+  local node="$1"
+  local disk="$2"
+  local tags="$3"
+  local escaped_disk
+  local next_tags
+
+  escaped_disk="$(json_pointer_escape "${disk}")"
+  next_tags="$(printf '%s\n' "${tags}" | xargs -n 1 | awk -v remove="${KITE_LONGHORN_DISK_TAG}" 'NF && $0 != remove && !seen[$0]++ { printf "%s\"%s\"", sep, $0; sep=", " }')"
+  log "removing Longhorn disk tag ${KITE_LONGHORN_DISK_TAG} from ${node}/${disk}"
+  kubectl -n longhorn-system patch "${node}" --type=json -p "[{\"op\":\"replace\",\"path\":\"/spec/disks/${escaped_disk}/tags\",\"value\":[${next_tags}]}]" >/dev/null 2>&1 || true
+}
+
 # 설치 방식에 따라 Kite 전용 disk 이름이 있거나 기존 disk에 kite tag만 있을 수 있어 둘 다 찾는다.
 remove_kite_longhorn_disks_from_node() {
   local node="$1"
@@ -349,7 +366,7 @@ remove_kite_longhorn_disks_from_node() {
     fi
 
     if [[ " ${tags} " == *" ${KITE_LONGHORN_DISK_TAG} "* ]]; then
-      remove_longhorn_disk_from_node "${node}" "${disk}" "Kite disk tag ${KITE_LONGHORN_DISK_TAG}"
+      remove_longhorn_disk_tag_from_node "${node}" "${disk}" "${tags}"
     fi
   done <<< "${disks}"
 }
@@ -360,6 +377,65 @@ longhorn_pv_count() {
     | sed '/^[[:space:]]*$/d' \
     | wc -l \
     | tr -d ' '
+}
+
+longhorn_installed_by_kite() {
+  local value
+
+  value="$(kubectl get namespace longhorn-system -o "go-template={{ index .metadata.labels \"${KITE_LONGHORN_OWNER_LABEL_KEY}\" }}" 2>/dev/null || true)"
+  [[ "${value}" == "${KITE_LONGHORN_OWNER_LABEL_VALUE}" ]]
+}
+
+longhorn_pv_lines() {
+  kubectl get pv -o 'go-template={{ range .items }}{{ if .spec.csi }}{{ if eq .spec.csi.driver "driver.longhorn.io" }}{{ .metadata.name }}|{{ if .spec.claimRef }}{{ .spec.claimRef.namespace }}|{{ .spec.claimRef.name }}{{ else }}|{{ end }}{{ "\n" }}{{ end }}{{ end }}{{ end }}' 2>/dev/null || true
+}
+
+namespace_managed_by_kite() {
+  local namespace="$1"
+  local value
+
+  value="$(kubectl get namespace "${namespace}" -o 'go-template={{ index .metadata.labels "hy3ons.github.io/managed-by" }}' 2>/dev/null || true)"
+  [[ "${value}" == "kite-controller" ]]
+}
+
+pvc_managed_by_kite() {
+  local namespace="$1"
+  local pvc="$2"
+  local value
+
+  value="$(kubectl -n "${namespace}" get pvc "${pvc}" -o 'go-template={{ index .metadata.labels "hy3ons.github.io/managed-by" }}' 2>/dev/null || true)"
+  [[ "${value}" == "kite-controller" ]]
+}
+
+longhorn_pv_is_kite_owned() {
+  local namespace="$1"
+  local pvc="$2"
+
+  [[ -z "${namespace}" || -z "${pvc}" ]] && return 1
+  if [[ "${namespace}" == "${KITE_NAMESPACE}" ]]; then
+    pvc_managed_by_kite "${namespace}" "${pvc}" && return 0
+    [[ "${pvc}" == "ubuntu-22.04" ]] && return 0
+    return 1
+  fi
+  namespace_managed_by_kite "${namespace}" && return 0
+  pvc_managed_by_kite "${namespace}" "${pvc}" && return 0
+  return 1
+}
+
+external_longhorn_pv_count() {
+  local pv
+  local namespace
+  local pvc
+  local count=0
+
+  while IFS="|" read -r pv namespace pvc; do
+    [[ -z "${pv}" ]] && continue
+    if ! longhorn_pv_is_kite_owned "${namespace}" "${pvc}"; then
+      count=$((count + 1))
+    fi
+  done < <(longhorn_pv_lines)
+
+  printf '%s\n' "${count}"
 }
 
 delete_longhorn_webhook_configurations() {
@@ -403,6 +479,13 @@ delete_kite_longhorn_host_data() {
     echo "[kite-deploy] refusing Longhorn host data deletion without DELETE_LONGHORN_DATA_CONFIRM=true" >&2
     exit 1
   fi
+  local external_pv_count
+  external_pv_count="$(external_longhorn_pv_count)"
+  if [[ "${external_pv_count}" != "0" ]]; then
+    log "skipping Kite Longhorn host data cleanup because ${external_pv_count} external Longhorn PV(s) still exist"
+    log "delete or migrate non-Kite Longhorn PVC/PV resources before deleting host data"
+    return
+  fi
   if [[ "${DELETE_LONGHORN_FORCE}" != "true" ]]; then
     local pv_count
     pv_count="$(longhorn_pv_count)"
@@ -426,7 +509,21 @@ delete_longhorn_resources() {
     return
   fi
 
+  local external_pv_count
+  external_pv_count="$(external_longhorn_pv_count)"
+  if [[ "${external_pv_count}" != "0" ]]; then
+    log "skipping Longhorn disk cleanup and uninstall because ${external_pv_count} external Longhorn PV(s) still exist"
+    log "DELETE_LONGHORN_FORCE does not override non-Kite Longhorn PVC/PV protection"
+    return
+  fi
+
   remove_kite_longhorn_disks
+
+  if ! longhorn_installed_by_kite; then
+    log "skipping Longhorn uninstall because longhorn-system is not marked as Kite-installed"
+    log "Kite cleanup will not delete shared Longhorn without ${KITE_LONGHORN_OWNER_LABEL_KEY}=${KITE_LONGHORN_OWNER_LABEL_VALUE}"
+    return
+  fi
 
   if [[ "${DELETE_LONGHORN_FORCE}" != "true" ]]; then
     local pv_count
@@ -469,6 +566,8 @@ main() {
   log "deleting remaining Kite namespace and cluster-scoped resources"
   kubectl delete namespace "${KITE_NAMESPACE}" --ignore-not-found=true
   kubectl delete crd kiteusers.hy3ons.github.io kitevirtualmachines.hy3ons.github.io --ignore-not-found=true
+  kubectl delete clusterrole kite-api-role kite-controller-role kite-gateway-role --ignore-not-found=true
+  kubectl delete clusterrolebinding kite-api-binding kite-controller-binding kite-gateway-binding --ignore-not-found=true
   kubectl delete clusterrole kite-control-plane-role --ignore-not-found=true
   kubectl delete clusterrolebinding kite-control-plane-binding --ignore-not-found=true
 

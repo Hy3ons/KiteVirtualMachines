@@ -25,6 +25,7 @@ import (
 	kite "kite/api/v1"
 	"kite/internal/guestlogin"
 	"kite/internal/kube"
+	"kite/internal/platform"
 	cloudinituserdata "kite/internal/render/cloud-init-userdata"
 	datavolume "kite/internal/render/data-volume"
 	"kite/internal/render/ingress"
@@ -96,6 +97,7 @@ const (
 	kiteDefaultVMStorageClassName      = "kite-vm-storage"
 	kiteSecretTypeLabel                = "hy3ons.github.io/kite-secret-type"
 	kiteVMSSHKeySecretType             = "vm-ssh-key"
+	kitePlatformTLSSecretType          = "platform-ingress-tls"
 	vmSSHPrivateKeyName                = "id_rsa"
 	vmSSHPublicKeyName                 = "id_rsa.pub"
 )
@@ -290,7 +292,18 @@ func reconcileKiteVirtualMachineDesiredState(ctx context.Context, dynamicClient 
 		return err
 	}
 
-	objects, err := kiteVirtualMachineDesiredObjects(vm, domain, keyPair.PublicKey, guestPasswordHash, storageClassName)
+	tlsSecretName := ""
+	if domain != "" {
+		tlsSecretName, err = ensureKiteVirtualMachineIngressTLSSecret(ctx, dynamicClient, vm.Namespace)
+		if err != nil {
+			if statusErr := updateKiteVirtualMachineStatus(ctx, dynamicClient, vm, kiteVMPhaseFailed, currentPowerStateFromVM(vm), domain, vm.Status.NodeName, metav1.ConditionFalse, kiteVMReasonFailed, err.Error()); statusErr != nil {
+				return fmt.Errorf("%w; failed to update failed status: %v", err, statusErr)
+			}
+			return err
+		}
+	}
+
+	objects, err := kiteVirtualMachineDesiredObjects(vm, domain, keyPair.PublicKey, guestPasswordHash, storageClassName, tlsSecretName)
 	if err != nil {
 		return err
 	}
@@ -355,8 +368,9 @@ func validateKiteVirtualMachineSpec(vm *kite.KiteVirtualMachine) error {
 // publicKey is injected into cloud-init so users can SSH through the host agent.
 // guestPasswordHash is injected into cloud-init so the browser console can log into the guest OS.
 // storageClassName selects the StorageClass for the VM disk DataVolume.
+// tlsSecretName is the optional namespace-local TLS Secret for domain Ingress.
 // The returned objects are applied in dependency order by the VM reconciler.
-func kiteVirtualMachineDesiredObjects(vm *kite.KiteVirtualMachine, domain string, publicKey string, guestPasswordHash string, storageClassName string) ([]*unstructured.Unstructured, error) {
+func kiteVirtualMachineDesiredObjects(vm *kite.KiteVirtualMachine, domain string, publicKey string, guestPasswordHash string, storageClassName string, tlsSecretName string) ([]*unstructured.Unstructured, error) {
 	dataVolume, err := (&datavolume.DataVolumeData{
 		VmName:           vm.Name,
 		Namespace:        vm.Namespace,
@@ -404,9 +418,10 @@ func kiteVirtualMachineDesiredObjects(vm *kite.KiteVirtualMachine, domain string
 
 	if domain != "" {
 		ingressObject, err := (&ingress.IngressData{
-			VmName:     vm.Name,
-			Namespace:  vm.Namespace,
-			DomainName: domain,
+			VmName:        vm.Name,
+			Namespace:     vm.Namespace,
+			DomainName:    domain,
+			TLSSecretName: tlsSecretName,
 		}).Render()
 		if err != nil {
 			return nil, fmt.Errorf("failed to render Ingress: %w", err)
@@ -443,6 +458,74 @@ func guestLoginPasswordHash(ctx context.Context, dynamicClient dynamic.Interface
 	}
 
 	return strings.TrimSpace(string(hash)), nil
+}
+
+// ensureKiteVirtualMachineIngressTLSSecret copies the platform TLS Secret into a VM namespace.
+// ctx controls Kubernetes Secret read and write requests.
+// dynamicClient reads kite/global-tls-secret and writes a same-named Secret in namespace.
+// The returned string is empty when no global TLS Secret is configured.
+func ensureKiteVirtualMachineIngressTLSSecret(ctx context.Context, dynamicClient dynamic.Interface, namespace string) (string, error) {
+	global, err := dynamicClient.Resource(secretGVR).Namespace(platform.GlobalTLSSecretNS).Get(ctx, platform.GlobalTLSSecretName, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to read platform TLS Secret %s/%s: %w", platform.GlobalTLSSecretNS, platform.GlobalTLSSecretName, err)
+	}
+
+	data, _, _ := unstructured.NestedStringMap(global.Object, "data")
+	if strings.TrimSpace(data[platform.TLSCertificateKey]) == "" || strings.TrimSpace(data[platform.TLSPrivateKeyDataKey]) == "" {
+		return "", fmt.Errorf("platform TLS Secret %s/%s is missing TLS data", platform.GlobalTLSSecretNS, platform.GlobalTLSSecretName)
+	}
+
+	desired := newKiteVirtualMachineIngressTLSSecret(namespace, data)
+	current, err := dynamicClient.Resource(secretGVR).Namespace(namespace).Get(ctx, platform.GlobalTLSSecretName, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		if _, createErr := dynamicClient.Resource(secretGVR).Namespace(namespace).Create(ctx, desired, metav1.CreateOptions{}); createErr != nil {
+			return "", fmt.Errorf("failed to create VM namespace TLS Secret %s/%s: %w", namespace, platform.GlobalTLSSecretName, createErr)
+		}
+		return platform.GlobalTLSSecretName, nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to read VM namespace TLS Secret %s/%s: %w", namespace, platform.GlobalTLSSecretName, err)
+	}
+
+	labels := current.GetLabels()
+	if labels[kiteSecretTypeLabel] != kitePlatformTLSSecretType {
+		return "", fmt.Errorf("refusing to overwrite unmanaged TLS Secret %s/%s", namespace, platform.GlobalTLSSecretName)
+	}
+	desired.SetResourceVersion(current.GetResourceVersion())
+	if _, updateErr := dynamicClient.Resource(secretGVR).Namespace(namespace).Update(ctx, desired, metav1.UpdateOptions{}); updateErr != nil {
+		return "", fmt.Errorf("failed to update VM namespace TLS Secret %s/%s: %w", namespace, platform.GlobalTLSSecretName, updateErr)
+	}
+
+	return platform.GlobalTLSSecretName, nil
+}
+
+// newKiteVirtualMachineIngressTLSSecret creates the namespace-local TLS Secret used by VM Ingress.
+// namespace is the user namespace that owns the VM Ingress.
+// data contains base64-encoded tls.crt and tls.key values copied from the platform Secret.
+// The returned object is created or updated by ensureKiteVirtualMachineIngressTLSSecret.
+func newKiteVirtualMachineIngressTLSSecret(namespace string, data map[string]string) *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]any{
+			"apiVersion": "v1",
+			"kind":       "Secret",
+			"metadata": map[string]any{
+				"name":      platform.GlobalTLSSecretName,
+				"namespace": namespace,
+				"labels": map[string]any{
+					"hy3ons.github.io/managed-by": "kite-controller",
+					kiteSecretTypeLabel:           kitePlatformTLSSecretType,
+				},
+			},
+			"type": "kubernetes.io/tls",
+			"data": map[string]any{
+				platform.TLSCertificateKey:    data[platform.TLSCertificateKey],
+				platform.TLSPrivateKeyDataKey: data[platform.TLSPrivateKeyDataKey],
+			},
+		},
+	}
 }
 
 // vmShouldRun converts Kite power intent into a boolean running intent.

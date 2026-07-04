@@ -13,6 +13,7 @@ import (
 	"k8s.io/client-go/dynamic/fake"
 
 	"kite/internal/guestlogin"
+	"kite/internal/platform"
 )
 
 // TestReconcileKiteVirtualMachineDeleteIntentDeletesKubeVirtFirst verifies delete intent cleanup order.
@@ -257,6 +258,67 @@ func TestKiteVirtualMachineStorageClassNameReadsRuntimeConfig(t *testing.T) {
 	}
 }
 
+// TestEnsureKiteVirtualMachineIngressTLSSecretCreatesNamespaceCopy verifies VM Ingress TLS wiring.
+// t is the Go test handle used for assertions.
+// The test ensures global TLS material is copied into the user namespace because Ingress TLS Secrets are namespace-local.
+func TestEnsureKiteVirtualMachineIngressTLSSecretCreatesNamespaceCopy(t *testing.T) {
+	ctx := context.Background()
+	namespace := "user-a"
+	client := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), machineReconcileListKinds(),
+		newMachineReconcilePlatformTLSSecret(),
+	)
+
+	secretName, err := ensureKiteVirtualMachineIngressTLSSecret(ctx, client, namespace)
+	if err != nil {
+		t.Fatalf("ensureKiteVirtualMachineIngressTLSSecret returned error: %v", err)
+	}
+
+	if secretName != platform.GlobalTLSSecretName {
+		t.Fatalf("expected TLS secret name %q, got %q", platform.GlobalTLSSecretName, secretName)
+	}
+	copied, err := client.Resource(secretGVR).Namespace(namespace).Get(ctx, platform.GlobalTLSSecretName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("expected namespace TLS Secret to be created, got %v", err)
+	}
+	labels := copied.GetLabels()
+	if labels[kiteSecretTypeLabel] != kitePlatformTLSSecretType {
+		t.Fatalf("expected Kite-managed TLS Secret label, got %#v", labels)
+	}
+}
+
+// TestEnsureKiteVirtualMachineIngressTLSSecretSkipsWhenGlobalSecretMissing verifies optional TLS behavior.
+// t is the Go test handle used for assertions.
+// The test keeps VM domain Ingress usable over HTTP before an admin uploads a TLS certificate.
+func TestEnsureKiteVirtualMachineIngressTLSSecretSkipsWhenGlobalSecretMissing(t *testing.T) {
+	ctx := context.Background()
+	client := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), machineReconcileListKinds())
+
+	secretName, err := ensureKiteVirtualMachineIngressTLSSecret(ctx, client, "user-a")
+	if err != nil {
+		t.Fatalf("ensureKiteVirtualMachineIngressTLSSecret returned error: %v", err)
+	}
+	if secretName != "" {
+		t.Fatalf("expected no TLS secret name without global TLS material, got %q", secretName)
+	}
+}
+
+// TestEnsureKiteVirtualMachineIngressTLSSecretRejectsUnmanagedNamespaceSecret verifies overwrite protection.
+// t is the Go test handle used for assertions.
+// The test prevents Kite from replacing an operator-owned Secret with the global TLS certificate.
+func TestEnsureKiteVirtualMachineIngressTLSSecretRejectsUnmanagedNamespaceSecret(t *testing.T) {
+	ctx := context.Background()
+	namespace := "user-a"
+	client := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), machineReconcileListKinds(),
+		newMachineReconcilePlatformTLSSecret(),
+		newMachineReconcileUnmanagedTLSSecret(namespace),
+	)
+
+	secretName, err := ensureKiteVirtualMachineIngressTLSSecret(ctx, client, namespace)
+	if err == nil {
+		t.Fatalf("expected unmanaged TLS Secret to fail, got secretName=%q", secretName)
+	}
+}
+
 // firstStatusConditionMessage returns the first condition message from an unstructured status.
 // obj is a KiteVirtualMachine object with a status.conditions slice.
 // The returned string is empty when no message exists.
@@ -426,6 +488,48 @@ func newMachineReconcileGuestLoginSecret(namespace string, name string, password
 			},
 			"data": map[string]any{
 				guestlogin.PasswordHashKey: base64.StdEncoding.EncodeToString([]byte(passwordHash)),
+			},
+		},
+	}
+}
+
+// newMachineReconcilePlatformTLSSecret creates the global TLS Secret test fixture.
+// The returned Secret uses the same namespace and name that platform settings writes in production.
+// Tests use it to verify VM namespace TLS copy behavior.
+func newMachineReconcilePlatformTLSSecret() *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]any{
+			"apiVersion": "v1",
+			"kind":       "Secret",
+			"metadata": map[string]any{
+				"name":      platform.GlobalTLSSecretName,
+				"namespace": platform.GlobalTLSSecretNS,
+			},
+			"type": "kubernetes.io/tls",
+			"data": map[string]any{
+				platform.TLSCertificateKey:    "Y2VydA==",
+				platform.TLSPrivateKeyDataKey: "a2V5",
+			},
+		},
+	}
+}
+
+// newMachineReconcileUnmanagedTLSSecret creates an operator-owned TLS Secret test fixture.
+// namespace is the user namespace where a VM Ingress will be rendered.
+// The returned object intentionally lacks Kite labels so overwrite protection can be tested.
+func newMachineReconcileUnmanagedTLSSecret(namespace string) *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]any{
+			"apiVersion": "v1",
+			"kind":       "Secret",
+			"metadata": map[string]any{
+				"name":      platform.GlobalTLSSecretName,
+				"namespace": namespace,
+			},
+			"type": "kubernetes.io/tls",
+			"data": map[string]any{
+				platform.TLSCertificateKey:    "b3BlcmF0b3ItY2VydA==",
+				platform.TLSPrivateKeyDataKey: "b3BlcmF0b3Ita2V5",
 			},
 		},
 	}

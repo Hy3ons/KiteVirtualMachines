@@ -122,7 +122,7 @@ export const AdminSettings: React.FC = () => {
     try {
       setLoadingCert(true);
       await adminApi.saveCert({ tlsCert: values.tlsCert, tlsKey: values.tlsKey });
-      message.success('HTTPS 인증서가 kube-system/global-tls-secret에 저장/갱신되었습니다.');
+      message.success('HTTPS 인증서가 kite/global-tls-secret에 저장/갱신되었습니다.');
       certForm.resetFields();
     } catch {
       message.error('인증서 저장에 실패했습니다.');
@@ -198,7 +198,7 @@ export const AdminSettings: React.FC = () => {
         <Card hoverable className="admin-settings-card">
           <Title level={4}>API 런타임 설정</Title>
           <Paragraph style={{ color: '#666' }}>
-            JWT Secret과 Password Salt는 서버 최초 시작 시 자동 생성되어 Kubernetes ConfigMap에 저장됩니다. 원문은 화면에 표시하지 않습니다.
+            JWT Secret과 Password Salt는 서버 최초 시작 시 자동 생성되어 Kubernetes Secret에 저장됩니다. 원문은 화면에 표시하지 않습니다.
             <br />재생성된 값은 저장 후 kite-api 재시작 시 적용됩니다.
           </Paragraph>
 
@@ -239,7 +239,7 @@ export const AdminSettings: React.FC = () => {
         <Card hoverable className="admin-settings-card">
           <Title level={4}><SafetyCertificateOutlined style={{ marginRight: 8 }} /> 와일드카드 인증서 갱신/등록</Title>
           <Paragraph style={{ color: '#666' }}>
-            등록된 도메인의 서브도메인을 모두 커버하는 TLS 인증서를 갱신합니다. 저장 시 즉시 K8s의 <Text strong>kube-system/global-tls-secret</Text>이 교체됩니다.
+            등록된 도메인의 서브도메인을 모두 커버하는 TLS 인증서를 갱신합니다. 저장 시 즉시 K8s의 <Text strong>kite/global-tls-secret</Text>이 교체됩니다.
           </Paragraph>
           
           <Form form={certForm} layout="vertical" onFinish={handleSaveCert}>

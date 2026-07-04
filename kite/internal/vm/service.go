@@ -35,6 +35,7 @@ const (
 	defaultPowerState          = "Off"
 	minDiskSize                = "20Gi"
 	maxSSHPasswordLen          = 128
+	maxDomainPrefixLen         = 63
 	kiteSecretTypeLabel        = "hy3ons.github.io/secret-type"
 	kiteVMGuestLoginSecretType = "kite-vm-guest-login"
 )
@@ -42,6 +43,19 @@ const (
 var minimumDiskQuantity = resource.MustParse(minDiskSize)
 
 var sshIDPattern = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
+var domainPrefixPattern = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$`)
+var reservedDomainPrefixes = map[string]struct{}{
+	"admin":     {},
+	"api":       {},
+	"assets":    {},
+	"auth":      {},
+	"console":   {},
+	"dashboard": {},
+	"kite":      {},
+	"kite-api":  {},
+	"ssh":       {},
+	"www":       {},
+}
 
 var secretGVR = schema.GroupVersionResource{
 	Group:    "",
@@ -150,8 +164,15 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (VirtualMachine
 	if err != nil {
 		return VirtualMachine{}, err
 	}
-	record.Spec.SSHPasswordHash = auth.HashPassword(req.SSHPassword, s.passwordSalt)
+	passwordHash, err := auth.HashPassword(req.SSHPassword, s.passwordSalt)
+	if err != nil {
+		return VirtualMachine{}, err
+	}
+	record.Spec.SSHPasswordHash = passwordHash
 	if err := s.ensureUniqueSSHID(ctx, record.Spec.SSHID, "", ""); err != nil {
+		return VirtualMachine{}, err
+	}
+	if err := s.ensureUniqueDomainPrefix(ctx, record.Spec.DomainPrefix, "", ""); err != nil {
 		return VirtualMachine{}, err
 	}
 	guestPasswordHash, err := guestlogin.GeneratePasswordHash(req.SSHPassword)
@@ -237,6 +258,11 @@ func (s *Service) Update(ctx context.Context, namespace string, name string, req
 			return VirtualMachine{}, err
 		}
 	}
+	if req.DomainPrefix != nil {
+		if err := s.ensureUniqueDomainPrefix(ctx, record.Spec.DomainPrefix, namespace, name); err != nil {
+			return VirtualMachine{}, err
+		}
+	}
 
 	updated, err := s.vmStore.Update(ctx, record)
 	if err != nil {
@@ -271,6 +297,37 @@ func (s *Service) ensureUniqueSSHID(ctx context.Context, sshID string, currentNa
 		spec, _ := item.Object["spec"].(map[string]any)
 		if strings.TrimSpace(stringValue(spec, "sshId")) == sshID {
 			return conflict("sshId is already used by another virtual machine")
+		}
+	}
+
+	return nil
+}
+
+// ensureUniqueDomainPrefix checks that no other KiteVirtualMachine claims the same domain prefix.
+// ctx controls the cluster-wide KiteVirtualMachine list request.
+// domainPrefix is the optional spec.domainPrefix value used with the platform base domain.
+// currentNamespace and currentName identify the VM being updated and are empty during create.
+// This function is used by create and domainPrefix update flows before writing the CRD.
+func (s *Service) ensureUniqueDomainPrefix(ctx context.Context, domainPrefix string, currentNamespace string, currentName string) error {
+	domainPrefix = strings.TrimSpace(domainPrefix)
+	if domainPrefix == "" {
+		return nil
+	}
+
+	list, err := s.vmStore.ListAll(ctx)
+	if err != nil {
+		return err
+	}
+
+	for i := range list.Items {
+		item := &list.Items[i]
+		if item.GetNamespace() == currentNamespace && item.GetName() == currentName {
+			continue
+		}
+
+		spec, _ := item.Object["spec"].(map[string]any)
+		if strings.TrimSpace(stringValue(spec, "domainPrefix")) == domainPrefix {
+			return conflict("domainPrefix is already used by another virtual machine")
 		}
 	}
 
@@ -328,6 +385,9 @@ func createRecord(req CreateRequest) (store.KiteVirtualMachineRecord, error) {
 	}
 	if !sshIDPattern.MatchString(req.SSHID) {
 		return store.KiteVirtualMachineRecord{}, invalid("sshId must be a Linux username using lowercase letters, numbers, underscore, or hyphen")
+	}
+	if err := validateDomainPrefix(req.DomainPrefix); err != nil {
+		return store.KiteVirtualMachineRecord{}, err
 	}
 	if req.CPU < 1 {
 		return store.KiteVirtualMachineRecord{}, invalid("cpu must be greater than zero")
@@ -402,6 +462,9 @@ func applyUpdate(record *store.KiteVirtualMachineRecord, req UpdateRequest) erro
 	}
 	if req.DomainPrefix != nil {
 		record.Spec.DomainPrefix = strings.TrimSpace(*req.DomainPrefix)
+		if err := validateDomainPrefix(record.Spec.DomainPrefix); err != nil {
+			return err
+		}
 	}
 	if req.SSHID != nil {
 		record.Spec.SSHID = strings.TrimSpace(*req.SSHID)
@@ -421,6 +484,28 @@ func applyUpdate(record *store.KiteVirtualMachineRecord, req UpdateRequest) erro
 	}
 	if req.Delete != nil {
 		record.Spec.Delete = *req.Delete
+	}
+
+	return nil
+}
+
+// validateDomainPrefix checks that a VM domain prefix is safe to combine with the platform base domain.
+// domainPrefix is optional; an empty value means the VM has no HTTP Ingress hostname.
+// A nil error means the value is a DNS label, not reserved for platform routes, and safe to store.
+// This function is used by create, update, and offer claim flows before writing CRDs.
+func validateDomainPrefix(domainPrefix string) error {
+	domainPrefix = strings.TrimSpace(domainPrefix)
+	if domainPrefix == "" {
+		return nil
+	}
+	if len(domainPrefix) > maxDomainPrefixLen {
+		return invalid("domainPrefix must be at most 63 characters")
+	}
+	if !domainPrefixPattern.MatchString(domainPrefix) {
+		return invalid("domainPrefix must be a lowercase DNS label")
+	}
+	if _, reserved := reservedDomainPrefixes[domainPrefix]; reserved {
+		return invalid("domainPrefix is reserved for Kite platform routes")
 	}
 
 	return nil

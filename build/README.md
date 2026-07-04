@@ -32,7 +32,7 @@ automation.
 | --- | --- |
 | `build/dev` | Development build, rollout, component rebuild, and development cleanup scripts. These scripts may build local images and load them into minikube, k3s, k3d, kind, or another selected cluster. |
 | `build/deploy` | Pull-based deployment documentation and scripts. All install, verify, uninstall, Longhorn, KubeVirt, CDI, host sshd, and remote cleanup scripts live under `build/deploy/scripts`. |
-| `build/kite` | Kite-owned Kubernetes manifests: CRDs, namespace, RBAC, API, controller, frontend, gateway, service account, and runtime ConfigMap. |
+| `build/kite` | Kite-owned Kubernetes manifests: CRDs, namespace, RBAC, API, controller, frontend, gateway, component service accounts, runtime ConfigMap, and runtime Secret bootstrap path. |
 | `build/kite-storage` | Kite storage manifests: Longhorn StorageClass, optional Longhorn disk directory setup/cleanup, and CDI golden image DataVolumes. |
 | `build/examples` | Example Kite CRs for manual testing after the CRDs are installed. |
 | `build/test` | Manual integration test helpers. |

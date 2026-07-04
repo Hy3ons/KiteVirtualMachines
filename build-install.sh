@@ -26,7 +26,7 @@ set -euo pipefail
 #   FRONTEND_VITE_USE_MOCK: default false; frontend mock API build 여부를 초반에 묻는다.
 #   K3S_IMPORT_IMAGES, K3D_LOAD_IMAGES, KIND_LOAD_IMAGES, MINIKUBE_START, PUSH_IMAGES: cluster별 image 전달 여부를 초반에 묻는다.
 #   KITE_GATEWAY_HOST_KEY_REFRESH: default false; 기존 gateway host key Secret 갱신 여부를 초반에 묻는다.
-#   MANAGE_HOST_SSHD: default true; gateway 22번 사용을 위한 host sshd handoff 여부를 초반에 묻는다.
+#   MANAGE_HOST_SSHD: default false; gateway 22번 사용을 위한 host sshd handoff 여부를 초반에 묻는다.
 #   KITE_HOST_SSHD_PORT: default 2222; host sshd handoff 대상 포트다.
 #   RUN_VERIFY: default true; 설치 후 verify 실행 여부를 초반에 묻는다.
 #   KITE_ASSUME_DEFAULTS: default false; true면 모든 interactive 질문을 건너뛰고 env/default 값으로 실행한다.

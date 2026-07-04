@@ -14,7 +14,21 @@ import type {
   UpdateVmPayload,
 } from './types';
 
-const useMockApi = import.meta.env.VITE_USE_MOCK === 'true';
+class MockApiModeError extends Error {
+  constructor(mode: string) {
+    super(`VITE_USE_MOCK=true is only allowed in debug mode, current mode is ${mode}`);
+    this.name = 'MockApiModeError';
+  }
+}
+
+const isDebugMode = import.meta.env.MODE === 'debug';
+const mockApiRequested = import.meta.env.VITE_USE_MOCK === 'true';
+
+if (mockApiRequested && !isDebugMode) {
+  throw new MockApiModeError(import.meta.env.MODE);
+}
+
+const useMockApi = mockApiRequested && isDebugMode;
 
 type BackendAdminUser = AdminUsersResponse['users'][number] & {
   readonly access_level?: number;

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -50,6 +51,7 @@ func newRouter(cfg config.Config, tokenService *auth.TokenService, dynamicClient
 	r := gin.Default()
 	_ = r.SetTrustedProxies(nil)
 	r.Use(corsMiddleware())
+	r.Use(csrfOriginMiddleware())
 
 	r.GET("/health", func(c *gin.Context) {
 		report := health.Run(c.Request.Context(), dynamicClient)
@@ -79,6 +81,49 @@ func newRouter(cfg config.Config, tokenService *auth.TokenService, dynamicClient
 	})
 
 	return r
+}
+
+// csrfOriginMiddleware rejects unsafe browser requests from another origin.
+// The middleware allows local Vite development origins and exact same-origin platform requests.
+// Requests without an Origin header are allowed so CLI and server-side clients keep working.
+func csrfOriginMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !methodCanMutateState(c.Request.Method) {
+			c.Next()
+			return
+		}
+
+		origin := c.GetHeader("Origin")
+		if origin == "" || isAllowedOrigin(origin) || originMatchesRequestHost(origin, c.Request.Host) {
+			c.Next()
+			return
+		}
+
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"message": "cross-origin state-changing request is not allowed"})
+	}
+}
+
+// methodCanMutateState reports whether a HTTP method should be protected by Origin checks.
+// method is the request method from net/http.
+// The returned value is false for read-only and CORS preflight methods.
+func methodCanMutateState(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return false
+	default:
+		return true
+	}
+}
+
+// originMatchesRequestHost reports whether Origin matches the request Host exactly.
+// origin is parsed as a browser Origin header.
+// host is the Host header that reached kite-api through ingress or port-forwarding.
+func originMatchesRequestHost(origin string, host string) bool {
+	parsed, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(parsed.Host, strings.TrimSpace(host))
 }
 
 // corsMiddleware handles browser CORS preflight requests for the Vite frontend.

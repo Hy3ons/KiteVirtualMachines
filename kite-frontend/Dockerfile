@@ -14,6 +14,10 @@ RUN npm install
 
 # Copy the rest of the source code and build
 COPY . .
+RUN if [ "${VITE_BUILD_MODE}" != "debug" ] && [ "${VITE_USE_MOCK}" = "true" ]; then \
+      echo "VITE_USE_MOCK=true is only allowed when VITE_BUILD_MODE=debug" >&2; \
+      exit 1; \
+    fi
 RUN npm run build -- --mode "${VITE_BUILD_MODE}"
 
 # Stage 2: Serve the static files with Nginx
