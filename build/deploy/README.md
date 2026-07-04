@@ -131,7 +131,8 @@ SSH session to the VM access Service inside the cluster.
 exist. On Linux hosts it first tries to copy the existing OpenSSH host key from
 `/etc/ssh/ssh_host_ed25519_key`, `ssh_host_ecdsa_key`, or `ssh_host_rsa_key`.
 That keeps the SSH fingerprint consistent when Kite takes over port `22`. If no
-host key is available, the script generates a gateway key instead.
+host key is available, or automatic mode cannot read it, the script generates a
+gateway key instead.
 
 Existing Secrets are kept by default so client fingerprints do not change on
 every deploy. To intentionally replace an already-created gateway key from the

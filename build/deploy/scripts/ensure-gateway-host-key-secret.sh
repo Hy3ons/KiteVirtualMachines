@@ -114,9 +114,12 @@ copy_key_file() {
   local target="$2"
 
   if [[ -r "${source}" ]]; then
-    cp "${source}" "${target}"
+    cp "${source}" "${target}" || return 1
   elif command -v sudo >/dev/null 2>&1; then
-    sudo_cmd cat "${source}" > "${target}"
+    if ! sudo_cmd cat "${source}" > "${target}"; then
+      rm -f "${target}"
+      return 1
+    fi
   else
     return 1
   fi
@@ -153,8 +156,12 @@ write_gateway_key() {
   case "${KITE_GATEWAY_HOST_KEY_SOURCE}" in
     auto)
       if host_key="$(select_host_key)"; then
-        log "using existing host SSH key ${host_key} for kite-gateway host key"
-        copy_key_file "${host_key}" "${target}"
+        if copy_key_file "${host_key}" "${target}"; then
+          log "using existing host SSH key ${host_key} for kite-gateway host key"
+        else
+          warn "host SSH key ${host_key} exists but could not be read; generating kite-gateway host key instead"
+          write_generated_key "${target}"
+        fi
       else
         log "host SSH key was not found; generating kite-gateway host key"
         write_generated_key "${target}"
@@ -165,8 +172,11 @@ write_gateway_key() {
         echo "[kite-deploy] host SSH key was not found" >&2
         exit 1
       fi
+      if ! copy_key_file "${host_key}" "${target}"; then
+        warn "host SSH key ${host_key} exists but could not be read"
+        exit 1
+      fi
       log "using existing host SSH key ${host_key} for kite-gateway host key"
-      copy_key_file "${host_key}" "${target}"
       ;;
     generate)
       log "generating kite-gateway host key"
@@ -174,7 +184,10 @@ write_gateway_key() {
       ;;
     /*)
       log "using configured SSH host key ${KITE_GATEWAY_HOST_KEY_SOURCE}"
-      copy_key_file "${KITE_GATEWAY_HOST_KEY_SOURCE}" "${target}"
+      if ! copy_key_file "${KITE_GATEWAY_HOST_KEY_SOURCE}" "${target}"; then
+        warn "configured SSH host key ${KITE_GATEWAY_HOST_KEY_SOURCE} could not be read"
+        exit 1
+      fi
       ;;
     *)
       echo "[kite-deploy] KITE_GATEWAY_HOST_KEY_SOURCE must be auto, host, generate, or an absolute file path" >&2

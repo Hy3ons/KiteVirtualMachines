@@ -217,7 +217,9 @@ port `22` listener are skipped safely.
 The gateway host key is also part of the install contract. On Linux hosts the
 installer tries to reuse the existing OpenSSH host key from `/etc/ssh` so users
 do not see a different SSH fingerprint just because port `22` is now served by
-`kite-gateway`. Existing gateway host key Secrets are kept by default; set
+`kite-gateway`. If the key exists but cannot be read in automatic mode, the
+installer generates a gateway key instead of stopping halfway. Existing gateway
+host key Secrets are kept by default; set
 `KITE_GATEWAY_HOST_KEY_REFRESH=true KITE_GATEWAY_HOST_KEY_SOURCE=host` when you
 intentionally want to replace the gateway Secret with the current host key.
 
