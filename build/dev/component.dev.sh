@@ -249,6 +249,15 @@ print_done() {
   print_plan_row "image tag" "${IMAGE_TAG}"
 }
 
+apply_runtime_config_if_missing() {
+  if kubectl -n "${KITE_NAMESPACE}" get configmap kite-runtime-config >/dev/null 2>&1; then
+    log "preserving existing kite-runtime-config"
+    return
+  fi
+
+  kubectl apply -f "${KITE_MANIFEST_DIR}/config.yaml"
+}
+
 # namespace, 공통 RBAC/config, 컴포넌트 manifest를 적용하고 Deployment image를 교체한다.
 apply_component_manifest() {
   local cluster="$1"
@@ -271,7 +280,7 @@ apply_component_manifest() {
   # API/controller/gateway는 Kubernetes API 접근 권한과 공통 config가 필요하다.
   if [[ "${component}" == "api" || "${component}" == "controller" || "${component}" == "gateway" ]]; then
     kubectl apply -f "${KITE_MANIFEST_DIR}/serviceaccount.yaml"
-    kubectl apply -f "${KITE_MANIFEST_DIR}/config.yaml"
+    apply_runtime_config_if_missing
     kubectl apply -f "${KITE_MANIFEST_DIR}/rbac.yaml"
   fi
 

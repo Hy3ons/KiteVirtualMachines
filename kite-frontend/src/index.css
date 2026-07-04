@@ -395,6 +395,7 @@ html, body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: nowrap;
   gap: 24px;
   min-height: 65px;
   height: 65px;
@@ -461,8 +462,9 @@ html, body {
 .global-header-actions {
   display: flex;
   align-items: center;
+  flex-wrap: nowrap;
   gap: 24px;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   justify-content: flex-end;
   min-width: 0;
   overflow: hidden;
@@ -499,9 +501,12 @@ html, body {
 }
 
 .global-header-session {
+  display: flex;
+  align-items: center;
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
+  white-space: nowrap;
 }
 
 .global-header-session .ant-space {
@@ -1173,6 +1178,28 @@ html, body {
 
   .global-header-links.with-session .global-header-docs-link .anticon {
     font-size: 16px;
+  }
+}
+
+@media (max-width: 1360px) {
+  .global-header-links.with-session {
+    border-right: 0;
+    padding-right: 0;
+  }
+
+  .global-header-links.with-session .global-header-docs-link {
+    font-size: 0;
+    gap: 0;
+  }
+
+  .global-header-links.with-session .global-header-docs-link .anticon {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 1180px) {
+  .global-header-links.with-session {
+    display: none;
   }
 }
 
