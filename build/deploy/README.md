@@ -115,10 +115,11 @@ DELETE_LONGHORN_DATA=true DELETE_LONGHORN_DATA_CONFIRM=true build/deploy/scripts
 
 ## Gateway
 
-Kite installs `kite-gateway` as a Kubernetes Deployment behind an internal
-`ClusterIP` Service by default. External SSH on port `22` is only enabled when
-host sshd handoff is explicitly enabled; then the Service is promoted to
-`LoadBalancer` and forwarded to the pod's internal `2222` port.
+Kite installs `kite-gateway` as a Kubernetes Deployment and exposes it as the
+external SSH entrypoint by default. The installer first moves or detects host
+sshd away from port `22`; only then is the Service promoted to `LoadBalancer`
+and forwarded to the pod's internal `2222` port. Set `MANAGE_HOST_SSHD=false`
+only when you intentionally want the gateway Service to stay internal.
 
 ```sh
 ssh <sshId>@<node-ip>
@@ -150,15 +151,13 @@ If it must move, Kite backs up `/etc/ssh/sshd_config` under
 `/etc/kite/host-sshd`, asks which port host sshd should use, checks that the
 port is free, and requires typing the same port again before restarting the
 service so the gateway can own port `22`. `build/deploy/scripts/uninstall-kite.sh`
-asks before restoring that backup. Set `KITE_MANAGE_HOST_SSHD=true` and
-`KITE_HOST_SSHD_PORT=<port>` or `KITE_RESTORE_HOST_SSHD=true` for
-non-interactive opt-in, and set `MANAGE_HOST_SSHD=false` or
-`RESTORE_HOST_SSHD=false` to skip these host changes.
+asks before restoring that backup. Set `KITE_HOST_SSHD_PORT=<port>` to choose a
+different non-interactive handoff port, and set `MANAGE_HOST_SSHD=false` or
+`RESTORE_HOST_SSHD=false` only to skip these host changes.
 
-When external SSH handoff is enabled and no Kite VM uses the SSH login username,
-`kite-gateway` falls back to the host sshd at the node IP on the selected host
-sshd port. This lets existing host accounts keep using
-`ssh <host-user>@<node-ip>` on port `22` after the gateway is installed. If a
-Kite VM `sshId` conflicts with a host user, the VM route has priority and host
-administration should use
+When no Kite VM uses the SSH login username, `kite-gateway` falls back to the
+host sshd at the node IP on the selected host sshd port. This lets existing host
+accounts keep using `ssh <host-user>@<node-ip>` on port `22` after the gateway
+is installed. If a Kite VM `sshId` conflicts with a host user, the VM route has
+priority and host administration should use
 `ssh <host-user>@<node-ip> -p <selected-host-sshd-port>`.

@@ -77,10 +77,9 @@ public key and disables password SSH login inside the VM.
 ## Host Port Handoff
 
 The gateway listens on container port `2222`. The base Kubernetes Service is
-internal by default so a normal install does not steal host SSH port `22`. On
-Linux hosts that should expose Kite SSH on port `22`, `./build-install.sh` and
-`./ghcr-install.sh` can move the host sshd listener to an operator-selected port
-after user confirmation and then promote the gateway Service to `LoadBalancer`.
+internal so raw manifest apply does not steal host SSH port `22`. The public
+install scripts move or detect the host sshd listener first, then promote the
+gateway Service to `LoadBalancer` port `22`.
 If host sshd already listens on another global port, the scripts do not move it;
 they patch `KITE_GATEWAY_HOST_SSHD_ADDRESS` to that detected port instead.
 

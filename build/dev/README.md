@@ -164,9 +164,10 @@ folder-level map and naming rules are documented in `build/README.md`.
 
 ## Gateway
 
-`build/dev/dev.sh` also builds and deploys `kite-gateway`. The base Service is
-internal by default; `build-install.sh` only promotes it to `LoadBalancer` port
-`22` when host sshd handoff is explicitly enabled.
+`build/dev/dev.sh` also builds and deploys `kite-gateway`. `build-install.sh`
+uses it as the external SSH entrypoint by default: host sshd is moved or
+detected away from port `22` first, then the gateway Service is promoted to
+`LoadBalancer` port `22`.
 
 ```sh
 ssh <sshId>@<node-ip>
@@ -198,14 +199,13 @@ must move, Kite backs up `/etc/ssh/sshd_config` under `/etc/kite/host-sshd`,
 asks which port host sshd should use, checks that the port is free, and requires
 typing the same port again before restarting the service so the gateway can own
 port `22`. `./build-clear.sh` asks before restoring that backup. Set
-`KITE_MANAGE_HOST_SSHD=true` and `KITE_HOST_SSHD_PORT=<port>` or
-`KITE_RESTORE_HOST_SSHD=true` for non-interactive opt-in, and set
-`MANAGE_HOST_SSHD=false` or `RESTORE_HOST_SSHD=false` to skip these host changes.
+`KITE_HOST_SSHD_PORT=<port>` to choose a different non-interactive handoff port,
+and set `MANAGE_HOST_SSHD=false` or `RESTORE_HOST_SSHD=false` only to skip these
+host changes.
 
-When external SSH handoff is enabled and no Kite VM uses the SSH login username,
-`kite-gateway` falls back to the host sshd at the node IP on the selected host
-sshd port. This lets existing host accounts keep using
-`ssh <host-user>@<node-ip>` on port `22` after the gateway is installed. If a
-Kite VM `sshId` conflicts with a host user, the VM route has priority and host
-administration should use
+When no Kite VM uses the SSH login username, `kite-gateway` falls back to the
+host sshd at the node IP on the selected host sshd port. This lets existing host
+accounts keep using `ssh <host-user>@<node-ip>` on port `22` after the gateway
+is installed. If a Kite VM `sshId` conflicts with a host user, the VM route has
+priority and host administration should use
 `ssh <host-user>@<node-ip> -p <selected-host-sshd-port>`.

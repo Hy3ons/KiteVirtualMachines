@@ -20,7 +20,7 @@ set -euo pipefail
 #   KITE_GHCR_INSTALL_REF: default main; curl 실행 시 받을 branch/tag다. prompt 없음.
 #   KITE_GHCR_INSTALL_ARCHIVE_URL: default empty; 직접 archive URL을 지정할 때 쓴다. prompt 없음.
 #   KITE_ASSUME_DEFAULTS: default false; true면 모든 interactive 질문을 건너뛰고 env/default 값으로 실행한다.
-#   MANAGE_HOST_SSHD: default false; gateway가 22번을 쓰도록 host sshd handoff를 허용할지 초반에 묻는다.
+#   MANAGE_HOST_SSHD: default true; gateway가 22번을 쓰도록 host sshd handoff를 수행할지 초반에 묻는다.
 #   KITE_HOST_SSHD_PORT: default 2222; host sshd handoff 대상 포트다. handoff가 필요하면 초반에 확인한다.
 #   INSTALL_LONGHORN: default true; Longhorn 기본 manifest를 설치할지 초반에 묻는다.
 #   KITE_INSTALL_LONGHORN_HOST_PACKAGES: default true; apt 기반 host에서 Longhorn 필수 패키지를 자동 설치할지 정한다.
@@ -44,7 +44,7 @@ set -euo pipefail
 #   진행한다. 일반 k8s/k3s 의존성 준비 실패는 하위 스크립트가 명확히 중단한다.
 #
 # Dangerous Options:
-#   MANAGE_HOST_SSHD=true는 host sshd 포트를 바꿀 수 있다. KITE_HOST_SSHD_PORT는
+#   MANAGE_HOST_SSHD=true가 기본값이며 host sshd 포트를 바꿀 수 있다. KITE_HOST_SSHD_PORT는
 #   적용 전 점유 확인과 재입력 확인을 거친다.
 #
 # Side Effects:

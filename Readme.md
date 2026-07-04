@@ -203,18 +203,18 @@ Kite has two top-level install entrypoints and one GHCR update entrypoint:
   PVCs, runtime config, and shared infrastructure while reapplying Kite manifests
   and rolling Deployments to a selected GHCR image tag.
 
-Both install modes deploy `kite-gateway`, but the default Service is internal so
-a normal install does not take over host SSH port `22`. When the target host is
-Linux with systemd OpenSSH and `MANAGE_HOST_SSHD=true`, the install flow first
-checks whether host `sshd` already avoids port `22`. If it does, Kite does not
-move it and patches gateway fallback to that existing port. If host `sshd` still
-needs to move, the flow asks which port should receive it, checks that the port
-is free, and requires typing the same port again before changing the host. Only
-after that handoff does Kite expose `kite-gateway` on external port `22`. The
-original config is backed up under `/etc/kite/host-sshd`, and
+Both install modes deploy `kite-gateway` as the external SSH entrypoint by
+default. The install flow first checks whether host `sshd` already avoids port
+`22`. If it does, Kite does not move it and patches gateway fallback to that
+existing port. If host `sshd` still needs to move, the flow moves it to
+`KITE_HOST_SSHD_PORT` (default `2222`) before exposing `kite-gateway` on
+external port `22`. In interactive runs the selected port is checked for
+occupancy and must be typed again before changing the host. The original config
+is backed up under `/etc/kite/host-sshd`, and
 `./build-clear.sh`, `./uninstall.sh`, or `build/deploy/scripts/uninstall-kite.sh`
 can restore it from that backup. Hosts without OpenSSH, systemd, Linux, or an
-active port `22` listener are skipped safely.
+active port `22` listener are skipped safely. Set `MANAGE_HOST_SSHD=false` only
+when you intentionally want the gateway Service to stay internal.
 
 The gateway host key is also part of the install contract. On Linux hosts the
 installer tries to reuse the existing OpenSSH host key from `/etc/ssh` so users
