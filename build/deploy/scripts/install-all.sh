@@ -10,7 +10,8 @@ set -euo pipefail
 #
 # Environment Variables:
 #   KITE_NAMESPACE: default kite
-#   INSTALL_LONGHORN: default false
+#   INSTALL_LONGHORN: default true
+#   KITE_INSTALL_LONGHORN_HOST_PACKAGES: default true
 #   CONFIGURE_LONGHORN: default true
 #   APPLY_STORAGECLASS: default true
 #   INSTALL_KUBEVIRT: default true
@@ -42,7 +43,7 @@ KITE_LONGHORN_USE_DEDICATED_DISK_WAS_SET="${KITE_LONGHORN_USE_DEDICATED_DISK+x}"
 KITE_GATEWAY_HOST_KEY_REFRESH_WAS_SET="${KITE_GATEWAY_HOST_KEY_REFRESH+x}"
 RUN_VERIFY_WAS_SET="${RUN_VERIFY+x}"
 KITE_NAMESPACE="${KITE_NAMESPACE:-kite}"
-INSTALL_LONGHORN="${INSTALL_LONGHORN:-false}"
+INSTALL_LONGHORN="${INSTALL_LONGHORN:-true}"
 CONFIGURE_LONGHORN="${CONFIGURE_LONGHORN:-true}"
 APPLY_STORAGECLASS="${APPLY_STORAGECLASS:-true}"
 INSTALL_KUBEVIRT="${INSTALL_KUBEVIRT:-true}"
@@ -131,6 +132,16 @@ patch_gateway_host_sshd_address() {
   kubectl -n "${KITE_NAMESPACE}" set env deployment/kite-gateway "KITE_GATEWAY_HOST_SSHD_ADDRESS=\$(KITE_NODE_IP):${port}"
 }
 
+ensure_longhorn_available_for_configuration() {
+  if kubectl get namespace longhorn-system >/dev/null 2>&1; then
+    return 0
+  fi
+
+  warn "CONFIGURE_LONGHORN=true requires Longhorn, but namespace/longhorn-system does not exist"
+  warn "run with INSTALL_LONGHORN=true, or set CONFIGURE_LONGHORN=false if Longhorn is managed elsewhere"
+  exit 1
+}
+
 configure_interactive_install_options() {
   kite_prompt_interactive || return 0
 
@@ -189,9 +200,10 @@ main() {
   if [[ "${INSTALL_LONGHORN}" == "true" ]]; then
     "${ROOT_DIR}/build/deploy/scripts/install-longhorn.sh"
   else
-    log "skipping Longhorn install; set INSTALL_LONGHORN=true to apply the default manifest"
+    log "skipping Longhorn install because INSTALL_LONGHORN=${INSTALL_LONGHORN}"
   fi
   if [[ "${CONFIGURE_LONGHORN}" == "true" ]]; then
+    ensure_longhorn_available_for_configuration
     "${ROOT_DIR}/build/deploy/scripts/wait-longhorn.sh"
     "${ROOT_DIR}/build/deploy/scripts/configure-longhorn-kite-disk.sh"
   else

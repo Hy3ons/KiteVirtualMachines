@@ -228,8 +228,7 @@ skip prompts and use defaults/env values for automation.
 
 ## Quick Install and Uninstall
 
-Install Kite on a prepared k3s or Kubernetes host without cloning this
-repository:
+Install Kite on a k3s or Kubernetes host without cloning this repository:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/ghcr-install.sh | bash
@@ -339,8 +338,9 @@ RESTORE_HOST_SSHD=false KITE_CLUSTER=k3s ./build-clear.sh
 ## Production-Oriented k3s Install
 
 `./ghcr-install.sh` contains a pull-based install flow for k3s clusters. Longhorn,
-KubeVirt, and CDI are required for VM disk provisioning and VM runtime. Kite
-images are pulled from GHCR instead of being built locally.
+KubeVirt, and CDI are required for VM disk provisioning and VM runtime, so the
+default install path applies them when they are missing. Kite images are pulled
+from GHCR instead of being built locally.
 
 The download install flow is intentionally split into two steps:
 
@@ -354,16 +354,20 @@ the Ubuntu golden image DataVolume, creates the Kite gateway host key Secret,
 and deploys the Kite manifests using GHCR images.
 
 ```sh
-kubectl get nodes
-INSTALL_LONGHORN=true ./ghcr-install.sh
-build/deploy/scripts/verify.sh
-```
-
-If Longhorn is already installed and ready:
-
-```sh
 ./ghcr-install.sh
 ```
+
+If Longhorn is managed outside Kite and you do not want Kite to apply the
+Longhorn manifest:
+
+```sh
+INSTALL_LONGHORN=false ./ghcr-install.sh
+```
+
+On apt-based Linux hosts, `INSTALL_LONGHORN=true` also installs the Longhorn host
+packages `open-iscsi` and `nfs-common` when they are missing. If the current
+user cannot use `sudo`, install those packages first or run the installer as
+root.
 
 Expected storage flow:
 

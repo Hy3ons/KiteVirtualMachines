@@ -22,7 +22,8 @@ set -euo pipefail
 #   KITE_ASSUME_DEFAULTS: default false; true면 모든 interactive 질문을 건너뛰고 env/default 값으로 실행한다.
 #   MANAGE_HOST_SSHD: default false; gateway가 22번을 쓰도록 host sshd handoff를 허용할지 초반에 묻는다.
 #   KITE_HOST_SSHD_PORT: default 2222; host sshd handoff 대상 포트다. handoff가 필요하면 초반에 확인한다.
-#   INSTALL_LONGHORN: default false; Longhorn 기본 manifest를 설치할지 초반에 묻는다.
+#   INSTALL_LONGHORN: default true; Longhorn 기본 manifest를 설치할지 초반에 묻는다.
+#   KITE_INSTALL_LONGHORN_HOST_PACKAGES: default true; apt 기반 host에서 Longhorn 필수 패키지를 자동 설치할지 정한다.
 #   CONFIGURE_LONGHORN: default true; Longhorn disk/tag 설정을 적용할지 초반에 묻는다.
 #   KITE_LONGHORN_USE_DEDICATED_DISK: default false; 전용 Longhorn host path disk를 만들지 초반에 묻는다.
 #   APPLY_STORAGECLASS: default true; Kite VM StorageClass를 적용할지 초반에 묻는다.

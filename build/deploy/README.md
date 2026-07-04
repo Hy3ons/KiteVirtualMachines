@@ -29,18 +29,14 @@ curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/ghc
   | KITE_GHCR_INSTALL_REF=stage bash
 ```
 
-Install everything. Longhorn installation is opt-in because production nodes
-must satisfy Longhorn prerequisites such as usable disks and required host
-packages.
+By default the installer applies Longhorn, KubeVirt, CDI, Kite storage, golden
+image, and Kite runtime manifests. On apt-based Linux hosts it also installs
+missing Longhorn host packages such as `open-iscsi` and `nfs-common`.
+
+If Longhorn is managed outside Kite and should not be applied by this installer:
 
 ```sh
-INSTALL_LONGHORN=true ./ghcr-install.sh
-```
-
-If Longhorn is already installed:
-
-```sh
-./ghcr-install.sh
+INSTALL_LONGHORN=false ./ghcr-install.sh
 ```
 
 `./ghcr-install.sh` asks all install choices near the start of the run. If a

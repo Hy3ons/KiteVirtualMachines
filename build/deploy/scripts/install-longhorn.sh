@@ -11,6 +11,7 @@ set -euo pipefail
 # Environment Variables:
 #   LONGHORN_VERSION: default (empty)
 #   LONGHORN_MANIFEST_URL: default (empty)
+#   KITE_INSTALL_LONGHORN_HOST_PACKAGES: default true
 #   KITE_LONGHORN_NAMESPACE_DELETE_TIMEOUT_SECONDS: default 300
 #   KITE_LONGHORN_OWNER_LABEL_KEY: default hy3ons.github.io/kite-installed-longhorn
 #   KITE_LONGHORN_OWNER_LABEL_VALUE: default true
@@ -23,6 +24,7 @@ set -euo pipefail
 
 LONGHORN_VERSION="${LONGHORN_VERSION:-}"
 LONGHORN_MANIFEST_URL="${LONGHORN_MANIFEST_URL:-}"
+KITE_INSTALL_LONGHORN_HOST_PACKAGES="${KITE_INSTALL_LONGHORN_HOST_PACKAGES:-true}"
 KITE_LONGHORN_NAMESPACE_DELETE_TIMEOUT_SECONDS="${KITE_LONGHORN_NAMESPACE_DELETE_TIMEOUT_SECONDS:-300}"
 KITE_LONGHORN_OWNER_LABEL_KEY="${KITE_LONGHORN_OWNER_LABEL_KEY:-hy3ons.github.io/kite-installed-longhorn}"
 KITE_LONGHORN_OWNER_LABEL_VALUE="${KITE_LONGHORN_OWNER_LABEL_VALUE:-true}"
@@ -64,6 +66,40 @@ require_command() {
   if ! command -v "${name}" >/dev/null 2>&1; then
     warn "missing required command: ${name}"
     exit 1
+  fi
+}
+
+sudo_command() {
+  if [[ "$(id -u)" -eq 0 ]]; then
+    "$@"
+    return
+  fi
+  if ! command -v sudo >/dev/null 2>&1; then
+    warn "sudo is required to install Longhorn host packages; install open-iscsi and nfs-common manually or run as root"
+    exit 1
+  fi
+
+  sudo "$@"
+}
+
+install_longhorn_host_packages() {
+  if [[ "${KITE_INSTALL_LONGHORN_HOST_PACKAGES}" != "true" ]]; then
+    return 0
+  fi
+  if command -v iscsiadm >/dev/null 2>&1 && command -v mount.nfs >/dev/null 2>&1; then
+    return 0
+  fi
+  if ! command -v apt-get >/dev/null 2>&1; then
+    warn "Longhorn host packages are missing, but this installer only auto-installs them on apt-based hosts"
+    warn "install open-iscsi and nfs-common manually, or set KITE_INSTALL_LONGHORN_HOST_PACKAGES=false if the host is already prepared"
+    exit 1
+  fi
+
+  log "installing Longhorn host packages with apt-get"
+  sudo_command apt-get update
+  sudo_command env DEBIAN_FRONTEND=noninteractive apt-get install -y open-iscsi nfs-common
+  if command -v systemctl >/dev/null 2>&1; then
+    sudo_command systemctl enable --now iscsid >/dev/null 2>&1 || true
   fi
 }
 
@@ -114,6 +150,7 @@ main() {
   fi
 
   log "installing Longhorn from ${LONGHORN_MANIFEST_URL}"
+  install_longhorn_host_packages
   wait_for_previous_longhorn_namespace_deletion
   if ! longhorn_namespace_exists; then
     kite_created_longhorn="true"
