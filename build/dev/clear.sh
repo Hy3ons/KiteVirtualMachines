@@ -421,7 +421,11 @@ delete_kite_resources() {
   kubectl delete -f "${ROOT_DIR}/build/kite/serviceaccount.yaml" --ignore-not-found=true --wait=false || true
 
   log "deleting Kite namespace-scoped resources from namespace/${KITE_NAMESPACE}"
-  kubectl delete namespace "${KITE_NAMESPACE}" --ignore-not-found=true --wait=false || true
+  if kite_namespace_has_external_pvcs; then
+    log "skipping namespace/${KITE_NAMESPACE} deletion because it contains non-Kite PVCs"
+  else
+    kubectl delete namespace "${KITE_NAMESPACE}" --ignore-not-found=true --wait=false || true
+  fi
 
   log "deleting remaining Kite cluster-scoped resources"
   kubectl delete -f "${ROOT_DIR}/build/kite/crds.yaml" --ignore-not-found=true --wait=false || true
@@ -567,6 +571,20 @@ delete_kite_custom_resources() {
       | xargs -r -n 1 kubectl patch --type=merge -p '{"metadata":{"finalizers":[]}}' || true
     kubectl delete kiteusers.hy3ons.github.io --all --ignore-not-found=true --wait=false || true
   fi
+}
+
+kite_namespace_has_external_pvcs() {
+  local pvc
+
+  kubectl get namespace "${KITE_NAMESPACE}" >/dev/null 2>&1 || return 1
+  while read -r pvc; do
+    [[ -z "${pvc}" ]] && continue
+    pvc_managed_by_kite "${KITE_NAMESPACE}" "${pvc}" && continue
+    [[ "${pvc}" == "ubuntu-22.04" ]] && continue
+    return 0
+  done < <(kubectl -n "${KITE_NAMESPACE}" get pvc -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null || true)
+
+  return 1
 }
 
 # Longhorn CRD가 있는 경우 Kite 전용/태그 disk entry를 node별로 제거한다.

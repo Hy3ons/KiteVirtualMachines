@@ -438,6 +438,41 @@ external_longhorn_pv_count() {
   printf '%s\n' "${count}"
 }
 
+kite_namespace_has_external_pvcs() {
+  local pvc
+
+  kubectl get namespace "${KITE_NAMESPACE}" >/dev/null 2>&1 || return 1
+  while read -r pvc; do
+    [[ -z "${pvc}" ]] && continue
+    pvc_managed_by_kite "${KITE_NAMESPACE}" "${pvc}" && continue
+    [[ "${pvc}" == "ubuntu-22.04" ]] && continue
+    return 0
+  done < <(kubectl -n "${KITE_NAMESPACE}" get pvc -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null || true)
+
+  return 1
+}
+
+delete_kite_manifests_preserving_namespace() {
+  log "deleting Kite manifests without deleting namespace/${KITE_NAMESPACE} because external PVCs exist"
+  kubectl delete -f "${ROOT_DIR}/build/kite/gateway.yaml" --ignore-not-found=true --wait=false || true
+  kubectl delete -f "${ROOT_DIR}/build/kite/controller.yaml" --ignore-not-found=true --wait=false || true
+  kubectl delete -f "${ROOT_DIR}/build/kite/api.yaml" --ignore-not-found=true --wait=false || true
+  kubectl delete -f "${ROOT_DIR}/build/kite/frontend.yaml" --ignore-not-found=true --wait=false || true
+  kubectl delete -f "${ROOT_DIR}/build/kite/config.yaml" --ignore-not-found=true --wait=false || true
+  kubectl delete -f "${ROOT_DIR}/build/kite/rbac.yaml" --ignore-not-found=true --wait=false || true
+  kubectl delete -f "${ROOT_DIR}/build/kite/serviceaccount.yaml" --ignore-not-found=true --wait=false || true
+  kubectl delete -f "${ROOT_DIR}/build/kite/crds.yaml" --ignore-not-found=true --wait=false || true
+}
+
+delete_kite_manifests() {
+  if kite_namespace_has_external_pvcs; then
+    delete_kite_manifests_preserving_namespace
+    return
+  fi
+
+  kubectl delete -k "${ROOT_DIR}/build/kite" --ignore-not-found=true || true
+}
+
 delete_longhorn_webhook_configurations() {
   kubectl get validatingwebhookconfigurations.admissionregistration.k8s.io -o name 2>/dev/null \
     | grep 'longhorn' \
@@ -559,12 +594,16 @@ main() {
   fi
 
   log "deleting Kite manifests"
-  kubectl delete -k "${ROOT_DIR}/build/kite" --ignore-not-found=true || true
+  delete_kite_manifests
   kubectl delete -f "${ROOT_DIR}/build/kite-storage/longhorn" --ignore-not-found=true || true
   delete_kite_longhorn_host_data
 
   log "deleting remaining Kite namespace and cluster-scoped resources"
-  kubectl delete namespace "${KITE_NAMESPACE}" --ignore-not-found=true
+  if kite_namespace_has_external_pvcs; then
+    log "skipping namespace/${KITE_NAMESPACE} deletion because it contains non-Kite PVCs"
+  else
+    kubectl delete namespace "${KITE_NAMESPACE}" --ignore-not-found=true
+  fi
   kubectl delete crd kiteusers.hy3ons.github.io kitevirtualmachines.hy3ons.github.io --ignore-not-found=true
   kubectl delete clusterrole kite-api-role kite-controller-role kite-gateway-role --ignore-not-found=true
   kubectl delete clusterrolebinding kite-api-binding kite-controller-binding kite-gateway-binding --ignore-not-found=true
