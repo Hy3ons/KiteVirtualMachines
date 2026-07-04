@@ -60,7 +60,7 @@
 
 ### 3-2. 와일드카드 인증서 갱신 (`POST /api/v1/admin/cert`)
 - **Request Body**: `{ "tlsCert": "...", "tlsKey": "..." }`
-- **Description**: `kube-system/global-tls-secret` TLS Secret을 즉시 생성/수정합니다.
+- **Description**: `kite/global-tls-secret` TLS Secret을 즉시 생성/수정합니다.
 
 ### 3-3. 전체 사용자 조회 (`GET /api/v1/admin/users`)
 - **Description**: 전체 `KiteUser` 목록을 반환합니다.

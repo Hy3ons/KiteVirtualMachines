@@ -2,6 +2,13 @@ package platformhttpredirect
 
 import "testing"
 
+func TestPlatformHTTPRedirectRenderRejectsEmptyHost(t *testing.T) {
+	obj, err := (&PlatformHTTPRedirectData{Namespace: "kite"}).Render()
+	if err == nil {
+		t.Fatalf("expected empty host to fail, got %#v", obj)
+	}
+}
+
 func TestPlatformHTTPRedirectRender(t *testing.T) {
 	obj, err := (&PlatformHTTPRedirectData{Namespace: "kite", Host: "domain.com"}).Render()
 	if err != nil {

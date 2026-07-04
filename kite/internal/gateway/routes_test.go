@@ -15,7 +15,7 @@ const routeTestPasswordSalt = "route-test-salt"
 // t is the Go test handle used for assertions.
 // The test protects sshId, Service, and Secret mapping used by password authentication and backend dialing.
 func TestRouteFromKiteVirtualMachineUsesStatusNames(t *testing.T) {
-	vm := newRouteTestKiteVM("user-a", "vm-a", "asdf", auth.HashPassword("password", routeTestPasswordSalt))
+	vm := newRouteTestKiteVM("user-a", "vm-a", "asdf", mustHashRoutePassword(t, "password"))
 	if err := unstructured.SetNestedField(vm.Object, "custom-service", "status", "serviceName"); err != nil {
 		t.Fatalf("failed to set status.serviceName: %v", err)
 	}
@@ -42,7 +42,7 @@ func TestRouteFromKiteVirtualMachineUsesStatusNames(t *testing.T) {
 // t is the Go test handle used for assertions.
 // The test keeps kite-gateway from routing users into VMs marked for deletion.
 func TestRouteFromKiteVirtualMachineSkipsDeleteIntent(t *testing.T) {
-	vm := newRouteTestKiteVM("user-a", "vm-a", "asdf", auth.HashPassword("password", routeTestPasswordSalt))
+	vm := newRouteTestKiteVM("user-a", "vm-a", "asdf", mustHashRoutePassword(t, "password"))
 	if err := unstructured.SetNestedField(vm.Object, true, "spec", "delete"); err != nil {
 		t.Fatalf("failed to set spec.delete: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestRouteFromKiteVirtualMachineSkipsDeleteIntent(t *testing.T) {
 // t is the Go test handle used for assertions.
 // The test keeps malformed usernames from reaching SSH authentication and backend dialing.
 func TestRouteFromKiteVirtualMachineSkipsUnsafeSSHID(t *testing.T) {
-	vm := newRouteTestKiteVM("user-a", "vm-a", "asdf;whoami", auth.HashPassword("password", routeTestPasswordSalt))
+	vm := newRouteTestKiteVM("user-a", "vm-a", "asdf;whoami", mustHashRoutePassword(t, "password"))
 
 	if _, ok := RouteFromKiteVirtualMachine(vm); ok {
 		t.Fatal("expected unsafe sshId to be skipped")
@@ -67,7 +67,7 @@ func TestRouteFromKiteVirtualMachineSkipsUnsafeSSHID(t *testing.T) {
 // t is the Go test handle used for assertions.
 // The test keeps invalid backend DNS names out of the gateway route table.
 func TestRouteFromKiteVirtualMachineSkipsUnsafeServiceName(t *testing.T) {
-	vm := newRouteTestKiteVM("user-a", "vm-a", "asdf", auth.HashPassword("password", routeTestPasswordSalt))
+	vm := newRouteTestKiteVM("user-a", "vm-a", "asdf", mustHashRoutePassword(t, "password"))
 	if err := unstructured.SetNestedField(vm.Object, "bad service", "status", "serviceName"); err != nil {
 		t.Fatalf("failed to set status.serviceName: %v", err)
 	}
@@ -83,13 +83,22 @@ func TestRouteFromKiteVirtualMachineSkipsUnsafeServiceName(t *testing.T) {
 func TestRouteTableRejectsDuplicateSSHID(t *testing.T) {
 	table := NewRouteTable(routeTestPasswordSalt)
 	table.ReplaceAll([]Route{
-		{Username: "asdf", PasswordHash: auth.HashPassword("one", routeTestPasswordSalt), VMNamespace: "user-a", VMName: "vm-a"},
-		{Username: "asdf", PasswordHash: auth.HashPassword("two", routeTestPasswordSalt), VMNamespace: "user-b", VMName: "vm-b"},
+		{Username: "asdf", PasswordHash: mustHashRoutePassword(t, "one"), VMNamespace: "user-a", VMName: "vm-a"},
+		{Username: "asdf", PasswordHash: mustHashRoutePassword(t, "two"), VMNamespace: "user-b", VMName: "vm-b"},
 	})
 
 	if _, err := table.AuthenticatePassword("asdf", []byte("one")); err != ErrRouteDuplicate {
 		t.Fatalf("expected ErrRouteDuplicate, got %v", err)
 	}
+}
+
+func mustHashRoutePassword(t *testing.T, password string) string {
+	t.Helper()
+	hash, err := auth.HashPassword(password, routeTestPasswordSalt)
+	if err != nil {
+		t.Fatalf("failed to hash route password: %v", err)
+	}
+	return hash
 }
 
 func newRouteTestKiteVM(namespace string, name string, sshID string, passwordHash string) *unstructured.Unstructured {

@@ -12,9 +12,10 @@ import (
 var ingressTemplate string
 
 type IngressData struct {
-	VmName     string
-	Namespace  string
-	DomainName string
+	VmName        string
+	Namespace     string
+	DomainName    string
+	TLSSecretName string
 }
 
 // Render creates a Kubernetes Ingress object from IngressData.

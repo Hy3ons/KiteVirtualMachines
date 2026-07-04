@@ -18,6 +18,7 @@ import (
 const (
 	KiteNamespace                = "kite"
 	RuntimeConfigName            = "kite-runtime-config"
+	RuntimeSecretName            = "kite-runtime-secret"
 	DefaultAccessTokenTTLMinutes = 60
 	JWTSecretKey                 = "jwtSecret"
 	PasswordSaltKey              = "passwordSalt"
@@ -38,6 +39,12 @@ var configMapGVR = schema.GroupVersionResource{
 	Resource: "configmaps",
 }
 
+var secretGVR = schema.GroupVersionResource{
+	Group:    "",
+	Version:  "v1",
+	Resource: "secrets",
+}
+
 var namespaceGVR = schema.GroupVersionResource{
 	Group:    "",
 	Version:  "v1",
@@ -54,10 +61,10 @@ type Config struct {
 	AccessTokenTTL time.Duration
 }
 
-// Bootstrap loads kite-api runtime configuration from a Kubernetes ConfigMap.
+// Bootstrap loads Kite runtime configuration from a ConfigMap and Secret.
 // ctx controls Kubernetes API calls.
-// dynamicClient reads and writes kite/kite-runtime-config.
-// Missing ConfigMap fields are generated once and persisted before the Config is returned.
+// dynamicClient reads and writes kite/kite-runtime-config and kite/kite-runtime-secret.
+// Missing secret fields are generated once or migrated from legacy ConfigMap data before Config is returned.
 func Bootstrap(ctx context.Context, dynamicClient dynamic.Interface) (Config, error) {
 	if dynamicClient == nil {
 		return Config{}, fmt.Errorf("dynamic Kubernetes client is required")
@@ -66,32 +73,137 @@ func Bootstrap(ctx context.Context, dynamicClient dynamic.Interface) (Config, er
 		return Config{}, err
 	}
 
+	configMap, legacySecrets, err := ensureRuntimeConfigMap(ctx, dynamicClient)
+	if err != nil {
+		return Config{}, err
+	}
+	runtimeSecret, err := ensureRuntimeSecret(ctx, dynamicClient, legacySecrets)
+	if err != nil {
+		return Config{}, err
+	}
+	configMap, err = clearLegacyRuntimeConfigSecrets(ctx, dynamicClient, configMap)
+	if err != nil {
+		return Config{}, err
+	}
+
+	return configFromResources(configMap, runtimeSecret)
+}
+
+// Load reads existing Kite runtime configuration without creating or repairing resources.
+// ctx controls Kubernetes API calls.
+// dynamicClient reads kite/kite-runtime-config and kite/kite-runtime-secret.
+// This function is used by components that should not own runtime secret bootstrap.
+func Load(ctx context.Context, dynamicClient dynamic.Interface) (Config, error) {
+	if dynamicClient == nil {
+		return Config{}, fmt.Errorf("dynamic Kubernetes client is required")
+	}
+	configMap, err := dynamicClient.Resource(configMapGVR).Namespace(KiteNamespace).Get(ctx, RuntimeConfigName, metav1.GetOptions{})
+	if err != nil {
+		return Config{}, fmt.Errorf("failed to read runtime config: %w", err)
+	}
+	runtimeSecret, err := dynamicClient.Resource(secretGVR).Namespace(KiteNamespace).Get(ctx, RuntimeSecretName, metav1.GetOptions{})
+	if err != nil {
+		return Config{}, fmt.Errorf("failed to read runtime secret: %w", err)
+	}
+
+	return configFromResources(configMap, runtimeSecret)
+}
+
+// ensureRuntimeConfigMap creates or normalizes public runtime settings.
+// ctx controls Kubernetes ConfigMap requests.
+// dynamicClient reads and writes kite/kite-runtime-config.
+// The returned ConfigMap may still include legacy secret keys until Secret migration succeeds.
+func ensureRuntimeConfigMap(ctx context.Context, dynamicClient dynamic.Interface) (*unstructured.Unstructured, map[string]string, error) {
 	configMap, err := dynamicClient.Resource(configMapGVR).Namespace(KiteNamespace).Get(ctx, RuntimeConfigName, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		created, createErr := dynamicClient.Resource(configMapGVR).Namespace(KiteNamespace).Create(ctx, newRuntimeConfigMap(), metav1.CreateOptions{})
 		if createErr != nil {
-			return Config{}, fmt.Errorf("failed to create runtime config: %w", createErr)
+			return nil, nil, fmt.Errorf("failed to create runtime config: %w", createErr)
 		}
-		return configFromObject(created)
+		return created, map[string]string{}, nil
 	}
 	if err != nil {
-		return Config{}, fmt.Errorf("failed to read runtime config: %w", err)
+		return nil, nil, fmt.Errorf("failed to read runtime config: %w", err)
 	}
 
+	legacySecrets := legacySecretData(configMap)
 	next := configMap.DeepCopy()
 	data, changed := normalizedRuntimeData(next)
 	if changed {
 		if err := unstructured.SetNestedStringMap(next.Object, data, "data"); err != nil {
-			return Config{}, err
+			return nil, nil, err
 		}
 		updated, updateErr := dynamicClient.Resource(configMapGVR).Namespace(KiteNamespace).Update(ctx, next, metav1.UpdateOptions{})
 		if updateErr != nil {
-			return Config{}, fmt.Errorf("failed to update runtime config defaults: %w", updateErr)
+			return nil, nil, fmt.Errorf("failed to update runtime config defaults: %w", updateErr)
 		}
-		return configFromObject(updated)
+		return updated, legacySecrets, nil
 	}
 
-	return configFromObject(configMap)
+	return configMap, legacySecrets, nil
+}
+
+// clearLegacyRuntimeConfigSecrets finalizes migration from ConfigMap to Secret storage.
+// ctx controls the Kubernetes ConfigMap update request.
+// dynamicClient updates kite/kite-runtime-config only after kite-runtime-secret is confirmed.
+// The returned ConfigMap contains only public runtime settings.
+func clearLegacyRuntimeConfigSecrets(ctx context.Context, dynamicClient dynamic.Interface, configMap *unstructured.Unstructured) (*unstructured.Unstructured, error) {
+	next := configMap.DeepCopy()
+	data, _, _ := unstructured.NestedStringMap(next.Object, "data")
+	changed := false
+	if _, exists := data[JWTSecretKey]; exists {
+		delete(data, JWTSecretKey)
+		changed = true
+	}
+	if _, exists := data[PasswordSaltKey]; exists {
+		delete(data, PasswordSaltKey)
+		changed = true
+	}
+	if !changed {
+		return configMap, nil
+	}
+	if err := unstructured.SetNestedStringMap(next.Object, data, "data"); err != nil {
+		return nil, err
+	}
+	updated, err := dynamicClient.Resource(configMapGVR).Namespace(KiteNamespace).Update(ctx, next, metav1.UpdateOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to remove legacy runtime config secrets: %w", err)
+	}
+	return updated, nil
+}
+
+// ensureRuntimeSecret creates or normalizes private runtime secrets.
+// ctx controls Kubernetes Secret requests.
+// dynamicClient reads and writes kite/kite-runtime-secret.
+// legacySecrets provides migration values from older kite-runtime-config data.
+func ensureRuntimeSecret(ctx context.Context, dynamicClient dynamic.Interface, legacySecrets map[string]string) (*unstructured.Unstructured, error) {
+	runtimeSecret, err := dynamicClient.Resource(secretGVR).Namespace(KiteNamespace).Get(ctx, RuntimeSecretName, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		created, createErr := dynamicClient.Resource(secretGVR).Namespace(KiteNamespace).Create(ctx, newRuntimeSecret(legacySecrets), metav1.CreateOptions{})
+		if createErr != nil {
+			return nil, fmt.Errorf("failed to create runtime secret: %w", createErr)
+		}
+		return created, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to read runtime secret: %w", err)
+	}
+
+	next := runtimeSecret.DeepCopy()
+	data, changed := normalizedRuntimeSecretData(next, legacySecrets)
+	if changed {
+		if err := unstructured.SetNestedStringMap(next.Object, data, "stringData"); err != nil {
+			return nil, err
+		}
+		unstructured.RemoveNestedField(next.Object, "data")
+		updated, updateErr := dynamicClient.Resource(secretGVR).Namespace(KiteNamespace).Update(ctx, next, metav1.UpdateOptions{})
+		if updateErr != nil {
+			return nil, fmt.Errorf("failed to update runtime secret defaults: %w", updateErr)
+		}
+		return updated, nil
+	}
+
+	return runtimeSecret, nil
 }
 
 // ensureKiteNamespace creates the kite namespace when local development starts from a clean cluster.
@@ -121,8 +233,8 @@ func ensureKiteNamespace(ctx context.Context, dynamicClient dynamic.Interface) e
 }
 
 // newRuntimeConfigMap creates the initial runtime ConfigMap for kite-api.
-// Generated secrets are persisted so image users do not need .env files.
-// The returned object is written to the kite namespace.
+// Public runtime defaults are persisted so image users do not need .env files.
+// The returned object is written to the kite namespace and intentionally excludes secrets.
 func newRuntimeConfigMap() *unstructured.Unstructured {
 	return &unstructured.Unstructured{
 		Object: map[string]any{
@@ -132,14 +244,14 @@ func newRuntimeConfigMap() *unstructured.Unstructured {
 				"name":      RuntimeConfigName,
 				"namespace": KiteNamespace,
 			},
-			"data": defaultRuntimeData(),
+			"data": stringMapToAny(defaultRuntimeData()),
 		},
 	}
 }
 
 // normalizedRuntimeData fills missing runtime config keys.
 // obj is the existing runtime ConfigMap.
-// The returned map contains every required key and whether anything changed.
+// The returned map contains every public key and whether anything changed.
 func normalizedRuntimeData(obj *unstructured.Unstructured) (map[string]string, bool) {
 	data, _, _ := unstructured.NestedStringMap(obj.Object, "data")
 	if data == nil {
@@ -159,12 +271,10 @@ func normalizedRuntimeData(obj *unstructured.Unstructured) (map[string]string, b
 }
 
 // defaultRuntimeData returns default config data for the first API startup.
-// JWTSecret and PasswordSalt are generated once.
 // Storage and image defaults are used by production k3s installs with Longhorn.
+// Secret material is stored separately in kite-runtime-secret.
 func defaultRuntimeData() map[string]string {
 	return map[string]string{
-		JWTSecretKey:             GenerateSecret("jwt"),
-		PasswordSaltKey:          GenerateSecret("salt"),
 		AccessTokenTTLMinutesKey: strconv.Itoa(DefaultAccessTokenTTLMinutes),
 		VMStorageClassNameKey:    DefaultVMStorageClassName,
 		GoldenImageNamespaceKey:  DefaultGoldenImageNamespace,
@@ -174,13 +284,15 @@ func defaultRuntimeData() map[string]string {
 	}
 }
 
-// configFromObject converts a runtime ConfigMap into Config.
-// obj is the unstructured ConfigMap returned by Kubernetes.
+// configFromResources converts runtime ConfigMap and Secret objects into Config.
+// configMap contains public settings such as accessTokenTTLMinutes.
+// runtimeSecret contains jwtSecret and passwordSalt values.
 // The returned Config is validated for required values.
-func configFromObject(obj *unstructured.Unstructured) (Config, error) {
-	data, _, _ := unstructured.NestedStringMap(obj.Object, "data")
-	jwtSecret := data[JWTSecretKey]
-	passwordSalt := data[PasswordSaltKey]
+func configFromResources(configMap *unstructured.Unstructured, runtimeSecret *unstructured.Unstructured) (Config, error) {
+	data, _, _ := unstructured.NestedStringMap(configMap.Object, "data")
+	secretData := runtimeSecretStringData(runtimeSecret)
+	jwtSecret := secretData[JWTSecretKey]
+	passwordSalt := secretData[PasswordSaltKey]
 	if jwtSecret == "" || passwordSalt == "" {
 		return Config{}, fmt.Errorf("runtime config is missing required fields")
 	}

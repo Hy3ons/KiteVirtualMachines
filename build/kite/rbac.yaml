@@ -1,7 +1,46 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: kite-control-plane-role
+  name: kite-api-role
+rules:
+  - apiGroups: ["hy3ons.github.io"]
+    resources: ["kiteusers", "kitevirtualmachines", "kitevirtualmachineoffers"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["hy3ons.github.io"]
+    resources: ["kiteusers/status", "kitevirtualmachines/status"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["hy3ons.github.io"]
+    resources: ["kitevirtualmachineoffers/status"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["namespaces", "configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: ["subresources.kubevirt.io"]
+    resources: ["virtualmachineinstances/console"]
+    verbs: ["get"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kite-api-binding
+subjects:
+  - kind: ServiceAccount
+    name: kite-api
+    namespace: kite
+roleRef:
+  kind: ClusterRole
+  name: kite-api-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kite-controller-role
 rules:
   - apiGroups: ["hy3ons.github.io"]
     resources: ["kiteusers", "kiteusers/status", "kitevirtualmachines", "kitevirtualmachines/status", "kitevirtualmachineoffers", "kitevirtualmachineoffers/status"]
@@ -24,9 +63,54 @@ rules:
   - apiGroups: ["subresources.kubevirt.io"]
     resources: ["virtualmachines/start", "virtualmachines/stop", "virtualmachines/restart"]
     verbs: ["update"]
-  - apiGroups: ["subresources.kubevirt.io"]
-    resources: ["virtualmachineinstances/console"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kite-controller-binding
+subjects:
+  - kind: ServiceAccount
+    name: kite-controller
+    namespace: kite
+roleRef:
+  kind: ClusterRole
+  name: kite-controller-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kite-gateway-role
+rules:
+  - apiGroups: ["hy3ons.github.io"]
+    resources: ["kitevirtualmachines"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets", "services"]
     verbs: ["get"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kite-gateway-binding
+subjects:
+  - kind: ServiceAccount
+    name: kite-gateway
+    namespace: kite
+roleRef:
+  kind: ClusterRole
+  name: kite-gateway-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kite-control-plane-role
+rules: []
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -67,7 +151,7 @@ subjects:
     name: cdi-sa
     namespace: cdi
   - kind: ServiceAccount
-    name: kite-control-plane
+    name: kite-controller
     namespace: kite
 roleRef:
   kind: Role

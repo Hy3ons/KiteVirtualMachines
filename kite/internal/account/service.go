@@ -114,8 +114,14 @@ func (s *Service) Authenticate(ctx context.Context, email string, password strin
 		return PublicUser{}, false, err
 	}
 
-	if !auth.VerifyPassword(password, s.passwordSalt, stringValue(spec, "password")) {
+	storedPassword := stringValue(spec, "password")
+	if !auth.VerifyPassword(password, s.passwordSalt, storedPassword) {
 		return PublicUser{}, false, nil
+	}
+	if auth.PasswordNeedsRehash(storedPassword) {
+		if err := s.rehashUserPassword(ctx, user, password); err != nil {
+			return PublicUser{}, false, err
+		}
 	}
 
 	return publicUserFromSpec(user.GetName(), spec), true, nil
@@ -229,6 +235,26 @@ func (s *Service) Delete(ctx context.Context, name string) error {
 	return s.userStore.Delete(ctx, name)
 }
 
+// rehashUserPassword rewrites a verified legacy password hash with the current bcrypt format.
+// ctx controls the Kubernetes update call.
+// user is the KiteUser object that authenticated successfully.
+// password is the verified plain text password received by Authenticate.
+// This function is used only after legacy hash verification succeeds.
+func (s *Service) rehashUserPassword(ctx context.Context, user *unstructured.Unstructured, password string) error {
+	record, err := recordFromObject(user)
+	if err != nil {
+		return err
+	}
+	passwordHash, err := auth.HashPassword(password, s.passwordSalt)
+	if err != nil {
+		return err
+	}
+	record.Spec.Password = passwordHash
+
+	_, err = s.userStore.Update(ctx, record)
+	return err
+}
+
 // deleteVirtualMachinesInNamespace deletes every KiteVirtualMachine CRD in one namespace.
 // ctx controls Kubernetes list and delete calls.
 // namespace is usually KiteUser spec.namespace.
@@ -336,13 +362,17 @@ func (s *Service) newSignUpRecord(ctx context.Context, req SignUpRequest) (store
 
 	name := kiteUserName(req.Name)
 	namespace := kiteUserNamespace(name, req.Namespace)
+	passwordHash, err := auth.HashPassword(req.Password, s.passwordSalt)
+	if err != nil {
+		return store.KiteUserRecord{}, err
+	}
 
 	return store.KiteUserRecord{
 		Name: name,
 		Spec: store.KiteUserSpec{
 			Username:     req.Username,
 			Email:        req.Email,
-			Password:     auth.HashPassword(req.Password, s.passwordSalt),
+			Password:     passwordHash,
 			Namespace:    namespace,
 			ProfileImage: defaultProfileImage,
 			AccessLevel:  accessLevel,
@@ -409,7 +439,11 @@ func (s *Service) applyUpdate(record *store.KiteUserRecord, req UpdateRequest) e
 		if s.passwordSalt == "" {
 			return invalid("password salt is not configured")
 		}
-		record.Spec.Password = auth.HashPassword(*req.Password, s.passwordSalt)
+		passwordHash, err := auth.HashPassword(*req.Password, s.passwordSalt)
+		if err != nil {
+			return err
+		}
+		record.Spec.Password = passwordHash
 	}
 	if req.Namespace != nil {
 		record.Spec.Namespace = strings.TrimSpace(*req.Namespace)

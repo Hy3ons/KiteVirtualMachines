@@ -530,7 +530,7 @@ Response `200`:
 }
 ```
 
-현재 API는 `kite/kite-runtime-config` ConfigMap의 `data.baseDomain`을 갱신한다. controller는 이 값을 보고 `kite/kite-platform` Ingress host를 갱신하고, VM별 Ingress는 `spec.domainPrefix + baseDomain` 조합으로 만든다. baseDomain이 비어 있으면 platform Ingress는 host 없이 `/api`와 `/` 경로만 라우팅하고, VM별 Ingress는 만들지 않는다.
+현재 API는 `kite/kite-runtime-config` ConfigMap의 `data.baseDomain`을 갱신한다. controller는 이 값을 보고 `kite/kite-platform` Ingress host를 갱신하고, VM별 Ingress는 `spec.domainPrefix + baseDomain` 조합으로 만든다. baseDomain이 비어 있으면 hostless/catch-all platform Ingress와 VM별 Ingress를 만들지 않는다.
 
 ### `POST /api/v1/admin/runtime-secrets/rotate`
 
@@ -563,7 +563,7 @@ Response `200`:
 }
 ```
 
-새 `jwtSecret`과 `passwordSalt`는 `kite/kite-runtime-config`에 저장되며, 실제 JWT 발급/검증과 password hash에는 다음 `kite-api` 프로세스 시작 시 적용된다.
+새 `jwtSecret`과 `passwordSalt`는 `kite/kite-runtime-secret`에 저장되며, 실제 JWT 발급/검증과 password hash에는 다음 `kite-api` 프로세스 시작 시 적용된다.
 
 ### `POST /api/v1/admin/cert`
 
@@ -594,4 +594,4 @@ Response `200`:
 }
 ```
 
-인증서 원문은 응답하지 않는다. API는 예전 수동 명령과 같은 위치인 `kube-system/global-tls-secret` Secret에 `kubernetes.io/tls` 타입으로 저장한다.
+인증서 원문은 응답하지 않는다. API는 `kite/global-tls-secret` Secret에 `kubernetes.io/tls` 타입으로 저장한다.

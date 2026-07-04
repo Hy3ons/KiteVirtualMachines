@@ -17,6 +17,22 @@ defaultVmImage=ubuntu-22.04
 
 The controller uses `vmStorageClassName` when rendering VM-owned DataVolumes.
 
+Runtime secrets are not stored in this ConfigMap. `kite-api` bootstraps
+`kite/kite-runtime-secret` for `jwtSecret` and `passwordSalt`, and migrates
+legacy ConfigMap secret values into that Secret on startup.
+
+## RBAC
+
+`build/kite` uses separate service accounts for each runtime component:
+
+- `kite-api`: creates and updates Kite CRDs, runtime config/secret, guest login
+  Secrets, and KubeVirt console subresources.
+- `kite-controller`: reconciles namespaces, quotas, network policies,
+  DataVolumes, KubeVirt VMs, Services, Ingresses, and VM-owned Secrets.
+- `kite-gateway`: reads runtime config, KiteVirtualMachine routes, VM SSH key
+  Secrets, and VM access Services. It does not create or delete cluster
+  resources.
+
 ## SSH Gateway
 
 `gateway.yaml` deploys `kite-gateway` and exposes it through the

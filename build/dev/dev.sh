@@ -38,6 +38,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PUSH_IMAGES_WAS_SET="${PUSH_IMAGES+x}"
+FRONTEND_VITE_BUILD_MODE_WAS_SET="${FRONTEND_VITE_BUILD_MODE+x}"
 FRONTEND_VITE_USE_MOCK_WAS_SET="${FRONTEND_VITE_USE_MOCK+x}"
 MINIKUBE_START_WAS_SET="${MINIKUBE_START+x}"
 K3S_IMPORT_IMAGES_WAS_SET="${K3S_IMPORT_IMAGES+x}"
@@ -194,6 +195,20 @@ configure_interactive_dev_options() {
   esac
 
   log "dev deploy choices: FRONTEND_VITE_USE_MOCK=${FRONTEND_VITE_USE_MOCK}, PUSH_IMAGES=${PUSH_IMAGES}, MINIKUBE_START=${MINIKUBE_START}, K3S_IMPORT_IMAGES=${K3S_IMPORT_IMAGES}, K3D_LOAD_IMAGES=${K3D_LOAD_IMAGES}, KIND_LOAD_IMAGES=${KIND_LOAD_IMAGES}"
+}
+
+normalize_frontend_mock_build_mode() {
+  if [[ "${FRONTEND_VITE_USE_MOCK}" != "true" ]]; then
+    return 0
+  fi
+  if [[ "${FRONTEND_VITE_BUILD_MODE}" == "debug" ]]; then
+    return 0
+  fi
+  if [[ -n "${FRONTEND_VITE_BUILD_MODE_WAS_SET}" ]]; then
+    echo "[kite-dev] FRONTEND_VITE_USE_MOCK=true requires FRONTEND_VITE_BUILD_MODE=debug, got ${FRONTEND_VITE_BUILD_MODE}" >&2
+    exit 1
+  fi
+  FRONTEND_VITE_BUILD_MODE="debug"
 }
 
 # minikube image build 전략을 고를 때 현재 profile의 driver를 확인한다.
@@ -648,6 +663,7 @@ main() {
   cluster="$(detect_cluster)"
   log "target cluster=${cluster}"
   configure_interactive_dev_options "${cluster}" all
+  normalize_frontend_mock_build_mode
 
   if [[ "${cluster}" == "minikube" ]]; then
     require_command minikube

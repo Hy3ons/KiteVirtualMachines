@@ -321,6 +321,9 @@ main() {
     kite_prompt_configure_bool KITE_DEV_DRY_RUN "${KITE_DEV_DRY_RUN_WAS_SET}" "실제 배포 없이 계획만 출력하는 dry-run으로 실행할까요?"
   fi
   configure_interactive_dev_options "${cluster}" "${component}"
+  if [[ "${component}" == "frontend" ]]; then
+    normalize_frontend_mock_build_mode
+  fi
   STEP_INDEX=0
   STEP_TOTAL="$(step_total_for_cluster "${cluster}")"
 

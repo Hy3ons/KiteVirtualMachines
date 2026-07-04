@@ -102,7 +102,11 @@ func TestAdminDeleteUserDeletesChildVirtualMachines(t *testing.T) {
 	dynamicClient := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
 		userTestGVR:               "KiteUserList",
 		userTestVirtualMachineGVR: "KiteVirtualMachineList",
-	}, newUserTestObject("target", "target", "target-ns", auth.AccessLevelUser), newVirtualMachineTestObject("target-vm", "target-ns"))
+	},
+		newUserTestObject("admin", "admin", "admin-ns", auth.AccessLevelAdmin),
+		newUserTestObject("target", "target", "target-ns", auth.AccessLevelUser),
+		newVirtualMachineTestObject("target-vm", "target-ns"),
+	)
 	r := newUserTestRouterWithClient(t, tokenService, dynamicClient)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/users/target", nil)

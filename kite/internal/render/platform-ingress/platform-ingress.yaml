@@ -14,9 +14,15 @@ metadata:
   {{ end }}
 
 spec:
+  {{ if .TLSSecretName }}
+  tls:
+    - hosts:
+        - {{ .Host }}
+      secretName: {{ .TLSSecretName }}
+  {{ end }}
   rules:
-    - {{ if .Host }}host: {{ .Host }}
-      {{ end }}http:
+    - host: {{ .Host }}
+      http:
         paths:
           - path: /api
             pathType: Prefix

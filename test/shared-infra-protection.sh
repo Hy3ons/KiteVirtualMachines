@@ -5,11 +5,13 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TEST_SHARED_INFRA_NAMESPACE="${TEST_SHARED_INFRA_NAMESPACE:-kite-protect-external}"
 TEST_EXTERNAL_VM_NAME="${TEST_EXTERNAL_VM_NAME:-external-vm}"
 TEST_EXTERNAL_PVC_NAME="${TEST_EXTERNAL_PVC_NAME:-external-longhorn-pvc}"
+TEST_KITE_NAMESPACE_EXTERNAL_PVC_NAME="${TEST_KITE_NAMESPACE_EXTERNAL_PVC_NAME:-external-kite-namespace-longhorn-pvc}"
 TEST_EXTERNAL_PVC_SIZE="${TEST_EXTERNAL_PVC_SIZE:-1Gi}"
 TEST_SHARED_INFRA_TIMEOUT="${TEST_SHARED_INFRA_TIMEOUT:-180s}"
 TEST_SHARED_INFRA_CLEANUP_TARGET="${TEST_SHARED_INFRA_CLEANUP_TARGET:-uninstall}"
 TEST_CLEANUP_EXTERNAL="${TEST_CLEANUP_EXTERNAL:-true}"
 EXTERNAL_PV_NAME=""
+KITE_NAMESPACE_EXTERNAL_PV_NAME=""
 
 log() {
   printf '[kite-shared-infra-test] %s\n' "$*"
@@ -57,6 +59,28 @@ EOF
   EXTERNAL_PV_NAME="$(kubectl -n "${TEST_SHARED_INFRA_NAMESPACE}" get "pvc/${TEST_EXTERNAL_PVC_NAME}" -o jsonpath='{.spec.volumeName}')"
   if [[ -z "${EXTERNAL_PV_NAME}" ]]; then
     warn "external PVC did not bind to a PV"
+    exit 1
+  fi
+
+  log "creating external Longhorn PVC ${TEST_KITE_NAMESPACE_EXTERNAL_PVC_NAME} in namespace kite"
+  kubectl create namespace kite --dry-run=client -o yaml | kubectl apply -f -
+  kubectl -n kite apply -f - <<EOF
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ${TEST_KITE_NAMESPACE_EXTERNAL_PVC_NAME}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: ${TEST_EXTERNAL_PVC_SIZE}
+EOF
+  kubectl -n kite wait --for=jsonpath='{.status.phase}'=Bound "pvc/${TEST_KITE_NAMESPACE_EXTERNAL_PVC_NAME}" --timeout="${TEST_SHARED_INFRA_TIMEOUT}"
+  KITE_NAMESPACE_EXTERNAL_PV_NAME="$(kubectl -n kite get "pvc/${TEST_KITE_NAMESPACE_EXTERNAL_PVC_NAME}" -o jsonpath='{.spec.volumeName}')"
+  if [[ -z "${KITE_NAMESPACE_EXTERNAL_PV_NAME}" ]]; then
+    warn "external kite namespace PVC did not bind to a PV"
     exit 1
   fi
 
@@ -128,6 +152,8 @@ verify_external_resources_survived() {
   kubectl -n "${TEST_SHARED_INFRA_NAMESPACE}" get "virtualmachines.kubevirt.io/${TEST_EXTERNAL_VM_NAME}" >/dev/null
   kubectl -n "${TEST_SHARED_INFRA_NAMESPACE}" get "pvc/${TEST_EXTERNAL_PVC_NAME}" >/dev/null
   kubectl get "pv/${EXTERNAL_PV_NAME}" >/dev/null
+  kubectl -n kite get "pvc/${TEST_KITE_NAMESPACE_EXTERNAL_PVC_NAME}" >/dev/null
+  kubectl get "pv/${KITE_NAMESPACE_EXTERNAL_PV_NAME}" >/dev/null
   kubectl get namespace longhorn-system >/dev/null
   kubectl get namespace kubevirt >/dev/null
   kubectl get namespace cdi >/dev/null
@@ -142,6 +168,8 @@ cleanup_external_resources() {
   fi
   log "deleting external namespace ${TEST_SHARED_INFRA_NAMESPACE}"
   kubectl delete namespace "${TEST_SHARED_INFRA_NAMESPACE}" --ignore-not-found=true --wait=false
+  log "deleting external kite namespace PVC ${TEST_KITE_NAMESPACE_EXTERNAL_PVC_NAME}"
+  kubectl -n kite delete pvc "${TEST_KITE_NAMESPACE_EXTERNAL_PVC_NAME}" --ignore-not-found=true --wait=false
 }
 
 main() {

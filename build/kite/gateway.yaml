@@ -15,7 +15,7 @@ spec:
       labels:
         app: kite-gateway
     spec:
-      serviceAccountName: kite-control-plane
+      serviceAccountName: kite-gateway
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001

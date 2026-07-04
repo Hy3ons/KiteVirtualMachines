@@ -65,7 +65,7 @@
 | CRD 적용 | `KiteUser`, `KiteVirtualMachine`, `KiteVirtualMachineOffer` CRD가 생성되고 read/write 가능한지 확인한다. |
 | CRD scope | `KiteUser`는 cluster-scoped, VM과 offer는 의도한 namespace scope로 동작하는지 확인한다. |
 | CRD schema | spec/status 필드가 API와 controller가 쓰는 값들을 거부하지 않고, 잘못된 타입은 거부하는지 확인한다. |
-| RBAC | API/controller ServiceAccount가 필요한 CRD, Secret, Service, DataVolume, KubeVirt 리소스만 다룰 수 있는지 확인한다. |
+| RBAC | API/controller/gateway ServiceAccount가 분리되어 있고, gateway는 route 조회와 SSH proxy에 필요한 읽기 권한만 갖는지 확인한다. |
 | Runtime ConfigMap | base domain, TLS secret, gateway 관련 설정이 pod env로 반영되는지 확인한다. |
 | Service | API/frontend/gateway Service가 targetPort와 type을 올바르게 노출하는지 확인한다. |
 | Deployment rollout | 네 workload가 새 이미지 태그로 rollout되고 CrashLoop 없이 Ready가 되는지 확인한다. |

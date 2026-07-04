@@ -19,10 +19,12 @@ metadata:
     # traefik.ingress.kubernetes.io/router.middlewares: cloud-admin-vm-traffic-interceptor@kubernetescrd
 
 spec:
+  {{ if .TLSSecretName }}
   tls:
     - hosts:
         - {{ .DomainName }}
-      # secretName: global-tls-secret # SSL 인증서가 담긴 Secret
+      secretName: {{ .TLSSecretName }}
+  {{ end }}
 
   rules:
     - host: {{ .DomainName }}

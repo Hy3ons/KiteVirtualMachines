@@ -412,7 +412,11 @@ longhorn_pv_is_kite_owned() {
   local pvc="$2"
 
   [[ -z "${namespace}" || -z "${pvc}" ]] && return 1
-  [[ "${namespace}" == "${KITE_NAMESPACE}" ]] && return 0
+  if [[ "${namespace}" == "${KITE_NAMESPACE}" ]]; then
+    pvc_managed_by_kite "${namespace}" "${pvc}" && return 0
+    [[ "${pvc}" == "ubuntu-22.04" ]] && return 0
+    return 1
+  fi
   namespace_managed_by_kite "${namespace}" && return 0
   pvc_managed_by_kite "${namespace}" "${pvc}" && return 0
   return 1
@@ -562,6 +566,8 @@ main() {
   log "deleting remaining Kite namespace and cluster-scoped resources"
   kubectl delete namespace "${KITE_NAMESPACE}" --ignore-not-found=true
   kubectl delete crd kiteusers.hy3ons.github.io kitevirtualmachines.hy3ons.github.io --ignore-not-found=true
+  kubectl delete clusterrole kite-api-role kite-controller-role kite-gateway-role --ignore-not-found=true
+  kubectl delete clusterrolebinding kite-api-binding kite-controller-binding kite-gateway-binding --ignore-not-found=true
   kubectl delete clusterrole kite-control-plane-role --ignore-not-found=true
   kubectl delete clusterrolebinding kite-control-plane-binding --ignore-not-found=true
 

@@ -15,7 +15,7 @@ spec:
       labels:
         app: kite-api
     spec:
-      serviceAccountName: kite-control-plane
+      serviceAccountName: kite-api
       containers:
         - name: kite-api
           image: ghcr.io/hy3ons/kite-api:latest

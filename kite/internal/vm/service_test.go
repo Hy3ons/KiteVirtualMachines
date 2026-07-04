@@ -147,7 +147,7 @@ func TestServiceUpdateRejectsSSHPasswordChange(t *testing.T) {
 	ctx := context.Background()
 	dynamicClient := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
 		kiteVirtualMachineTestGVR: "KiteVirtualMachineList",
-	}, newTestKiteVirtualMachine("tenant-a", "vm-a", "asdf"))
+	}, newTestKiteVirtualMachine("tenant-a", "vm-a", "asdf", "app-a"))
 
 	nextPassword := "new password"
 	service := NewService(dynamicClient, "vm-password-salt")
@@ -170,7 +170,7 @@ func TestServiceCreateRejectsDuplicateSSHID(t *testing.T) {
 	ctx := context.Background()
 	dynamicClient := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
 		kiteVirtualMachineTestGVR: "KiteVirtualMachineList",
-	}, newTestKiteVirtualMachine("tenant-a", "vm-a", "asdf"))
+	}, newTestKiteVirtualMachine("tenant-a", "vm-a", "asdf", "app-a"))
 
 	service := NewService(dynamicClient, "vm-password-salt")
 	_, err := service.Create(ctx, CreateRequest{
@@ -192,7 +192,85 @@ func TestServiceCreateRejectsDuplicateSSHID(t *testing.T) {
 	}
 }
 
-func newTestKiteVirtualMachine(namespace string, name string, sshID string) *unstructured.Unstructured {
+func TestServiceCreateRejectsDuplicateDomainPrefixAcrossNamespaces(t *testing.T) {
+	ctx := context.Background()
+	dynamicClient := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
+		kiteVirtualMachineTestGVR: "KiteVirtualMachineList",
+	}, newTestKiteVirtualMachine("tenant-a", "vm-a", "ssh-a", "shared-app"))
+
+	service := NewService(dynamicClient, "vm-password-salt")
+	_, err := service.Create(ctx, CreateRequest{
+		Name:         "vm-b",
+		Namespace:    "tenant-b",
+		Disk:         "20Gi",
+		DomainPrefix: "shared-app",
+		SSHID:        "ssh-b",
+		SSHPassword:  "pass word_123!",
+	})
+	if err == nil {
+		t.Fatal("expected duplicate domainPrefix to be rejected")
+	}
+	requestErr, ok := err.(RequestError)
+	if !ok {
+		t.Fatalf("expected RequestError, got %T: %v", err, err)
+	}
+	if requestErr.Kind != ErrorKindConflict {
+		t.Fatalf("expected conflict error, got %s: %s", requestErr.Kind, requestErr.Message)
+	}
+}
+
+func TestServiceUpdateRejectsReservedDomainPrefix(t *testing.T) {
+	ctx := context.Background()
+	dynamicClient := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
+		kiteVirtualMachineTestGVR: "KiteVirtualMachineList",
+	}, newTestKiteVirtualMachine("tenant-a", "vm-a", "ssh-a", "app-a"))
+
+	nextDomainPrefix := "api"
+	service := NewService(dynamicClient, "vm-password-salt")
+	_, err := service.Update(ctx, "tenant-a", "vm-a", UpdateRequest{
+		DomainPrefix: &nextDomainPrefix,
+	})
+	if err == nil {
+		t.Fatal("expected reserved domainPrefix to be rejected")
+	}
+	requestErr, ok := err.(RequestError)
+	if !ok {
+		t.Fatalf("expected RequestError, got %T: %v", err, err)
+	}
+	if requestErr.Kind != ErrorKindInvalid {
+		t.Fatalf("expected invalid error, got %s: %s", requestErr.Kind, requestErr.Message)
+	}
+}
+
+func TestCreateRecordRejectsInvalidDomainPrefix(t *testing.T) {
+	tests := []struct {
+		name         string
+		domainPrefix string
+	}{
+		{name: "uppercase", domainPrefix: "BadApp"},
+		{name: "underscore", domainPrefix: "bad_app"},
+		{name: "leading hyphen", domainPrefix: "-bad"},
+		{name: "trailing hyphen", domainPrefix: "bad-"},
+		{name: "reserved", domainPrefix: "www"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := createRecord(CreateRequest{
+				Namespace:    "tenant-a",
+				Disk:         "20Gi",
+				DomainPrefix: tt.domainPrefix,
+				SSHID:        "ssh-a",
+				SSHPassword:  "pass word_123!",
+			})
+			if err == nil {
+				t.Fatalf("expected invalid domainPrefix %q to be rejected", tt.domainPrefix)
+			}
+		})
+	}
+}
+
+func newTestKiteVirtualMachine(namespace string, name string, sshID string, domainPrefix string) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
 		Object: map[string]any{
 			"apiVersion": "hy3ons.github.io/v1",
@@ -203,7 +281,8 @@ func newTestKiteVirtualMachine(namespace string, name string, sshID string) *uns
 			},
 			"spec": map[string]any{
 				"sshId":           sshID,
-				"sshPasswordHash": auth.HashPassword("existing-password", "vm-password-salt"),
+				"domainPrefix":    domainPrefix,
+				"sshPasswordHash": auth.LegacyHashPassword("existing-password", "vm-password-salt"),
 			},
 		},
 	}
