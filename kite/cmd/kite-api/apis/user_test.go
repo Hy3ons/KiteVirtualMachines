@@ -166,6 +166,23 @@ func TestSignUpCreatesLaterUserAsReadOnly(t *testing.T) {
 	}
 }
 
+func TestSignUpRejectsDuplicateEmail(t *testing.T) {
+	r := newUserTestRouter(t, newTestTokenService(t))
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/signup",
+		strings.NewReader(`{"username":"other","email":"test@gmail.com","password":"secret"}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusConflict, rec.Code, rec.Body.String())
+	}
+}
+
 func newUserTestRouter(t *testing.T, tokenService *auth.TokenService) http.Handler {
 	t.Helper()
 	gin.SetMode(gin.TestMode)

@@ -199,6 +199,9 @@ func (s *Service) Update(ctx context.Context, name string, req UpdateRequest) (P
 		return PublicUser{}, err
 	}
 
+	if err := s.rejectDuplicateEmailUpdate(ctx, record.Name, req.Email); err != nil {
+		return PublicUser{}, err
+	}
 	if err := s.applyUpdate(&record, req); err != nil {
 		return PublicUser{}, err
 	}
@@ -281,6 +284,22 @@ func (s *Service) deleteVirtualMachinesInNamespace(ctx context.Context, namespac
 	return nil
 }
 
+func (s *Service) rejectDuplicateEmailUpdate(ctx context.Context, currentName string, email *string) error {
+	if email == nil || emailLookupKey(*email) == "" {
+		return nil
+	}
+
+	existingUser, found, err := s.FindByEmail(ctx, *email)
+	if err != nil || !found {
+		return err
+	}
+	if existingUser.GetName() != currentName {
+		return conflict("email already exists")
+	}
+
+	return nil
+}
+
 // FindByUsername searches KiteUser CRDs by spec.username.
 // ctx controls the Kubernetes list call.
 // username is matched exactly after trimming surrounding whitespace.
@@ -309,10 +328,10 @@ func (s *Service) FindByUsername(ctx context.Context, username string) (*unstruc
 
 // FindByEmail searches KiteUser CRDs by spec.email.
 // ctx controls the Kubernetes list call.
-// email is matched exactly after trimming surrounding whitespace.
+// email is matched case-insensitively after trimming surrounding whitespace.
 // The returned boolean is false when no matching user exists.
 func (s *Service) FindByEmail(ctx context.Context, email string) (*unstructured.Unstructured, bool, error) {
-	email = strings.TrimSpace(email)
+	email = emailLookupKey(email)
 	list, err := s.userStore.List(ctx)
 	if err != nil {
 		return nil, false, err
@@ -325,7 +344,7 @@ func (s *Service) FindByEmail(ctx context.Context, email string) (*unstructured.
 			continue
 		}
 
-		if stringValue(spec, "email") == email {
+		if emailLookupKey(stringValue(spec, "email")) == email {
 			return item, true, nil
 		}
 	}
@@ -353,6 +372,11 @@ func (s *Service) newSignUpRecord(ctx context.Context, req SignUpRequest) (store
 		return store.KiteUserRecord{}, err
 	} else if found {
 		return store.KiteUserRecord{}, conflict("username already exists")
+	}
+	if _, found, err := s.FindByEmail(ctx, req.Email); err != nil {
+		return store.KiteUserRecord{}, err
+	} else if found {
+		return store.KiteUserRecord{}, conflict("email already exists")
 	}
 
 	accessLevel, err := s.accessLevelForNewUser(ctx)
@@ -535,6 +559,10 @@ func specFromObject(obj *unstructured.Unstructured) (map[string]any, error) {
 func stringValue(data map[string]any, key string) string {
 	value, _ := data[key].(string)
 	return value
+}
+
+func emailLookupKey(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
 }
 
 // intValue reads one integer-like field from an unstructured map.

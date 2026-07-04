@@ -51,6 +51,50 @@ func TestAuthenticateMigratesLegacyPasswordHashToBcrypt(t *testing.T) {
 	}
 }
 
+func TestSignUpRejectsDuplicateEmail(t *testing.T) {
+	ctx := context.Background()
+	passwordSalt := "account-test-salt"
+	dynamicClient := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
+		accountTestUserGVR: "KiteUserList",
+	}, newAccountTestUser("alice", "shared@example.com", auth.LegacyHashPassword("secret-password", passwordSalt)))
+
+	service := NewService(dynamicClient, passwordSalt)
+	_, err := service.SignUp(ctx, SignUpRequest{
+		Username: "bob",
+		Email:    "SHARED@example.com",
+		Password: "secret-password",
+	})
+
+	if err == nil {
+		t.Fatal("expected duplicate email to be rejected")
+	}
+	if kind, ok := RequestErrorKind(err); !ok || kind != ErrorKindConflict {
+		t.Fatalf("expected conflict error, got %v", err)
+	}
+}
+
+func TestUpdateRejectsDuplicateEmail(t *testing.T) {
+	ctx := context.Background()
+	passwordSalt := "account-test-salt"
+	dynamicClient := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
+		accountTestUserGVR: "KiteUserList",
+	},
+		newAccountTestUser("alice", "alice@example.com", auth.LegacyHashPassword("secret-password", passwordSalt)),
+		newAccountTestUser("bob", "bob@example.com", auth.LegacyHashPassword("secret-password", passwordSalt)),
+	)
+
+	service := NewService(dynamicClient, passwordSalt)
+	duplicateEmail := "ALICE@example.com"
+	_, err := service.Update(ctx, "bob", UpdateRequest{Email: &duplicateEmail})
+
+	if err == nil {
+		t.Fatal("expected duplicate email update to be rejected")
+	}
+	if kind, ok := RequestErrorKind(err); !ok || kind != ErrorKindConflict {
+		t.Fatalf("expected conflict error, got %v", err)
+	}
+}
+
 func newAccountTestUser(name string, email string, passwordHash string) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
 		Object: map[string]any{

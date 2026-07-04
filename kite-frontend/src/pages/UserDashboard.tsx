@@ -203,7 +203,6 @@ export const UserDashboard: React.FC = () => {
         <UserDashboardSummary
           username={username}
           namespace={namespace}
-          profileImage={profileImage}
           accessLevel={safeAccessLevel}
           vms={vms}
           quotaLimit={LEVEL_1_VM_QUOTA}

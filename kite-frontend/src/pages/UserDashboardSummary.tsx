@@ -1,6 +1,6 @@
 import React from 'react';
-import { Avatar, Card, Col, Progress, Row, Space, Statistic, Typography } from 'antd';
-import { CloudServerOutlined, UserOutlined } from '@ant-design/icons';
+import { Card, Col, Progress, Row, Space, Statistic, Typography } from 'antd';
+import { CloudServerOutlined } from '@ant-design/icons';
 import type { DashboardVm } from './UserDashboardTypes';
 
 const { Title, Text } = Typography;
@@ -8,7 +8,6 @@ const { Title, Text } = Typography;
 type UserDashboardSummaryProps = {
   readonly username: string | null;
   readonly namespace: string | null;
-  readonly profileImage: string | null;
   readonly accessLevel: number;
   readonly vms: readonly DashboardVm[];
   readonly quotaLimit: number;
@@ -18,7 +17,6 @@ type UserDashboardSummaryProps = {
 export const UserDashboardSummary: React.FC<UserDashboardSummaryProps> = ({
   username,
   namespace,
-  profileImage,
   accessLevel,
   vms,
   quotaLimit,
@@ -36,12 +34,16 @@ export const UserDashboardSummary: React.FC<UserDashboardSummaryProps> = ({
           <Card hoverable className="dashboard-profile-card">
             <div className="dashboard-profile">
               <div className="dashboard-profile-main">
-                <Avatar src={profileImage || '/default_profile.png'} icon={<UserOutlined />} size={48} />
                 <div className="dashboard-profile-copy">
                   <Title level={4} className="dashboard-card-title">
-                    {username || 'debug'}님의 프로필
+                    {username || 'debug'}님 안녕하세요!
                   </Title>
-                  <Text type="secondary">{accessDescription}</Text>
+                  <Text className="dashboard-profile-lead">
+                    이곳에서 VM 상태와 접속 정보를 확인하고, 권한에 따라 생성과 제어를 진행할 수 있습니다.
+                  </Text>
+                  <Text type="secondary" className="dashboard-profile-note">
+                    {accessDescription}
+                  </Text>
                 </div>
               </div>
               <Space size="large" wrap className="dashboard-profile-meta">

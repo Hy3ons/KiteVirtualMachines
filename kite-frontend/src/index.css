@@ -632,7 +632,20 @@ html, body {
 }
 
 .dashboard-profile-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   min-width: 0;
+}
+
+.dashboard-profile-lead {
+  color: #594E46;
+  line-height: 1.55;
+}
+
+.dashboard-profile-note {
+  display: block;
+  line-height: 1.55;
 }
 
 .dashboard-card-title,

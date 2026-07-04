@@ -174,6 +174,7 @@ Kite가 관리하는 Kubernetes API는 `build/kite/crds.yaml`에 정의되어 �
 ├── kite-frontend/         # web frontend
 ├── test/                  # release E2E gates for k3s, minikube, and generic k8s
 ├── ghcr-install.sh        # GHCR image pull based install entrypoint
+├── ghcr-update.sh         # GHCR image pull based update entrypoint
 ├── build-install.sh       # local build based development install entrypoint
 ├── uninstall.sh           # operator-facing Kite uninstall entrypoint
 └── build-clear.sh         # developer-facing build/deploy cleanup entrypoint
@@ -187,9 +188,9 @@ Kite가 관리하는 Kubernetes API는 `build/kite/crds.yaml`에 정의되어 �
 - `build/kite-storage/longhorn-cleanup`: optional cleanup DaemonSet for Kite-owned Longhorn host data.
 - `build/examples`: example custom resources for manual CRD testing.
 
-## Install Modes
+## Install And Update Modes
 
-Kite has two top-level install entrypoints:
+Kite has two top-level install entrypoints and one GHCR update entrypoint:
 
 - `./ghcr-install.sh`: pull-based install. It installs or waits for Longhorn,
   KubeVirt, CDI, applies the Ubuntu golden image, and deploys Kite manifests
@@ -198,6 +199,9 @@ Kite has two top-level install entrypoints:
   the API, controller, gateway, and frontend images from this checkout, then
   imports or loads those images into the selected local cluster before deploying
   Kite.
+- `./ghcr-update.sh`: pull-based update. It preserves existing Kite users, VMs,
+  PVCs, runtime config, and shared infrastructure while reapplying Kite manifests
+  and rolling Deployments to a selected GHCR image tag.
 
 Both install modes deploy `kite-gateway` as the SSH entrypoint. When the target
 host is Linux with systemd OpenSSH and the gateway external port is `22`, the
@@ -241,6 +245,28 @@ curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/ghc
 The remote installer downloads the selected GitHub archive into a temporary
 directory and runs `build/deploy/scripts/install-all.sh`. It uses GHCR images
 and does not build containers locally.
+
+Update an existing Kite install without cloning this repository:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/ghcr-update.sh | bash
+```
+
+Update from a specific repository ref, or pin runtime images to a specific
+published image tag:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/ghcr-update.sh \
+  | KITE_GHCR_UPDATE_REF=main KITE_UPDATE_TAG=sha-<commit> bash
+```
+
+The remote updater downloads the selected GitHub archive into a temporary
+directory and runs `build/deploy/scripts/update-ghcr.sh`. It does not remove
+Kite users, VMs, PVCs, Longhorn, KubeVirt, CDI, or host sshd settings. It
+applies CRDs/RBAC/runtime manifests, preserves an existing
+`kite-runtime-config`, restores the current gateway host sshd fallback address
+after manifest apply, changes Deployment images, waits for rollout, and rolls
+back to the previous images if rollout or smoke checks fail.
 
 Uninstall Kite resources without cloning this repository:
 
@@ -367,6 +393,44 @@ More details are in `build/deploy/README.md`.
 The same host SSHD handoff variables are supported by `./ghcr-install.sh`,
 `./uninstall.sh`, and `build/deploy/scripts/uninstall-kite.sh`.
 
+## GHCR Update
+
+Use `./ghcr-update.sh` after Kite is already installed and the cluster should
+move to a newer GHCR image tag.
+
+```sh
+./ghcr-update.sh
+```
+
+For unattended updates:
+
+```sh
+KITE_ASSUME_DEFAULTS=true KITE_UPDATE_TAG=latest ./ghcr-update.sh
+```
+
+For a pinned production rollout or rollback:
+
+```sh
+KITE_ASSUME_DEFAULTS=true KITE_UPDATE_TAG=sha-<commit> ./ghcr-update.sh
+```
+
+Useful update variables:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `KITE_UPDATE_TAG` | `latest` | GHCR tag applied to all selected Kite images. |
+| `KITE_UPDATE_COMPONENTS` | `api,controller,gateway,frontend` | Comma-separated component list. |
+| `KITE_UPDATE_APPLY_CRDS` | `true` | Reapply Kite CRD definitions before rollout. |
+| `KITE_UPDATE_APPLY_RBAC` | `true` | Reapply ServiceAccount and RBAC manifests. |
+| `KITE_UPDATE_HEALTH_CHECK` | `true` | Port-forward API/frontend services and smoke check them. |
+| `KITE_UPDATE_RUN_VERIFY` | `false` | Also run the heavier deploy verify script. |
+| `KITE_UPDATE_ROLLBACK_ON_FAIL` | `true` | Restore previous Deployment images when rollout/smoke fails. |
+| `KITE_UPDATE_DRY_RUN` | `false` | Print the plan and commands without changing the cluster. |
+
+The update script is intentionally not an infrastructure upgrader. Longhorn,
+KubeVirt, CDI, golden image data, user namespaces, VM resources, and PVCs stay
+outside the default update scope.
+
 ## Container Images
 
 Production images are published to GHCR when commits land on `main`.
@@ -385,9 +449,10 @@ The workflow publishes these tags:
 - `production`
 - `sha-<commit>`
 
-The workflow logs in with the `GHCR_TOKEN` GitHub secret. `./ghcr-install.sh` uses
-the GHCR images by default, while `./build-install.sh` builds images locally and imports
-or loads them into the selected development cluster.
+The workflow logs in with the `GHCR_TOKEN` GitHub secret. `./ghcr-install.sh`
+and `./ghcr-update.sh` use the GHCR images by default, while
+`./build-install.sh` builds images locally and imports or loads them into the
+selected development cluster.
 
 Before production publishing, `Test GHCR Image Builds` runs on `stage` pushes
 and pull requests. It uses the same image matrix, Dockerfiles, and build args as
