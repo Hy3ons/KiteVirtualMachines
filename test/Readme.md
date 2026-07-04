@@ -409,6 +409,11 @@ Frontend tests remain mandatory for frontend behavior near the changed UI.
 `test/all-test-*.sh` is mandatory for release confidence because it proves the
 whole system through Kubernetes.
 
+`test/shared-infra-protection.sh` is mandatory before promoting cleanup changes.
+It creates an external KubeVirt VM and Longhorn PVC, runs Kite cleanup with
+dangerous Longhorn flags enabled, and then proves the external infrastructure is
+still present.
+
 No single layer replaces the others.
 
 ## Current Release Gate Commands
@@ -417,6 +422,7 @@ k3s:
 
 ```sh
 ./test/all-test-k3s.sh
+./test/shared-infra-protection.sh
 ```
 
 minikube:

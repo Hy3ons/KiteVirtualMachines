@@ -294,7 +294,10 @@
 | Longhorn data skip | Longhorn PV가 남아 있으면 host data cleanup을 건너뛰고 이유를 출력하는지 확인한다. |
 | Longhorn data delete | 명시 확인과 PV 없음 조건에서 cleanup DaemonSet이 생성/완료/삭제되는지 확인한다. |
 | Longhorn disk entry 제거 | Kite 전용 disk entry만 제거하고 공유 기본 disk를 통째로 삭제하지 않는지 확인한다. |
+| Longhorn ownership marker | Kite installer가 새로 설치한 Longhorn에만 ownership marker를 붙이고, 기존 Longhorn에는 marker를 만들지 않는지 확인한다. |
 | Longhorn uninstall | `DELETE_LONGHORN=true`와 force 조합별로 Longhorn namespace/CR finalizer 처리가 기대대로 동작하는지 확인한다. |
+| 공유 Longhorn 보존 | 외부 Longhorn PVC/PV가 있으면 `DELETE_LONGHORN_FORCE=true`여도 Longhorn namespace, CRD, webhook, PV/PVC가 보존되는지 확인한다. |
+| 공유 KubeVirt 보존 | 외부 KubeVirt VM이 있으면 `uninstall.sh`/`build-clear.sh` 후에도 KubeVirt namespace, CRD, VM이 보존되는지 확인한다. |
 | Host sshd restore | gateway 삭제 후 host sshd가 22번으로 돌아오고 restore worker 실패가 숨겨지지 않는지 확인한다. |
 | Idempotent rerun | 이미 삭제된 상태에서 `uninstall.sh`/`build-clear.sh`를 다시 실행해도 성공하거나 안전하게 skip하는지 확인한다. |
 | Remote cleanup | curl pipe `uninstall.sh`가 git checkout 없이 같은 cleanup 정책을 수행하는지 확인한다. |

@@ -79,8 +79,8 @@ path. Inside this directory, `build/deploy/scripts/clean.sh` is the bootstrap
 entrypoint and `build/deploy/scripts/uninstall-kite.sh` is the implementation.
 `KITE_UNINSTALL_PRESET=safe` keeps dangerous deletion off by default.
 `KITE_UNINSTALL_PRESET=full` enables golden image, Kite Longhorn host data, and
-Longhorn uninstall choices, while `DELETE_LONGHORN_FORCE` still defaults to
-`false`.
+Longhorn uninstall choices, while shared infrastructure protection still applies.
+`DELETE_LONGHORN_FORCE` never overrides non-Kite Longhorn PVC/PV protection.
 
 Run the same cleanup without git or a repository clone:
 
@@ -104,12 +104,14 @@ Longhorn removal is opt-in because it deletes VM disk infrastructure:
 DELETE_LONGHORN=true build/deploy/scripts/uninstall-kite.sh
 ```
 
-`DELETE_LONGHORN=true` uninstalls Longhorn only when no Longhorn PV remains. If
-another workload is still using Longhorn, the script skips Longhorn uninstall.
+`DELETE_LONGHORN=true` uninstalls Longhorn only when `longhorn-system` is marked
+as Kite-installed and no non-Kite Longhorn PV remains. If Longhorn existed before
+Kite, or another workload is still using Longhorn, the script skips Longhorn
+uninstall.
 
 To remove Kite-owned host data under `/mnt/kite-longhorn`, use the extra
 confirmation flag. This can be used without uninstalling Longhorn, but the
-script skips data deletion while Longhorn PVs still exist.
+script skips data deletion while non-Kite Longhorn PVs still exist.
 
 ```sh
 DELETE_LONGHORN_DATA=true DELETE_LONGHORN_DATA_CONFIRM=true build/deploy/scripts/uninstall-kite.sh
