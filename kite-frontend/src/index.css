@@ -1176,6 +1176,20 @@ html, body {
   }
 }
 
+@media (max-width: 900px) {
+  .global-header-session .ant-typography {
+    max-width: min(18vw, 140px);
+  }
+
+  .global-header-session .ant-btn-text {
+    padding-inline: 8px;
+  }
+
+  .global-header-session .ant-btn-text .ant-btn-icon + span {
+    display: none;
+  }
+}
+
 @media (max-width: 640px) {
   .app-main,
   .app-main--wide,
