@@ -261,6 +261,9 @@ main() {
 
   log "applying Kite manifests"
   "${ROOT_DIR}/build/deploy/scripts/ensure-gateway-host-key-secret.sh"
+  if kubectl -n "${KITE_NAMESPACE}" get service kite-gateway >/dev/null 2>&1; then
+    configure_gateway_service_exposure
+  fi
   # build/kite kustomization에는 API/controller/gateway/frontend 런타임 리소스가 모여 있다.
   kubectl apply -k "${ROOT_DIR}/build/kite"
   configure_gateway_service_exposure

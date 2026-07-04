@@ -298,6 +298,9 @@ main() {
   run_step "${APPLY_GOLDEN_IMAGE}" "applying Ubuntu golden image" kubectl apply -f "${ROOT_DIR}/build/kite-storage/golden-images"
   run_step "${APPLY_GOLDEN_IMAGE}" "waiting for Ubuntu golden image" "${ROOT_DIR}/build/deploy/scripts/wait-golden-image.sh" ubuntu-22.04
 
+  if [[ "${DEPLOY_KITE}" == "true" ]] && kubectl -n kite get service kite-gateway >/dev/null 2>&1; then
+    configure_gateway_service_exposure
+  fi
   run_step "${DEPLOY_KITE}" "building local Kite images and deploying Kite" "${ROOT_DIR}/build/dev/dev.sh"
   run_step "${DEPLOY_KITE}" "configuring gateway Service exposure" configure_gateway_service_exposure
   run_step "${DEPLOY_KITE}" "configuring gateway host sshd fallback port" patch_gateway_host_sshd_address
