@@ -231,6 +231,12 @@ The HTTP hostname prefix used by the test VM. The VM create API requires
 `domainPrefix`, so the E2E script sends this field explicitly instead of
 depending on an API default. Default: the same value as `TEST_VM_NAME`.
 
+`TEST_VM_DISK`
+
+The root disk size requested for the test VM. Default: `20Gi`. Use a smaller
+value, such as `8Gi`, on small single-node Longhorn test servers where CDI clone
+creates temporary PVCs and Longhorn must keep its reserved free-space threshold.
+
 `TEST_DRY_RUN`
 
 When `true`, prints the high-level commands without building, deploying, or
