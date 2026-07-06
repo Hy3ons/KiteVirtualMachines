@@ -219,6 +219,12 @@ inspect a failed cluster state.
 How long the E2E gate waits for the VM to reach `Running`. Default: `20m`.
 Use a larger value for slow storage or first-time image imports.
 
+`TEST_VM_DOMAIN_PREFIX`
+
+The HTTP hostname prefix used by the test VM. The VM create API requires
+`domainPrefix`, so the E2E script sends this field explicitly instead of
+depending on an API default. Default: the same value as `TEST_VM_NAME`.
+
 `TEST_DRY_RUN`
 
 When `true`, prints the high-level commands without building, deploying, or

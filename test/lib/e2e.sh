@@ -22,6 +22,7 @@ TEST_USERNAME_WAS_SET="${TEST_USERNAME+x}"
 TEST_EMAIL_WAS_SET="${TEST_EMAIL+x}"
 TEST_PASSWORD_WAS_SET="${TEST_PASSWORD+x}"
 TEST_VM_NAME_WAS_SET="${TEST_VM_NAME+x}"
+TEST_VM_DOMAIN_PREFIX_WAS_SET="${TEST_VM_DOMAIN_PREFIX+x}"
 TEST_VM_SSH_ID_WAS_SET="${TEST_VM_SSH_ID+x}"
 TEST_VM_SSH_PASSWORD_WAS_SET="${TEST_VM_SSH_PASSWORD+x}"
 K3S_CTR_CMD_WAS_SET="${K3S_CTR_CMD+x}"
@@ -70,6 +71,7 @@ TEST_USERNAME="${TEST_USERNAME:-e2e-$(date +%s)}"
 TEST_EMAIL="${TEST_EMAIL:-${TEST_USERNAME}@example.com}"
 TEST_PASSWORD="${TEST_PASSWORD:-Kite-e2e-password-1}"
 TEST_VM_NAME="${TEST_VM_NAME:-kite-e2e-vm-$(date +%s)}"
+TEST_VM_DOMAIN_PREFIX="${TEST_VM_DOMAIN_PREFIX:-${TEST_VM_NAME}}"
 TEST_VM_SSH_ID="${TEST_VM_SSH_ID:-kitee2e}"
 TEST_VM_SSH_PASSWORD="${TEST_VM_SSH_PASSWORD:-Kite-e2e-vm-password-1}"
 K3S_CTR_CMD="${K3S_CTR_CMD:-sudo k3s ctr -n k8s.io}"
@@ -192,6 +194,8 @@ configure_interactive_test_options() {
   prompt_value TEST_EMAIL "${TEST_EMAIL_WAS_SET}" "TEST_EMAIL 값을 정합니다." "테스트 사용자가 API login에 사용할 email입니다. signup 후 이 email/password로 실제 API 로그인을 검증합니다."
   prompt_value TEST_PASSWORD "${TEST_PASSWORD_WAS_SET}" "TEST_PASSWORD 값을 정합니다." "테스트 사용자의 API login password입니다. CRD에는 hash로 저장되고, 테스트 중 cookie 발급 확인에 사용됩니다."
   prompt_value TEST_VM_NAME "${TEST_VM_NAME_WAS_SET}" "TEST_VM_NAME 값을 정합니다." "테스트가 생성할 KiteVirtualMachine 이름입니다. 같은 namespace 안에서 겹치면 안 됩니다."
+  TEST_VM_DOMAIN_PREFIX="${TEST_VM_DOMAIN_PREFIX:-${TEST_VM_NAME}}"
+  prompt_value TEST_VM_DOMAIN_PREFIX "${TEST_VM_DOMAIN_PREFIX_WAS_SET}" "TEST_VM_DOMAIN_PREFIX 값을 정합니다." "테스트 VM의 HTTP hostname prefix입니다. API가 domainPrefix를 필수로 요구하므로 비워둘 수 없고, 기본값은 TEST_VM_NAME과 같습니다."
   prompt_value TEST_VM_SSH_ID "${TEST_VM_SSH_ID_WAS_SET}" "TEST_VM_SSH_ID 값을 정합니다." "VM guest OS와 gateway 라우팅에 쓰는 Linux login id입니다. 소문자/숫자/밑줄/하이픈 규칙을 따라야 합니다."
   prompt_value TEST_VM_SSH_PASSWORD "${TEST_VM_SSH_PASSWORD_WAS_SET}" "TEST_VM_SSH_PASSWORD 값을 정합니다." "VM 생성 API가 guest login Secret과 cloud-init password hash를 만들 때 사용하는 테스트용 비밀번호입니다."
 
@@ -214,7 +218,7 @@ configure_interactive_test_options() {
   kite_prompt_configure_bool TEST_CLEANUP "${TEST_CLEANUP_WAS_SET}" $'TEST_CLEANUP 값을 정합니다.\n  예를 고르면 테스트가 만든 VM, KiteUser, 사용자 namespace를 끝나고 삭제합니다. 실패 상태를 직접 조사하려면 아니오가 좋습니다.'
   kite_prompt_configure_bool TEST_DRY_RUN "${TEST_DRY_RUN_WAS_SET}" $'TEST_DRY_RUN 값을 정합니다.\n  예를 고르면 실제 빌드/배포/VM 생성 없이 어떤 명령을 실행할지 계획만 출력합니다.'
 
-  log "e2e choices: cluster=${TEST_CLUSTER}, namespace=${KITE_NAMESPACE}, image=${TEST_IMAGE_REGISTRY}/<component>:${TEST_IMAGE_TAG}, install_deps=${TEST_INSTALL_DEPS}, manage_host_sshd=${TEST_MANAGE_HOST_SSHD}, gateway_host_key_source=${TEST_GATEWAY_HOST_KEY_SOURCE}, gateway_host_key_refresh=${TEST_GATEWAY_HOST_KEY_REFRESH}, cleanup=${TEST_CLEANUP}, vm_timeout=${TEST_VM_TIMEOUT}, dry_run=${TEST_DRY_RUN}"
+  log "e2e choices: cluster=${TEST_CLUSTER}, namespace=${KITE_NAMESPACE}, image=${TEST_IMAGE_REGISTRY}/<component>:${TEST_IMAGE_TAG}, install_deps=${TEST_INSTALL_DEPS}, manage_host_sshd=${TEST_MANAGE_HOST_SSHD}, gateway_host_key_source=${TEST_GATEWAY_HOST_KEY_SOURCE}, gateway_host_key_refresh=${TEST_GATEWAY_HOST_KEY_REFRESH}, cleanup=${TEST_CLEANUP}, vm_name=${TEST_VM_NAME}, vm_domain_prefix=${TEST_VM_DOMAIN_PREFIX}, vm_timeout=${TEST_VM_TIMEOUT}, dry_run=${TEST_DRY_RUN}"
 }
 
 validate_static_options() {
@@ -767,7 +771,7 @@ create_test_vm() {
   log "creating test VM ${TEST_VM_NAME}"
   response="$(curl -fsS -b "${COOKIE_JAR}" -X POST "http://127.0.0.1:${TEST_API_LOCAL_PORT}/api/v1/vms" \
     -H "Content-Type: application/json" \
-    -d "{\"name\":\"${TEST_VM_NAME}\",\"cpu\":2,\"memory\":\"4Gi\",\"image\":\"ubuntu-22.04\",\"disk\":\"20Gi\",\"sshId\":\"${TEST_VM_SSH_ID}\",\"sshPassword\":\"${TEST_VM_SSH_PASSWORD}\",\"powerState\":\"On\"}")"
+    -d "{\"name\":\"${TEST_VM_NAME}\",\"domainPrefix\":\"${TEST_VM_DOMAIN_PREFIX}\",\"cpu\":2,\"memory\":\"4Gi\",\"image\":\"ubuntu-22.04\",\"disk\":\"20Gi\",\"sshId\":\"${TEST_VM_SSH_ID}\",\"sshPassword\":\"${TEST_VM_SSH_PASSWORD}\",\"powerState\":\"On\"}")"
 
   if [[ "$(require_json_field "${response}" "vm.name")" != "${TEST_VM_NAME}" ]]; then
     warn "VM create response did not include expected vm.name: ${response}"
