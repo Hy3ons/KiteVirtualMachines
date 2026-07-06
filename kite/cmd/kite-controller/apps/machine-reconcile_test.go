@@ -117,6 +117,37 @@ func TestReconcileKiteVirtualMachineStaleEventUsesLatestDeletionTimestamp(t *tes
 	}
 }
 
+// TestReconcileKiteVirtualMachineNamespaceTerminationSkipsChildCreation verifies namespace cleanup safety.
+// t is the Go test handle used for assertions.
+// The test prevents VM child resource creation after a user namespace has entered finalization.
+func TestReconcileKiteVirtualMachineNamespaceTerminationSkipsChildCreation(t *testing.T) {
+	ctx := context.Background()
+	namespace := "user-a"
+	name := "vm-a"
+	current := newMachineReconcileKiteVirtualMachineSpec(namespace, name)
+	current.SetFinalizers([]string{kiteVirtualMachineCleanupFinalizer})
+	client := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), machineReconcileListKinds(),
+		newMachineReconcileTerminatingNamespace(namespace),
+		current,
+		newMachineReconcileGuestLoginSecret(namespace, name, "$6$rounds=500000$salt$hash"),
+	)
+
+	if err := ReconcileKiteVirtualMachine(ctx, client, current); err != nil {
+		t.Fatalf("ReconcileKiteVirtualMachine returned error: %v", err)
+	}
+
+	latest, err := client.Resource(kiteVirtualMachineGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("expected KiteVirtualMachine to remain in fake client, got %v", err)
+	}
+	if hasKiteVirtualMachineFinalizer(latest.GetFinalizers()) {
+		t.Fatalf("expected namespace termination to remove cleanup finalizer, got %v", latest.GetFinalizers())
+	}
+	if _, err := client.Resource(secretGVR).Namespace(namespace).Get(ctx, sshKeySecretName(name), metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("expected namespace termination not to create SSH key Secret, got %v", err)
+	}
+}
+
 // TestDeleteOwnedNamespacedResourceSkipsUnlabeledResource verifies destructive cleanup label guards.
 // t is the Go test handle used for assertions.
 // The test protects golden resources such as kite/ubuntu-22.04 from VM cleanup by name alone.
@@ -441,6 +472,7 @@ func machineReconcileListKinds() map[schema.GroupVersionResource]string {
 		dataVolumeGVR:             "DataVolumeList",
 		secretGVR:                 "SecretList",
 		configMapGVR:              "ConfigMapList",
+		namespaceGVR:              "NamespaceList",
 	}
 }
 
@@ -541,6 +573,23 @@ func newMachineReconcileDataVolume(namespace string, name string, labels map[str
 			"metadata":   metadata,
 		},
 	}
+}
+
+// newMachineReconcileTerminatingNamespace creates a Namespace test fixture with deletion timestamp.
+// name is metadata.name for the namespace that contains KiteVirtualMachine resources.
+// The returned object is used to model namespace finalization races during VM cleanup.
+func newMachineReconcileTerminatingNamespace(name string) *unstructured.Unstructured {
+	namespace := &unstructured.Unstructured{
+		Object: map[string]any{
+			"apiVersion": "v1",
+			"kind":       "Namespace",
+			"metadata": map[string]any{
+				"name": name,
+			},
+		},
+	}
+	namespace.SetDeletionTimestamp(&metav1.Time{Time: metav1.Now().Time})
+	return namespace
 }
 
 // newMachineReconcileGuestLoginSecret creates a guest login Secret test fixture.

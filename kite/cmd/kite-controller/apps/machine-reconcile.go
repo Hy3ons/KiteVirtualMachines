@@ -215,6 +215,14 @@ func ReconcileKiteVirtualMachine(ctx context.Context, dynamicClient dynamic.Inte
 	resource = currentResource
 	vm = currentVM
 
+	namespaceTerminating, err := kiteVirtualMachineNamespaceTerminating(ctx, dynamicClient, vm.Namespace)
+	if err != nil {
+		return err
+	}
+	if namespaceTerminating {
+		return reconcileKiteVirtualMachineDeletion(ctx, dynamicClient, resource, vm)
+	}
+
 	if resource.GetDeletionTimestamp() != nil {
 		return reconcileKiteVirtualMachineDeletion(ctx, dynamicClient, resource, vm)
 	}
@@ -281,6 +289,23 @@ func latestKiteVirtualMachineForReconcile(ctx context.Context, dynamicClient dyn
 	}
 
 	return current, vm, nil
+}
+
+// kiteVirtualMachineNamespaceTerminating checks whether a VM namespace is being deleted.
+// ctx controls the Kubernetes get request.
+// dynamicClient reads core/v1 Namespace through the dynamic client.
+// namespace identifies the namespace that contains a KiteVirtualMachine and its child resources.
+// A true return prevents stale VM events from creating resources while namespace finalization is running.
+func kiteVirtualMachineNamespaceTerminating(ctx context.Context, dynamicClient dynamic.Interface, namespace string) (bool, error) {
+	current, err := dynamicClient.Resource(namespaceGVR).Get(ctx, namespace, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to read KiteVirtualMachine namespace %s: %w", namespace, err)
+	}
+
+	return current.GetDeletionTimestamp() != nil, nil
 }
 
 // reconcileKiteVirtualMachineDesiredState applies the real resources for one KiteVirtualMachine.
