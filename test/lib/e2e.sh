@@ -10,6 +10,7 @@ TEST_IMAGE_TAG_WAS_SET="${TEST_IMAGE_TAG+x}"
 TEST_INSTALL_DEPS_WAS_SET="${TEST_INSTALL_DEPS+x}"
 TEST_MANAGE_HOST_SSHD_WAS_SET="${TEST_MANAGE_HOST_SSHD+x}"
 TEST_CLEANUP_WAS_SET="${TEST_CLEANUP+x}"
+TEST_CLEANUP_TIMEOUT_WAS_SET="${TEST_CLEANUP_TIMEOUT+x}"
 TEST_VM_TIMEOUT_WAS_SET="${TEST_VM_TIMEOUT+x}"
 TEST_DRY_RUN_WAS_SET="${TEST_DRY_RUN+x}"
 TEST_API_LOCAL_PORT_WAS_SET="${TEST_API_LOCAL_PORT+x}"
@@ -59,6 +60,7 @@ TEST_IMAGE_TAG="${TEST_IMAGE_TAG:-test-$(date +%Y%m%d%H%M%S)}"
 TEST_INSTALL_DEPS="${TEST_INSTALL_DEPS:-true}"
 TEST_MANAGE_HOST_SSHD="${TEST_MANAGE_HOST_SSHD:-false}"
 TEST_CLEANUP="${TEST_CLEANUP:-true}"
+TEST_CLEANUP_TIMEOUT="${TEST_CLEANUP_TIMEOUT:-5m}"
 TEST_VM_TIMEOUT="${TEST_VM_TIMEOUT:-20m}"
 TEST_DRY_RUN="${TEST_DRY_RUN:-false}"
 TEST_API_LOCAL_PORT="${TEST_API_LOCAL_PORT:-18080}"
@@ -216,9 +218,10 @@ configure_interactive_test_options() {
   kite_prompt_configure_bool TEST_MANAGE_HOST_SSHD "${TEST_MANAGE_HOST_SSHD_WAS_SET}" $'TEST_MANAGE_HOST_SSHD 값을 정합니다.\n  예를 고르면 gateway가 22번을 쓰도록 host sshd handoff를 허용합니다. 원격 서버 접속 경로가 바뀔 수 있어 기본값은 아니오입니다.'
   kite_prompt_configure_bool TEST_GATEWAY_HOST_KEY_REFRESH "${TEST_GATEWAY_HOST_KEY_REFRESH_WAS_SET}" $'TEST_GATEWAY_HOST_KEY_REFRESH 값을 정합니다.\n  예를 고르면 기존 gateway host key Secret이 있어도 다시 만듭니다. host key 재사용 테스트에서는 예여야 예전 generate key가 남아 fingerprint 검증을 속이지 않습니다.'
   kite_prompt_configure_bool TEST_CLEANUP "${TEST_CLEANUP_WAS_SET}" $'TEST_CLEANUP 값을 정합니다.\n  예를 고르면 테스트가 만든 VM, KiteUser, 사용자 namespace를 끝나고 삭제합니다. 실패 상태를 직접 조사하려면 아니오가 좋습니다.'
+  prompt_value TEST_CLEANUP_TIMEOUT "${TEST_CLEANUP_TIMEOUT_WAS_SET}" "TEST_CLEANUP_TIMEOUT 값을 정합니다." "TEST_CLEANUP=true일 때 테스트 VM/User/namespace가 실제로 삭제될 때까지 기다리는 최대 시간입니다."
   kite_prompt_configure_bool TEST_DRY_RUN "${TEST_DRY_RUN_WAS_SET}" $'TEST_DRY_RUN 값을 정합니다.\n  예를 고르면 실제 빌드/배포/VM 생성 없이 어떤 명령을 실행할지 계획만 출력합니다.'
 
-  log "e2e choices: cluster=${TEST_CLUSTER}, namespace=${KITE_NAMESPACE}, image=${TEST_IMAGE_REGISTRY}/<component>:${TEST_IMAGE_TAG}, install_deps=${TEST_INSTALL_DEPS}, manage_host_sshd=${TEST_MANAGE_HOST_SSHD}, gateway_host_key_source=${TEST_GATEWAY_HOST_KEY_SOURCE}, gateway_host_key_refresh=${TEST_GATEWAY_HOST_KEY_REFRESH}, cleanup=${TEST_CLEANUP}, vm_name=${TEST_VM_NAME}, vm_domain_prefix=${TEST_VM_DOMAIN_PREFIX}, vm_timeout=${TEST_VM_TIMEOUT}, dry_run=${TEST_DRY_RUN}"
+  log "e2e choices: cluster=${TEST_CLUSTER}, namespace=${KITE_NAMESPACE}, image=${TEST_IMAGE_REGISTRY}/<component>:${TEST_IMAGE_TAG}, install_deps=${TEST_INSTALL_DEPS}, manage_host_sshd=${TEST_MANAGE_HOST_SSHD}, gateway_host_key_source=${TEST_GATEWAY_HOST_KEY_SOURCE}, gateway_host_key_refresh=${TEST_GATEWAY_HOST_KEY_REFRESH}, cleanup=${TEST_CLEANUP}, cleanup_timeout=${TEST_CLEANUP_TIMEOUT}, vm_name=${TEST_VM_NAME}, vm_domain_prefix=${TEST_VM_DOMAIN_PREFIX}, vm_timeout=${TEST_VM_TIMEOUT}, dry_run=${TEST_DRY_RUN}"
 }
 
 validate_static_options() {
@@ -936,8 +939,19 @@ run_e2e_checks() {
   verify_gateway
 }
 
+wait_for_cleanup_delete() {
+  local resource="$1"
+
+  if ! kubectl get "${resource}" >/dev/null 2>&1; then
+    return 0
+  fi
+  log "waiting for cleanup deletion of ${resource}"
+  kubectl wait --for=delete "${resource}" --timeout="${TEST_CLEANUP_TIMEOUT}" >/dev/null
+}
+
 cleanup() {
   local status=$?
+  local cleanup_status=0
 
   for pid in "${API_PORT_FORWARD_PID}" "${FRONTEND_PORT_FORWARD_PID}" "${GATEWAY_PORT_FORWARD_PID}"; do
     if [[ -n "${pid}" ]]; then
@@ -956,6 +970,18 @@ cleanup() {
     fi
     if [[ -n "${TEST_USER_NAMESPACE}" ]]; then
       kubectl delete namespace "${TEST_USER_NAMESPACE}" --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
+    fi
+    if [[ -n "${TEST_USER_NAMESPACE}" ]]; then
+      wait_for_cleanup_delete "namespace/${TEST_USER_NAMESPACE}" || cleanup_status=1
+    fi
+    if [[ -n "${TEST_USER_NAME}" ]]; then
+      wait_for_cleanup_delete "kiteusers.hy3ons.github.io/${TEST_USER_NAME}" || cleanup_status=1
+    fi
+    if [[ "${cleanup_status}" -ne 0 ]]; then
+      warn "cleanup did not finish within ${TEST_CLEANUP_TIMEOUT}"
+      if [[ "${status}" -eq 0 ]]; then
+        status=1
+      fi
     fi
   fi
 

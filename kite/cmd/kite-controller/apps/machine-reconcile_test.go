@@ -60,6 +60,31 @@ func TestReconcileKiteVirtualMachineDeleteIntentDeletesCRDWhenKubeVirtMissing(t 
 	}
 }
 
+// TestReconcileKiteVirtualMachineDeletionTimestampRemovesFinalizer verifies namespace cleanup convergence.
+// t is the Go test handle used for assertions.
+// The test keeps deleting CRDs from staying stuck after child resources are already absent.
+func TestReconcileKiteVirtualMachineDeletionTimestampRemovesFinalizer(t *testing.T) {
+	ctx := context.Background()
+	namespace := "user-a"
+	name := "vm-a"
+	vm := newMachineReconcileKiteVirtualMachineSpec(namespace, name)
+	vm.SetFinalizers([]string{kiteVirtualMachineCleanupFinalizer})
+	vm.SetDeletionTimestamp(&metav1.Time{Time: metav1.Now().Time})
+	client := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), machineReconcileListKinds(), vm)
+
+	if err := ReconcileKiteVirtualMachine(ctx, client, vm); err != nil {
+		t.Fatalf("ReconcileKiteVirtualMachine returned error: %v", err)
+	}
+
+	current, err := client.Resource(kiteVirtualMachineGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("expected deleting KiteVirtualMachine to remain in fake client, got %v", err)
+	}
+	if hasKiteVirtualMachineFinalizer(current.GetFinalizers()) {
+		t.Fatalf("expected cleanup finalizer to be removed, got %v", current.GetFinalizers())
+	}
+}
+
 // TestDeleteOwnedNamespacedResourceSkipsUnlabeledResource verifies destructive cleanup label guards.
 // t is the Go test handle used for assertions.
 // The test protects golden resources such as kite/ubuntu-22.04 from VM cleanup by name alone.
@@ -158,6 +183,21 @@ func TestKiteVirtualMachineNeedsSameGenerationReconcileSkipsReadyPhase(t *testin
 
 	if kiteVirtualMachineNeedsSameGenerationReconcile(vm) {
 		t.Fatal("expected Ready phase to skip same-generation resync")
+	}
+}
+
+// TestKiteVirtualMachineNeedsSameGenerationReconcileKeepsDeletingCRD verifies finalizer retries.
+// t is the Go test handle used for assertions.
+// The test ensures deleting VMs are reconciled even when their last status phase is stable.
+func TestKiteVirtualMachineNeedsSameGenerationReconcileKeepsDeletingCRD(t *testing.T) {
+	vm := newMachineReconcileKiteVirtualMachineSpec("user-a", "vm-a")
+	vm.SetDeletionTimestamp(&metav1.Time{Time: metav1.Now().Time})
+	if err := unstructured.SetNestedField(vm.Object, kiteVMPhaseReady, "status", "phase"); err != nil {
+		t.Fatalf("failed to set status.phase: %v", err)
+	}
+
+	if !kiteVirtualMachineNeedsSameGenerationReconcile(vm) {
+		t.Fatal("expected deleting VM to reconcile even with a stable phase")
 	}
 }
 

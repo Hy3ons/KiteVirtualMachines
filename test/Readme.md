@@ -214,6 +214,12 @@ When `true`, the script deletes the test VM, test KiteUser, and generated user
 namespace after the run. Default: `true`. Set it to `false` when you need to
 inspect a failed cluster state.
 
+`TEST_CLEANUP_TIMEOUT`
+
+How long the E2E gate waits for the test namespace and KiteUser to actually
+disappear after cleanup starts. Default: `5m`. A successful E2E run fails if
+cleanup does not converge within this timeout.
+
 `TEST_VM_TIMEOUT`
 
 How long the E2E gate waits for the VM to reach `Running`. Default: `20m`.

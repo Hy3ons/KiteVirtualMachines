@@ -96,7 +96,7 @@ func ReconcileKiteVirtualMachineService(ctx context.Context, dynamicClient dynam
 		return fmt.Errorf("failed to read owning KiteVirtualMachine %s/%s: %w", kiteVMNamespace, kiteVMName, err)
 	}
 
-	if deleted {
+	if deleted || kiteVMObject.GetDeletionTimestamp() != nil {
 		return ReconcileKiteVirtualMachine(ctx, dynamicClient, kiteVMObject)
 	}
 

@@ -205,7 +205,7 @@ func ReconcileKiteVirtualMachine(ctx context.Context, dynamicClient dynamic.Inte
 		return nil
 	}
 
-	if vm.DeletionTimestamp != nil {
+	if resource.GetDeletionTimestamp() != nil {
 		return reconcileKiteVirtualMachineDeletion(ctx, dynamicClient, resource, vm)
 	}
 
@@ -828,13 +828,22 @@ func kiteVirtualMachineFromEventObject(eventObj interface{}) (*kite.KiteVirtualM
 // eventObj is the new KiteVirtualMachine object from an update or resync event.
 // A true result allows delete cleanup and dependency/provisioning retries to run from informer resyncs.
 func kiteVirtualMachineNeedsSameGenerationReconcile(eventObj interface{}) bool {
+	resource, err := kiteVirtualMachineResourceFromEventObject(eventObj)
+	if err != nil {
+		log.Printf("failed to inspect KiteVirtualMachine same-generation reconcile metadata: %v", err)
+		return false
+	}
+	if resource.GetDeletionTimestamp() != nil {
+		return true
+	}
+
 	vm, err := kiteVirtualMachineFromEventObject(eventObj)
 	if err != nil {
 		log.Printf("failed to inspect KiteVirtualMachine same-generation reconcile need: %v", err)
 		return false
 	}
 
-	if vm.Spec.Delete || vm.DeletionTimestamp != nil {
+	if vm.Spec.Delete {
 		return true
 	}
 
@@ -947,6 +956,9 @@ func updateKiteVirtualMachineStatus(ctx context.Context, dynamicClient dynamic.I
 		}
 		if err != nil {
 			return fmt.Errorf("failed to read KiteVirtualMachine %s/%s before status update: %w", vm.Namespace, vm.Name, err)
+		}
+		if current.GetDeletionTimestamp() != nil {
+			return nil
 		}
 
 		observedGeneration := current.GetGeneration()
@@ -1162,13 +1174,23 @@ func sshKeySecretName(vmName string) string {
 // updateKiteVirtualMachineFinalizers updates finalizers on one KiteVirtualMachine CRD.
 // ctx controls the Kubernetes API update request.
 // dynamicClient writes hy3ons.github.io/v1 kitevirtualmachines in the resource namespace.
-// resource is copied so the informer cache object is not mutated unexpectedly.
+// resource identifies the KiteVirtualMachine; the latest resourceVersion is read before update.
 // finalizers is the complete replacement finalizer list.
 func updateKiteVirtualMachineFinalizers(ctx context.Context, dynamicClient dynamic.Interface, resource *unstructured.Unstructured, finalizers []string) error {
-	next := resource.DeepCopy()
-	next.SetFinalizers(finalizers)
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		current, err := dynamicClient.Resource(kiteVirtualMachineGVR).Namespace(resource.GetNamespace()).Get(ctx, resource.GetName(), metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
 
-	_, err := dynamicClient.Resource(kiteVirtualMachineGVR).Namespace(next.GetNamespace()).Update(ctx, next, metav1.UpdateOptions{})
+		next := current.DeepCopy()
+		next.SetFinalizers(finalizers)
+		_, err = dynamicClient.Resource(kiteVirtualMachineGVR).Namespace(next.GetNamespace()).Update(ctx, next, metav1.UpdateOptions{})
+		return err
+	})
 	return err
 }
 
