@@ -100,6 +100,7 @@ TEST_USER_NAMESPACE=""
 API_PORT_FORWARD_PID=""
 FRONTEND_PORT_FORWARD_PID=""
 GATEWAY_PORT_FORWARD_PID=""
+HOST_SSHD_PORTS_BEFORE=""
 
 source "${ROOT_DIR}/build/lib/prompt.sh"
 
@@ -246,6 +247,49 @@ validate_static_options() {
       exit 1
       ;;
   esac
+}
+
+host_sshd_port_snapshot() {
+  local sshd_bin=""
+  local output
+
+  [[ "${TEST_CLUSTER}" == "k3s" ]] || return 1
+  [[ "$(uname -s 2>/dev/null || true)" == "Linux" ]] || return 1
+  for candidate in /usr/sbin/sshd /usr/local/sbin/sshd sshd; do
+    if command -v "${candidate}" >/dev/null 2>&1 || [[ -x "${candidate}" ]]; then
+      sshd_bin="${candidate}"
+      break
+    fi
+  done
+  [[ -n "${sshd_bin}" ]] || return 1
+
+  output="$(sudo -n "${sshd_bin}" -T 2>/dev/null || "${sshd_bin}" -T 2>/dev/null || true)"
+  printf '%s\n' "${output}" | awk 'tolower($1) == "port" { print $2 }' | sort -n | paste -sd, -
+}
+
+record_host_sshd_ports() {
+  HOST_SSHD_PORTS_BEFORE="$(host_sshd_port_snapshot || true)"
+  if [[ -z "${HOST_SSHD_PORTS_BEFORE}" ]]; then
+    warn "skipping host sshd port preservation check because sshd effective config could not be read"
+    return 0
+  fi
+  log "host sshd ports before E2E: ${HOST_SSHD_PORTS_BEFORE}"
+}
+
+verify_host_sshd_ports_unchanged() {
+  local after
+
+  [[ -n "${HOST_SSHD_PORTS_BEFORE}" ]] || return 0
+  after="$(host_sshd_port_snapshot || true)"
+  if [[ -z "${after}" ]]; then
+    warn "host sshd ports could not be read after E2E"
+    return 1
+  fi
+  if [[ "${after}" != "${HOST_SSHD_PORTS_BEFORE}" ]]; then
+    warn "host sshd ports changed during E2E: before=${HOST_SSHD_PORTS_BEFORE}, after=${after}"
+    return 1
+  fi
+  log "host sshd ports unchanged after E2E: ${after}"
 }
 
 run_cmd() {
@@ -1065,12 +1109,14 @@ main() {
   fi
 
   preflight
+  record_host_sshd_ports
   prepare_minikube
   prepare_dependencies
   build_and_distribute_images
   render_manifest
   apply_kite_runtime
   run_e2e_checks
+  verify_host_sshd_ports_unchanged
   log "E2E test complete"
 }
 
