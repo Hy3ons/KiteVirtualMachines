@@ -252,6 +252,7 @@ validate_static_options() {
 host_sshd_port_snapshot() {
   local sshd_bin=""
   local output
+  local ports
 
   [[ "${TEST_CLUSTER}" == "k3s" ]] || return 1
   [[ "$(uname -s 2>/dev/null || true)" == "Linux" ]] || return 1
@@ -264,7 +265,22 @@ host_sshd_port_snapshot() {
   [[ -n "${sshd_bin}" ]] || return 1
 
   output="$(sudo -n "${sshd_bin}" -T 2>/dev/null || "${sshd_bin}" -T 2>/dev/null || true)"
-  printf '%s\n' "${output}" | awk 'tolower($1) == "port" { print $2 }' | sort -n | paste -sd, -
+  ports="$(printf '%s\n' "${output}" | awk 'tolower($1) == "port" { print $2 }' | sort -n | paste -sd, -)"
+  if [[ -n "${ports}" ]]; then
+    printf '%s\n' "${ports}"
+    return 0
+  fi
+
+  ports="$(grep -hE '^[[:space:]]*Port[[:space:]]+' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null \
+    | awk '{ print $2 }' \
+    | sort -n \
+    | paste -sd, -)"
+  if [[ -n "${ports}" ]]; then
+    printf '%s\n' "${ports}"
+    return 0
+  fi
+
+  printf '22\n'
 }
 
 record_host_sshd_ports() {
