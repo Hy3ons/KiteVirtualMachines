@@ -36,20 +36,20 @@ SSH login username == KiteVirtualMachine.spec.sshId
 Duplicate live `sshId` values are rejected by the route table.
 
 If no live Kite VM route exists for the SSH username, the gateway can fall back
-to the host OpenSSH daemon. The default manifest points this fallback at the node
-IP on port `2222`, and the install/test scripts patch it to the host sshd port
-selected during handoff when Kite owns external port `22`.
+to the host OpenSSH daemon. The default manifest disables this fallback. When a
+Level 3 admin enables it from Admin Settings, the controller patches the gateway
+Deployment with `$(KITE_NODE_IP):<host-sshd-port>`.
 
 ```text
-ssh <host-linux-user>@<node-ip>:22
+ssh -p <admin-selected-port> <host-linux-user>@<node-ip>
   -> kite-gateway
   -> no KiteVM spec.sshId match
-  -> host sshd at <node-ip>:<selected-host-sshd-port>
+  -> host sshd at <node-ip>:<configured-host-sshd-port>
 ```
 
 Kite VM routes have priority. If a VM `spec.sshId` is the same as a host Linux
-username, port `22` goes to the VM route. Use `ssh <host-user>@<node-ip> -p
-<selected-host-sshd-port>` for direct host administration in that case.
+username, the VM route wins inside the gateway. Use the host's normal SSH port
+for direct host administration in that case.
 
 Before password authentication, the gateway may show an SSH login banner. The
 default manifest uses it to tell users they are connected to Kite Gateway and
@@ -74,7 +74,7 @@ vps-access-<vmName>.<namespace>.svc.cluster.local:22
 The VM cloud-init creates the same `spec.sshId` Linux user with the matching
 public key and disables password SSH login inside the VM.
 
-## Host Port Handoff
+## External Exposure
 
 The gateway listens on container port `2222`. The base Kubernetes Service is
 internal so raw manifest apply and public install scripts do not steal host SSH
@@ -106,9 +106,9 @@ kubectl -n kite get secret kite-gateway-host-key
 The Secret stores `ssh_host_rsa_key`, which is the SSH server host key seen by
 external clients. The installer first tries to copy the existing Linux host
 OpenSSH key from `/etc/ssh/ssh_host_ed25519_key`, `ssh_host_ecdsa_key`, or
-`ssh_host_rsa_key` so the gateway can preserve the host fingerprint after taking
-over port `22`. If no host key is available, or automatic mode cannot read it,
-it generates a gateway key.
+`ssh_host_rsa_key` so the gateway can use a familiar fingerprint if the operator
+later exposes it on a public SSH port. If no host key is available, or automatic
+mode cannot read it, it generates a gateway key.
 
 Keeping the key in a Secret prevents SSH host key warnings after gateway pod
 restarts. Existing Secrets are not replaced unless

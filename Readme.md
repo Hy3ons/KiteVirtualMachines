@@ -312,14 +312,6 @@ CLEAR_LONGHORN=true KITE_CLUSTER=k3s ./build-clear.sh
 CLEAR_LONGHORN_DATA=true CLEAR_LONGHORN_DATA_CONFIRM=true KITE_CLUSTER=k3s ./build-clear.sh
 ```
 
-Legacy host SSHD restore can still be controlled for clusters that were installed
-with older Kite handoff behavior:
-
-```sh
-KITE_RESTORE_HOST_SSHD=true KITE_CLUSTER=k3s ./build-clear.sh
-RESTORE_HOST_SSHD=false KITE_CLUSTER=k3s ./build-clear.sh
-```
-
 More details are in `build/dev/README.md`. The full `build` directory layout
 and root command naming contract are documented in `build/README.md`.
 
@@ -376,9 +368,8 @@ build/deploy/scripts/uninstall-kite.sh
 
 The remote cleanup commands are listed in
 [Quick Install and Uninstall](#quick-install-and-uninstall). The cleanup removes
-Kite application resources and Kite CRDs first, then optionally restores the
-legacy host SSHD handoff state and removes Kite Longhorn disk data only when the explicit
-cleanup environment variables are set.
+Kite application resources and Kite CRDs first, then removes Kite Longhorn disk
+data only when the explicit cleanup environment variables are set.
 
 More details are in `build/deploy/README.md`.
 
@@ -473,19 +464,8 @@ TEST_IMAGE_REGISTRY=registry.example.com/kite ./test/all-test-k8s.sh
 ```
 
 k3s E2E additionally verifies that default install keeps `kite-gateway` internal
-until Admin Settings enables external exposure. The legacy dangerous external
-SSH handoff path remains separated into:
-
-```sh
-TEST_HOST_SSH_USER=<host-user> \
-TEST_HOST_SSH_PASSWORD='<host-password>' \
-./test/all-test-k3s-ssh-handoff.sh
-```
-
-That handoff test can move host sshd away from port `22`, expose
-`kite-gateway` on `22`, compare gateway and host sshd fingerprints, and verify
-host fallback login. Run it only when you can recover the server console or
-connect through the selected host sshd port.
+until Admin Settings enables external exposure. Kite no longer ships a host sshd
+mutation test because installers do not move or restore the host SSH daemon.
 
 More details are in `test/Readme.md` and `test/Test-Specification.md`.
 

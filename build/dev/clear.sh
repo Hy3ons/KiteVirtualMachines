@@ -25,10 +25,6 @@ set -euo pipefail
 #   KITE_LONGHORN_OWNER_LABEL_VALUE: default true
 #   KITE_LONGHORN_DISK_REMOVE_TIMEOUT_SECONDS: default 180
 #   KITE_LONGHORN_DISK_REMOVE_RETRY_SECONDS: default 5
-#   RESTORE_HOST_SSHD: default true
-#   KITE_RESTORE_HOST_SSHD: default ask
-#   KITE_HOST_SSHD_STATE: default /etc/kite/host-sshd/state.env
-#   KITE_HOST_SSHD_RESTORE_LOG: default /tmp/kite-host-sshd-restore.log
 #   KITE_LOG_COLOR: default auto
 #   NO_COLOR: default (unset)
 #
@@ -36,7 +32,7 @@ set -euo pipefail
 #   TTY에서 직접 실행하면 명시적으로 지정하지 않은 위험 옵션을 번호 선택으로 묻는다.
 #
 # Side Effects:
-#   Kubernetes 리소스, 이미지 캐시, 선택적 Longhorn/host sshd 상태를 변경하거나 삭제할 수 있다.
+#   Kubernetes 리소스, 이미지 캐시, 선택적 Longhorn 상태를 변경하거나 삭제할 수 있다.
 # ==============================================================================
 
 MINIKUBE_PURGE_WAS_SET="${MINIKUBE_PURGE+x}"
@@ -45,8 +41,6 @@ CLEAR_LONGHORN_WAS_SET="${CLEAR_LONGHORN+x}"
 CLEAR_LONGHORN_FORCE_WAS_SET="${CLEAR_LONGHORN_FORCE+x}"
 CLEAR_LONGHORN_DATA_WAS_SET="${CLEAR_LONGHORN_DATA+x}"
 CLEAR_LONGHORN_DATA_CONFIRM_WAS_SET="${CLEAR_LONGHORN_DATA_CONFIRM+x}"
-RESTORE_HOST_SSHD_WAS_SET="${RESTORE_HOST_SSHD+x}"
-KITE_RESTORE_HOST_SSHD_WAS_SET="${KITE_RESTORE_HOST_SSHD+x}"
 
 KITE_CLUSTER="${KITE_CLUSTER:-auto}"
 KITE_NAMESPACE="${KITE_NAMESPACE:-kite}"
@@ -65,17 +59,6 @@ KITE_LONGHORN_OWNER_LABEL_KEY="${KITE_LONGHORN_OWNER_LABEL_KEY:-hy3ons.github.io
 KITE_LONGHORN_OWNER_LABEL_VALUE="${KITE_LONGHORN_OWNER_LABEL_VALUE:-true}"
 KITE_LONGHORN_DISK_REMOVE_TIMEOUT_SECONDS="${KITE_LONGHORN_DISK_REMOVE_TIMEOUT_SECONDS:-180}"
 KITE_LONGHORN_DISK_REMOVE_RETRY_SECONDS="${KITE_LONGHORN_DISK_REMOVE_RETRY_SECONDS:-5}"
-# RESTORE_HOST_SSHD=true이면 삭제가 끝난 뒤 Kite 설치 시 백업해 둔 host sshd
-# 설정을 복원하는 경로로 들어간다. 실제 복원 여부는 manage-host-sshd.sh 안에서
-# KITE_RESTORE_HOST_SSHD=ask/true/false로 한 번 더 결정된다.
-# 원격 서버에서 22/2222 포트를 그대로 유지해야 하면 RESTORE_HOST_SSHD=false를
-# 지정해 이 단계 전체를 건너뛴다.
-RESTORE_HOST_SSHD="${RESTORE_HOST_SSHD:-true}"
-KITE_RESTORE_HOST_SSHD="${KITE_RESTORE_HOST_SSHD:-ask}"
-KITE_HOST_SSHD_STATE="${KITE_HOST_SSHD_STATE:-/etc/kite/host-sshd/state.env}"
-KITE_HOST_SSHD_RESTORE_LOG="${KITE_HOST_SSHD_RESTORE_LOG:-/tmp/kite-host-sshd-restore.log}"
-HOST_SSHD_RESTORE_PID=""
-
 log_color_enabled() {
   [[ "${KITE_LOG_COLOR:-auto}" != "false" && -z "${NO_COLOR:-}" && -t 1 ]]
 }
@@ -200,153 +183,15 @@ configure_interactive_clear_options() {
     fi
   fi
 
-  if [[ -z "${RESTORE_HOST_SSHD_WAS_SET}" ]]; then
-    if ask_numbered_bool "Kite gateway가 22번을 쓰던 경우 host sshd를 22번으로 복원할까요?" "${RESTORE_HOST_SSHD}"; then
-      RESTORE_HOST_SSHD=true
-      if [[ -z "${KITE_RESTORE_HOST_SSHD_WAS_SET}" ]]; then
-        KITE_RESTORE_HOST_SSHD=true
-      fi
-    else
-      RESTORE_HOST_SSHD=false
-      if [[ -z "${KITE_RESTORE_HOST_SSHD_WAS_SET}" ]]; then
-        KITE_RESTORE_HOST_SSHD=false
-      fi
-    fi
-  fi
-
-  log "cleanup choices: namespace=${KITE_NAMESPACE}, CLEAR_IMAGES=${CLEAR_IMAGES}, CLEAR_LONGHORN=${CLEAR_LONGHORN}, CLEAR_LONGHORN_DATA=${CLEAR_LONGHORN_DATA}, CLEAR_LONGHORN_FORCE=${CLEAR_LONGHORN_FORCE}, RESTORE_HOST_SSHD=${RESTORE_HOST_SSHD}"
+  log "cleanup choices: namespace=${KITE_NAMESPACE}, CLEAR_IMAGES=${CLEAR_IMAGES}, CLEAR_LONGHORN=${CLEAR_LONGHORN}, CLEAR_LONGHORN_DATA=${CLEAR_LONGHORN_DATA}, CLEAR_LONGHORN_FORCE=${CLEAR_LONGHORN_FORCE}"
 }
 
 normalize_clear_options() {
-  if [[ "${RESTORE_HOST_SSHD}" == "true" && -z "${KITE_RESTORE_HOST_SSHD_WAS_SET}" ]]; then
-    KITE_RESTORE_HOST_SSHD=true
-  elif [[ "${RESTORE_HOST_SSHD}" != "true" && -z "${KITE_RESTORE_HOST_SSHD_WAS_SET}" ]]; then
-    KITE_RESTORE_HOST_SSHD=false
-  fi
   export CLEAR_IMAGES
   export CLEAR_LONGHORN
   export CLEAR_LONGHORN_FORCE
   export CLEAR_LONGHORN_DATA
   export CLEAR_LONGHORN_DATA_CONFIRM
-  export RESTORE_HOST_SSHD
-  export KITE_RESTORE_HOST_SSHD
-}
-
-# host_sshd_restore_state_exists checks whether Kite previously moved host sshd away from port 22.
-# The state file may require sudo because it is stored under /etc/kite on remote Linux hosts.
-host_sshd_restore_state_exists() {
-  [[ "$(uname -s 2>/dev/null || true)" == "Linux" ]] || return 1
-  if [[ -f "${KITE_HOST_SSHD_STATE}" ]]; then
-    return 0
-  fi
-  if command -v sudo >/dev/null 2>&1 && sudo test -f "${KITE_HOST_SSHD_STATE}" 2>/dev/null; then
-    return 0
-  fi
-  return 1
-}
-
-# confirm_host_sshd_restore_before_gateway_delete asks before scheduling a detached restore.
-# The answer is exported so foreground and background restore paths use the same decision.
-confirm_host_sshd_restore_before_gateway_delete() {
-  local answer
-
-  case "${KITE_RESTORE_HOST_SSHD}" in
-    true|yes|1)
-      export KITE_RESTORE_HOST_SSHD=true
-      return 0
-      ;;
-    false|no|0)
-      export KITE_RESTORE_HOST_SSHD=false
-      return 1
-      ;;
-    ask)
-      if [[ ! -t 0 ]]; then
-        warn "non-interactive shell; not scheduling host sshd restore because KITE_RESTORE_HOST_SSHD=ask"
-        export KITE_RESTORE_HOST_SSHD=false
-        return 1
-      fi
-      if ask_numbered_bool "Kite gateway가 현재 SSH 세션을 처리 중일 수 있습니다. gateway 삭제 전에 host sshd 22번 복원 worker를 예약할까요?" "false"; then
-        export KITE_RESTORE_HOST_SSHD=true
-        return 0
-      fi
-      export KITE_RESTORE_HOST_SSHD=false
-      return 1
-      ;;
-    *)
-      warn "unknown KITE_RESTORE_HOST_SSHD=${KITE_RESTORE_HOST_SSHD}; expected ask, true, or false"
-      export KITE_RESTORE_HOST_SSHD=false
-      return 1
-      ;;
-  esac
-}
-
-prepare_host_sshd_restore_log() {
-  local log_dir
-
-  if { : >>"${KITE_HOST_SSHD_RESTORE_LOG}"; } 2>/dev/null; then
-    return 0
-  fi
-
-  log_dir="${TMPDIR:-/tmp}"
-  KITE_HOST_SSHD_RESTORE_LOG="$(mktemp "${log_dir%/}/kite-host-sshd-restore.XXXXXX.log")"
-}
-
-# schedule_host_sshd_restore_before_gateway_delete starts a nohup restore worker before gateway deletion.
-# This keeps the port-22 recovery alive even if deleting the gateway drops the current SSH session.
-schedule_host_sshd_restore_before_gateway_delete() {
-  local restore_cmd
-
-  if [[ "${RESTORE_HOST_SSHD}" != "true" ]]; then
-    return 0
-  fi
-  if ! host_sshd_restore_state_exists; then
-    return 0
-  fi
-  if ! confirm_host_sshd_restore_before_gateway_delete; then
-    warn "host sshd restore is disabled; deleting kite-gateway may leave host SSH away from port 22"
-    return 0
-  fi
-
-  if [[ "${EUID:-$(id -u)}" == "0" ]]; then
-    restore_cmd=(env)
-  else
-    if ! sudo -v; then
-      warn "sudo is required before deleting kite-gateway so host sshd restore can run after port 22 is released"
-      return 1
-    fi
-    restore_cmd=(sudo -n env)
-  fi
-
-  prepare_host_sshd_restore_log
-  log "scheduling detached host sshd restore after port 22 is released"
-  nohup "${restore_cmd[@]}" \
-    KITE_RESTORE_HOST_SSHD=true \
-    KITE_HOST_SSHD_STATE="${KITE_HOST_SSHD_STATE}" \
-    KITE_HOST_SSHD_RESTORE_WAIT_TIMEOUT_SECONDS="${KITE_HOST_SSHD_RESTORE_WAIT_TIMEOUT_SECONDS:-90}" \
-    KITE_HOST_SSHD_RESTORE_WAIT_RETRY_SECONDS="${KITE_HOST_SSHD_RESTORE_WAIT_RETRY_SECONDS:-1}" \
-    "${ROOT_DIR}/build/deploy/scripts/manage-host-sshd.sh" restore-after-port-free >>"${KITE_HOST_SSHD_RESTORE_LOG}" 2>&1 &
-  HOST_SSHD_RESTORE_PID="$!"
-  log "host sshd restore worker pid=${HOST_SSHD_RESTORE_PID}; log=${KITE_HOST_SSHD_RESTORE_LOG}"
-}
-
-# finish_host_sshd_restore waits for the scheduled restore worker or runs a foreground restore fallback.
-# When the SSH session survived gateway deletion this gives clear.sh a deterministic success/failure result.
-finish_host_sshd_restore() {
-  if [[ "${RESTORE_HOST_SSHD}" != "true" ]]; then
-    log "skipping host sshd restore because RESTORE_HOST_SSHD=${RESTORE_HOST_SSHD}"
-    return 0
-  fi
-  if [[ -n "${HOST_SSHD_RESTORE_PID}" ]]; then
-    if wait "${HOST_SSHD_RESTORE_PID}"; then
-      log "host sshd restore worker completed"
-    else
-      warn "host sshd restore worker failed; check ${KITE_HOST_SSHD_RESTORE_LOG}"
-      return 1
-    fi
-    return 0
-  fi
-
-  "${ROOT_DIR}/build/deploy/scripts/manage-host-sshd.sh" restore-after-port-free
 }
 
 
@@ -911,7 +756,7 @@ delete_minikube_profile() {
   minikube -p "${MINIKUBE_PROFILE}" delete
 }
 
-# 대상 클러스터 종류에 맞춰 Kubernetes 리소스, storage, 이미지 캐시, host sshd 복원을 정리한다.
+# 대상 클러스터 종류에 맞춰 Kubernetes 리소스, storage, 이미지 캐시를 정리한다.
 main() {
   local cluster
 
@@ -926,7 +771,6 @@ main() {
       delete_local_docker_images
       ;;
     k3s)
-      schedule_host_sshd_restore_before_gateway_delete
       delete_kite_resources
       delete_kite_longhorn_host_data
       delete_longhorn_resources
@@ -934,7 +778,6 @@ main() {
       delete_local_docker_images
       ;;
     k3d|kind|current|k8s|kubernetes)
-      schedule_host_sshd_restore_before_gateway_delete
       delete_kite_resources
       delete_kite_longhorn_host_data
       delete_longhorn_resources
@@ -945,8 +788,6 @@ main() {
       exit 1
       ;;
   esac
-
-  finish_host_sshd_restore
 
   log "clear complete"
 }

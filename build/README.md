@@ -31,7 +31,7 @@ automation.
 | Path | Role |
 | --- | --- |
 | `build/dev` | Development build, rollout, component rebuild, and development cleanup scripts. These scripts may build local images and load them into minikube, k3s, k3d, kind, or another selected cluster. |
-| `build/deploy` | Pull-based deployment documentation and scripts. All install, verify, uninstall, Longhorn, KubeVirt, CDI, host sshd, and remote cleanup scripts live under `build/deploy/scripts`. |
+| `build/deploy` | Pull-based deployment documentation and scripts. Install, verify, uninstall, Longhorn, KubeVirt, CDI, gateway host key, and remote cleanup scripts live under `build/deploy/scripts`. |
 | `build/kite` | Kite-owned Kubernetes manifests: CRDs, namespace, RBAC, API, controller, frontend, gateway, component service accounts, runtime ConfigMap, and runtime Secret bootstrap path. |
 | `build/kite-storage` | Kite storage manifests: Longhorn StorageClass, optional Longhorn disk directory setup/cleanup, and CDI golden image DataVolumes. |
 | `build/examples` | Example Kite CRs for manual testing after the CRDs are installed. |
@@ -111,9 +111,8 @@ curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/uni
 ```
 
 The deployment cleanup path removes Kite resources by default. Golden image,
-Longhorn uninstall, Longhorn host data removal, and host sshd restoration are
-controlled by explicit prompts or environment variables documented in
-`build/deploy/README.md`.
+Longhorn uninstall, and Longhorn host data removal are controlled by explicit
+prompts or environment variables documented in `build/deploy/README.md`.
 
 ## Manifests
 

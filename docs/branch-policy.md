@@ -97,7 +97,7 @@
 
 - k3s, minikube, generic k8s release E2E가 완료되어야 한다.
 - legacy etcd/CRD compatibility가 필요한 변경은 호환성 검증이 완료되어야 한다.
-- install, uninstall, cleanup, host sshd handoff 같은 운영 흐름이 깨지지 않아야 한다.
+- install, uninstall, cleanup, gateway exposure 같은 운영 흐름이 깨지지 않아야 한다.
 - 문서, 테스트 명세, 실제 스크립트 이름이 서로 일치해야 한다.
 
 ## 관련 문서

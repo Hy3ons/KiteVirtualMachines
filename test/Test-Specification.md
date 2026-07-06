@@ -174,8 +174,9 @@
 | VM not ready | VM route는 있지만 Service/VM이 준비되지 않았을 때 명확히 실패하고 연결이 매달리지 않는지 확인한다. |
 | Default internal only | fresh install 후 `kite-gateway`는 ClusterIP이고 `kite-gateway-external` Service가 없는지 확인한다. |
 | Runtime config desired | `kite-runtime-config`의 `sshGatewayExternalEnabled=false`, `sshGatewayExternalPort=""`, `sshGatewayHostFallbackEnabled=false`, `sshGatewayHostSshdPort=""` 기본값을 확인한다. |
-| Gateway status | `kite-gateway-status`가 Disabled/Blocked/Ready/Failed phase와 reason/message/observed 값을 올바르게 기록하는지 확인한다. |
+| Gateway status | `kite-gateway-status`가 Disabled/Reconciling/Blocked/Ready/Failed phase와 reason/message/observed 값을 올바르게 기록하는지 확인한다. |
 | External reconcile | Admin Settings 또는 API로 external enabled + valid port를 저장하면 `kite-gateway-external` LoadBalancer가 지정 포트로 생성되는지 확인한다. |
+| LoadBalancer pending | Service는 적용됐지만 LoadBalancer ingress가 없으면 Ready가 아니라 Reconciling/ServicePending으로 남는지 확인한다. |
 | Blocked reconcile | external port 누락, host fallback port 누락, external/host port 충돌 시 Blocked가 되고 `kite-gateway-external`이 생성되지 않는지 확인한다. |
 | Host fallback | VM route가 없는 username은 host fallback enabled + configured host sshd 주소일 때만 password/key 인증을 전달하는지 확인한다. |
 | Fallback priority | host username과 VM sshId가 충돌하면 VM route가 우선되는지 확인한다. |
@@ -183,27 +184,6 @@
 | Host sshd address env | controller가 `kite-runtime-config` desired 값 기준으로만 `KITE_GATEWAY_HOST_FALLBACK_ENABLED`와 `KITE_GATEWAY_HOST_SSHD_ADDRESS`를 patch하는지 확인한다. |
 | Timeout | backend VM 또는 host sshd가 응답하지 않을 때 제한 시간 안에 실패하는지 확인한다. |
 | Public config privacy | public `/api/v1/config`는 external enabled/port/status만 반환하고 host fallback port/address를 노출하지 않는지 확인한다. |
-
-## Host SSHD Handoff
-
-목적: 과거 또는 별도 실험에서 gateway가 22번을 사용해야 할 때 기존 host sshd 접속 경로를 안전하게 이동하고 복원한다.
-
-최종 기준: 기본 install/update 경로에서는 실행되지 않는다. 별도 handoff 테스트에서만 설정 변경 전 검증, 사용자 재확인, 포트 점유 방지, sshd restart 검증, rollback, uninstall/build-clear 복원이 모두 작동한다.
-
-| 소분류 | 테스트해야 하는 것 |
-| --- | --- |
-| 이미 22번이 아닌 sshd | host sshd가 이미 다른 포트를 쓰면 이동하지 않고 해당 포트를 gateway fallback으로 감지하는지 확인한다. |
-| 포트 입력 | interactive 실행에서 선택 포트 의미를 설명하고 같은 포트를 한 번 더 입력해야 적용되는지 확인한다. |
-| 포트 검증 | 숫자가 아니거나 1-65535 범위를 벗어난 포트를 거부하는지 확인한다. |
-| 22번 거부 | gateway external port와 같은 포트를 host sshd 이동 포트로 선택하지 못하게 하는지 확인한다. |
-| 점유 확인 | `ss`, `lsof`, `netstat` 순서로 포트 점유를 확인하고 점유 중이면 config를 바꾸지 않는지 확인한다. |
-| 확인 불가 실패 | 점유 확인 도구가 없으면 안전하게 실패하는지 확인한다. |
-| sshd syntax | 새 config를 적용하기 전 `sshd -t`가 실패하면 원본 config/state가 바뀌지 않는지 확인한다. |
-| restart rollback | sshd restart 실패 시 이전 config와 state로 되돌리고 gateway fallback을 바꾸지 않는지 확인한다. |
-| listen 확인 | restart 후 선택 포트가 실제 listen 중이 아니면 rollback되는지 확인한다. |
-| socket activation | ssh.socket/sshd.socket이 active이면 자동 handoff를 거부하거나 skip하는지 확인한다. |
-| restore worker | `uninstall.sh`/`build-clear.sh`가 gateway 삭제 전에 root 권한 restore worker를 예약하고 완료까지 확인하는지 확인한다. |
-| 복원 결과 | `uninstall.sh` 또는 `build-clear.sh` 후 host sshd가 22번으로 돌아오고 선택 포트와 `/etc/kite/host-sshd` state가 사라지는지 확인한다. |
 
 ## Frontend
 
@@ -276,7 +256,7 @@
 | Longhorn install | opt-in일 때 Longhorn manifest 설치와 Ready 대기가 끝까지 수행되는지 확인한다. |
 | KubeVirt install | KubeVirt operator/CR 설치와 Ready 대기가 idempotent하게 동작하는지 확인한다. |
 | CDI install | CDI operator/CR 설치와 Ready 대기가 idempotent하게 동작하는지 확인한다. |
-| all-in-one 순서 | storage, KubeVirt, CDI, golden image, app deploy, verify 순서가 지켜지고 host sshd handoff가 실행되지 않는지 확인한다. |
+| all-in-one 순서 | storage, KubeVirt, CDI, golden image, app deploy, verify 순서가 지켜지고 host sshd 변경 경로가 없는지 확인한다. |
 | `ghcr-install.sh` install | GHCR 이미지를 pull하는 설치 흐름에서 이미지 태그와 manifest가 production default와 맞는지 확인한다. |
 | `build-install.sh` install | 로컬 build/import 후 같은 manifest가 새 image tag로 배포되는지 확인한다. |
 | component deploy | api/controller/gateway/frontend 단일 rebuild가 해당 Deployment만 갱신하고 다른 workload를 깨지 않는지 확인한다. |
@@ -286,7 +266,7 @@
 
 ## Uninstall and Build Clear
 
-목적: 설치된 Kite 리소스를 안전하게 제거하고, 필요하면 host sshd와 Longhorn host data를 복원/정리한다.
+목적: 설치된 Kite 리소스를 안전하게 제거하고, 필요하면 Longhorn host data를 정리한다.
 
 최종 기준: 기본 cleanup은 Kite 리소스만 제거하고 공유 인프라는 보존하며, 위험 삭제는 명시 확인이 있을 때만 수행한다.
 
@@ -303,7 +283,6 @@
 | Longhorn uninstall | `DELETE_LONGHORN=true`와 force 조합별로 Longhorn namespace/CR finalizer 처리가 기대대로 동작하는지 확인한다. |
 | 공유 Longhorn 보존 | 외부 Longhorn PVC/PV가 있으면 `DELETE_LONGHORN_FORCE=true`여도 Longhorn namespace, CRD, webhook, PV/PVC가 보존되는지 확인한다. |
 | 공유 KubeVirt 보존 | 외부 KubeVirt VM이 있으면 `uninstall.sh`/`build-clear.sh` 후에도 KubeVirt namespace, CRD, VM이 보존되는지 확인한다. |
-| Host sshd restore | gateway 삭제 후 host sshd가 22번으로 돌아오고 restore worker 실패가 숨겨지지 않는지 확인한다. |
 | Idempotent rerun | 이미 삭제된 상태에서 `uninstall.sh`/`build-clear.sh`를 다시 실행해도 성공하거나 안전하게 skip하는지 확인한다. |
 | Remote cleanup | curl pipe `uninstall.sh`가 git checkout 없이 같은 cleanup 정책을 수행하는지 확인한다. |
 
@@ -327,22 +306,6 @@
 | Frontend response | `svc/kite-frontend` port-forward 후 index HTML이 응답하는지 확인한다. |
 | Gateway response | `svc/kite-gateway` port-forward 또는 외부 LB에서 SSH banner/handshake가 되는지 확인한다. |
 | Cleanup | E2E 종료 후 test user, VM, namespace, temporary overlay가 정리되는지 확인한다. |
-
-## SSH Handoff Acceptance Gate
-
-목적: legacy 또는 별도 실험에서 실제 k3s host의 port 22를 gateway가 받고 host sshd가 선택 포트로 이동하는 위험 경로를 별도 검증한다.
-
-최종 기준: `./test/all-test-k3s-ssh-handoff.sh`가 host 접속 경로를 잃지 않고 gateway와 host fallback을 모두 검증한다.
-
-| 소분류 | 테스트해야 하는 것 |
-| --- | --- |
-| Direct host port | 선택한 host sshd 포트가 OpenSSH banner를 반환하고 host 계정 password login이 되는지 확인한다. |
-| Gateway port 22 | 22번이 kite-gateway banner를 반환하고 host OpenSSH banner가 직접 노출되지 않는지 확인한다. |
-| Host key fingerprint | gateway 22번과 이동한 host sshd 포트가 같은 SSH host key fingerprint를 노출하는지 확인한다. |
-| Fallback login | VM route가 없는 host 계정이 gateway 22번을 통해 password login 되는지 확인한다. |
-| Domain path | node IP뿐 아니라 운영 도메인이 같은 22번 gateway/fallback 경로로 동작하는지 확인한다. |
-| Occupied port | 선택 포트가 점유되어 있으면 host sshd config, state, gateway env를 바꾸지 않는지 확인한다. |
-| Recovery | 테스트 실패 후에도 선택 포트 또는 22번 중 하나로 host에 접속 가능한지 확인한다. |
 
 ## Frontend E2E와 Visual QA
 
@@ -370,7 +333,7 @@
 | --- | --- |
 | Root README | 아키텍처, install, SSH gateway, cleanup 설명이 실제 스크립트 동작과 일치하는지 확인한다. |
 | build README | `ghcr-install.sh`, `build-install.sh`, `uninstall.sh`, `build-clear.sh` 경계와 wrapper 위임 설명이 실제 경로와 일치하는지 확인한다. |
-| deploy docs | production install, Longhorn/KubeVirt/CDI, host sshd handoff 설명이 최신 환경변수와 일치하는지 확인한다. |
+| deploy docs | production install, Longhorn/KubeVirt/CDI, gateway exposure 설명이 최신 환경변수와 일치하는지 확인한다. |
 | dev docs | component rebuild, local image loading, frontend build arg 설명이 실제 script option과 일치하는지 확인한다. |
 | frontend docs | API spec, design convention, mock 설명이 현재 UI/API 타입과 어긋나지 않는지 확인한다. |
 | examples | `build/examples`의 KiteUser/VM 예제가 현재 CRD schema로 apply 가능한지 확인한다. |
@@ -403,7 +366,7 @@
 | CRD diagnostics | VM/User 실패 시 CRD spec/status와 관련 resource 목록을 출력하는지 확인한다. |
 | Storage diagnostics | DataVolume/PVC/PV 실패 시 CDI event와 Longhorn volume 상태를 출력하는지 확인한다. |
 | Gateway diagnostics | SSH 실패 시 gateway env, Service endpoint, route lookup 대상 정보를 출력하는지 확인한다. |
-| Cleanup diagnostics | cleanup 실패 시 남은 namespace, CRD, PV, host sshd state를 출력하는지 확인한다. |
+| Cleanup diagnostics | cleanup 실패 시 남은 namespace, CRD, PV를 출력하는지 확인한다. |
 | Log location | 긴 원격 테스트는 `/tmp/kite-acceptance` 같은 고정 위치에 로그를 남기는지 확인한다. |
 
 ## 변경 유형별 최소 테스트 선택
@@ -414,8 +377,7 @@
 | Controller reconcile 변경 | fake client reconcile 테스트, idempotency 테스트, 실제 클러스터 resource/status E2E |
 | CRD schema 변경 | schema apply 테스트, API create/update 테스트, controller status E2E |
 | Renderer 변경 | renderer output shape 테스트, controller가 실제 apply하는 E2E |
-| Gateway 변경 | gateway unit 테스트, SSH handoff acceptance, fallback/password/banner E2E |
-| Host sshd script 변경 | bash syntax, occupied port, rollback, restore-after-clean 실제 host 테스트 |
+| Gateway 변경 | gateway unit 테스트, external exposure reconcile, fallback/password/banner E2E |
 | Storage 변경 | Longhorn/CDI wait, golden image import, VM disk clone, cleanup safety 테스트 |
 | Frontend UI 변경 | typecheck/build, route/component E2E, visual QA, backend contract 확인 |
 | Dockerfile/build 변경 | GHCR build workflow, buildx build, local load/push, deployed image tag 확인 |

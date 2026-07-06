@@ -27,6 +27,7 @@ const (
 	SSHGatewayReasonMissingExternalPort     = "MissingExternalPort"
 	SSHGatewayReasonMissingHostFallbackPort = "MissingHostFallbackPort"
 	SSHGatewayReasonPortConflict            = "PortConflict"
+	SSHGatewayReasonServicePending          = "ServicePending"
 	SSHGatewayReasonServiceApplied          = "ServiceApplied"
 	SSHGatewayReasonApplyFailed             = "ApplyFailed"
 )

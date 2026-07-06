@@ -200,7 +200,7 @@ export const KiteDocsPage: React.FC = () => {
               </Col>
               <Col xs={24} md={8}>
                 <Text strong>host SSH 포트</Text>
-                <Paragraph>설치 스크립트가 Gateway에 외부 22번을 넘기면 기존 host sshd는 2222번으로 이동할 수 있습니다. VM `sshId`와 host Linux username이 같으면 22번은 VM route가 우선합니다. host 직접 접속은 `ssh user@host -p 2222` 경로를 확인해야 합니다.</Paragraph>
+                <Paragraph>설치 스크립트는 host sshd 포트를 변경하지 않습니다. 외부 VM SSH 포트는 Level 3 관리자가 Admin Settings에서 명시적으로 열고, host fallback도 host sshd 포트를 직접 입력했을 때만 활성화됩니다.</Paragraph>
               </Col>
             </Row>
           </Card>

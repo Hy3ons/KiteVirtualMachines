@@ -54,10 +54,12 @@ func RunKiteGatewayExposureReconciler(clientManager *kube.ClientManager, stopCh 
 		nil,
 	)
 	configMapInformer := factory.ForResource(configMapGVR).Informer()
+	serviceInformer := factory.ForResource(serviceGVR).Informer()
 	RegisterKiteGatewayExposureReconciler(configMapInformer, clientManager.DynamicClient)
+	RegisterKiteGatewayExposureServiceReconciler(serviceInformer, clientManager.DynamicClient)
 
 	factory.Start(stopCh)
-	if !cache.WaitForCacheSync(stopCh, configMapInformer.HasSynced) {
+	if !cache.WaitForCacheSync(stopCh, configMapInformer.HasSynced, serviceInformer.HasSynced) {
 		log.Printf("failed to sync Kite gateway exposure informer cache")
 		return
 	}
@@ -79,6 +81,23 @@ func RegisterKiteGatewayExposureReconciler(informer cache.SharedIndexInformer, d
 		},
 		UpdateFunc: func(oldObj interface{}, newObj interface{}) {
 			reconcileGatewayExposureConfigEvent(dynamicClient, newObj)
+		},
+	})
+}
+
+// RegisterKiteGatewayExposureServiceReconciler attaches external gateway Service event handlers.
+// informer watches Services in the kite namespace.
+// dynamicClient reads desired config again so status follows LoadBalancer readiness changes.
+func RegisterKiteGatewayExposureServiceReconciler(informer cache.SharedIndexInformer, dynamicClient dynamic.Interface) {
+	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			reconcileGatewayExposureServiceEvent(dynamicClient, obj)
+		},
+		UpdateFunc: func(oldObj interface{}, newObj interface{}) {
+			reconcileGatewayExposureServiceEvent(dynamicClient, newObj)
+		},
+		DeleteFunc: func(obj interface{}) {
+			reconcileGatewayExposureServiceEvent(dynamicClient, obj)
 		},
 	})
 }
@@ -139,14 +158,11 @@ func ReconcileKiteGatewayExposureFromConfigMap(ctx context.Context, dynamicClien
 		return writeGatewayFailedStatus(ctx, statusWriter, err)
 	}
 
-	return statusWriter.WriteSSHGatewayStatus(ctx, withTransitionTime(platform.SSHGatewayStatus{
-		Phase:                       platform.SSHGatewayPhaseReady,
-		Reason:                      platform.SSHGatewayReasonServiceApplied,
-		Message:                     "External VM SSH gateway LoadBalancer has been applied.",
-		ObservedExternalPort:        desired.ExternalPort,
-		ObservedHostFallbackAddress: fallbackAddress,
-		ObservedServiceName:         kiteGatewayExternalServiceName,
-	}))
+	appliedStatus, err := externalGatewayServiceStatus(ctx, dynamicClient, desired.ExternalPort, fallbackAddress)
+	if err != nil {
+		return writeGatewayFailedStatus(ctx, statusWriter, err)
+	}
+	return statusWriter.WriteSSHGatewayStatus(ctx, withTransitionTime(appliedStatus))
 }
 
 // reconcileGatewayExposureConfigEvent reconciles only kite-runtime-config changes.
@@ -164,6 +180,36 @@ func reconcileGatewayExposureConfigEvent(dynamicClient dynamic.Interface, obj in
 	if err := ReconcileKiteGatewayExposureFromConfigMap(context.Background(), dynamicClient); err != nil {
 		log.Printf("failed to reconcile Kite gateway exposure: %v", err)
 	}
+}
+
+// reconcileGatewayExposureServiceEvent reconciles status when kite-gateway-external changes.
+// dynamicClient applies the latest runtime config again, which keeps status accurate after LoadBalancer updates.
+// obj is a Service informer event object or a deleted-final-state wrapper.
+func reconcileGatewayExposureServiceEvent(dynamicClient dynamic.Interface, obj interface{}) {
+	resource, ok := informerEventObject(obj)
+	if !ok {
+		log.Printf("Kite gateway exposure Service event is not an unstructured object")
+		return
+	}
+	if resource.GetName() != kiteGatewayExternalServiceName {
+		return
+	}
+	if err := ReconcileKiteGatewayExposureFromConfigMap(context.Background(), dynamicClient); err != nil {
+		log.Printf("failed to reconcile Kite gateway exposure Service status: %v", err)
+	}
+}
+
+func informerEventObject(obj interface{}) (*unstructured.Unstructured, bool) {
+	resource, ok := obj.(*unstructured.Unstructured)
+	if ok {
+		return resource, true
+	}
+	deleted, ok := obj.(cache.DeletedFinalStateUnknown)
+	if !ok {
+		return nil, false
+	}
+	resource, ok = deleted.Obj.(*unstructured.Unstructured)
+	return resource, ok
 }
 
 // gatewayBlockedStatus validates desired SSH gateway settings before Kubernetes resources are changed.
@@ -287,6 +333,36 @@ func applyExternalGatewayService(ctx context.Context, dynamicClient dynamic.Inte
 		return fmt.Errorf("failed to apply external gateway Service: %w", err)
 	}
 	return nil
+}
+
+// externalGatewayServiceStatus reads the applied external Service and returns the admin-facing status.
+// ctx controls the Kubernetes get request.
+// externalPort and fallbackAddress are the desired values written into observed status fields.
+func externalGatewayServiceStatus(ctx context.Context, dynamicClient dynamic.Interface, externalPort string, fallbackAddress string) (platform.SSHGatewayStatus, error) {
+	service, err := dynamicClient.Resource(serviceGVR).Namespace(config.KiteNamespace).Get(ctx, kiteGatewayExternalServiceName, metav1.GetOptions{})
+	if err != nil {
+		return platform.SSHGatewayStatus{}, fmt.Errorf("failed to read external gateway Service status: %w", err)
+	}
+	return externalGatewayServiceStatusFromObject(service, externalPort, fallbackAddress), nil
+}
+
+func externalGatewayServiceStatusFromObject(service *unstructured.Unstructured, externalPort string, fallbackAddress string) platform.SSHGatewayStatus {
+	status := platform.SSHGatewayStatus{
+		ObservedExternalPort:        externalPort,
+		ObservedHostFallbackAddress: fallbackAddress,
+		ObservedServiceName:         kiteGatewayExternalServiceName,
+	}
+	ingress, _, _ := unstructured.NestedSlice(service.Object, "status", "loadBalancer", "ingress")
+	if len(ingress) == 0 {
+		status.Phase = platform.SSHGatewayPhaseReconciling
+		status.Reason = platform.SSHGatewayReasonServicePending
+		status.Message = "External VM SSH gateway Service was applied, but the LoadBalancer is not ready yet. If this remains pending, check whether the requested port is already used by the host or load balancer."
+		return status
+	}
+	status.Phase = platform.SSHGatewayPhaseReady
+	status.Reason = platform.SSHGatewayReasonServiceApplied
+	status.Message = "External VM SSH gateway LoadBalancer is ready."
+	return status
 }
 
 func deleteExternalGatewayService(ctx context.Context, dynamicClient dynamic.Interface) error {

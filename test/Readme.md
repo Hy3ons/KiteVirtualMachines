@@ -143,12 +143,6 @@ prefix such as `registry.example.com/kite`.
 When `true`, the script prepares Longhorn, KubeVirt, CDI, the Kite StorageClass,
 and the golden image using the existing deployment helpers. Default: `true`.
 
-`TEST_MANAGE_HOST_SSHD`
-
-Legacy-only switch for older SSH handoff experiments. General k3s, minikube,
-and k8s E2E scripts keep host sshd untouched and expect the gateway to stay
-internal until Admin Settings enables `kite-gateway-external`.
-
 `TEST_GATEWAY_HOST_KEY_SOURCE`
 
 How the general cluster E2E scripts create the `kite-gateway` SSH host key
@@ -174,34 +168,9 @@ The file name stored inside the gateway host key Secret and mounted into the
 gateway container. Default: `ssh_host_rsa_key`, matching the production
 manifest path `/etc/kite-gateway/ssh/ssh_host_rsa_key`.
 
-`./test/all-test-k3s-ssh-handoff.sh`
-
-This is the dangerous SSH acceptance gate for k3s hosts. It intentionally
-checks the legacy full external SSH handoff outside the normal install path:
-
-- host sshd is moved away from port `22` to `TEST_HOST_SSHD_PORT` (default `2022`),
-- the selected host sshd port is rejected before any config change when another process already uses it,
-- `svc/kite-gateway` is exposed as a `LoadBalancer` on external port `22`,
-- port `22` returns the `kite-gateway` SSH banner,
-- `TEST_HOST_SSHD_PORT` returns the host sshd banner,
-- the external gateway port and the moved host sshd port expose the same SSH
-  host key fingerprint,
-- a username that is not a Kite VM route can still log into the host through
-  gateway fallback using the host account password.
-
-Run it only from a place where you can recover the server console or connect
-with `ssh -p <TEST_HOST_SSHD_PORT>` if something goes wrong:
-
-```sh
-TEST_HOST_SSH_USER=hhs2003 \
-TEST_HOST_SSH_PASSWORD='<host-password>' \
-TEST_HOST_SSHD_PORT=2022 \
-./test/all-test-k3s-ssh-handoff.sh
-```
-
-If the host does not have Go installed, the script automatically runs the SSH
-probe through Docker with `golang:1.25-alpine` and host networking. Override this
-with `TEST_SSH_PROBE_RUNNER=go` or `TEST_SSH_PROBE_RUNNER=docker` when needed.
+The old k3s SSH handoff test has been removed. Kite installers no longer move
+host sshd or expose the gateway on an external SSH port by default. Gateway
+external exposure is tested through Admin Settings/runtime ConfigMap reconcile.
 
 The general cluster E2E scripts do not perform this check. They patch
 `kite-gateway` to `ClusterIP` and verify the gateway through `kubectl
