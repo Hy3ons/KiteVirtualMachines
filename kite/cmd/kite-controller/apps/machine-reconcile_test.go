@@ -85,6 +85,38 @@ func TestReconcileKiteVirtualMachineDeletionTimestampRemovesFinalizer(t *testing
 	}
 }
 
+// TestReconcileKiteVirtualMachineStaleEventUsesLatestDeletionTimestamp verifies stale event safety.
+// t is the Go test handle used for assertions.
+// The test prevents old informer events from recreating VM children after the CRD has started deleting.
+func TestReconcileKiteVirtualMachineStaleEventUsesLatestDeletionTimestamp(t *testing.T) {
+	ctx := context.Background()
+	namespace := "user-a"
+	name := "vm-a"
+	current := newMachineReconcileKiteVirtualMachineSpec(namespace, name)
+	current.SetFinalizers([]string{kiteVirtualMachineCleanupFinalizer})
+	current.SetDeletionTimestamp(&metav1.Time{Time: metav1.Now().Time})
+	staleEvent := newMachineReconcileKiteVirtualMachineSpec(namespace, name)
+	client := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), machineReconcileListKinds(),
+		current,
+		newMachineReconcileGuestLoginSecret(namespace, name, "$6$rounds=500000$salt$hash"),
+	)
+
+	if err := ReconcileKiteVirtualMachine(ctx, client, staleEvent); err != nil {
+		t.Fatalf("ReconcileKiteVirtualMachine returned error: %v", err)
+	}
+
+	latest, err := client.Resource(kiteVirtualMachineGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("expected deleting KiteVirtualMachine to remain in fake client, got %v", err)
+	}
+	if hasKiteVirtualMachineFinalizer(latest.GetFinalizers()) {
+		t.Fatalf("expected stale event to remove cleanup finalizer, got %v", latest.GetFinalizers())
+	}
+	if _, err := client.Resource(secretGVR).Namespace(namespace).Get(ctx, sshKeySecretName(name), metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("expected stale event not to create SSH key Secret, got %v", err)
+	}
+}
+
 // TestDeleteOwnedNamespacedResourceSkipsUnlabeledResource verifies destructive cleanup label guards.
 // t is the Go test handle used for assertions.
 // The test protects golden resources such as kite/ubuntu-22.04 from VM cleanup by name alone.

@@ -205,6 +205,16 @@ func ReconcileKiteVirtualMachine(ctx context.Context, dynamicClient dynamic.Inte
 		return nil
 	}
 
+	currentResource, currentVM, err := latestKiteVirtualMachineForReconcile(ctx, dynamicClient, vm.Namespace, vm.Name)
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	resource = currentResource
+	vm = currentVM
+
 	if resource.GetDeletionTimestamp() != nil {
 		return reconcileKiteVirtualMachineDeletion(ctx, dynamicClient, resource, vm)
 	}
@@ -252,6 +262,25 @@ func ReconcileKiteVirtualMachine(ctx context.Context, dynamicClient dynamic.Inte
 
 	log.Printf("deleted KiteVirtualMachine CRD after KubeVirt VirtualMachine was absent: %s/%s", vm.Namespace, vm.Name)
 	return nil
+}
+
+// latestKiteVirtualMachineForReconcile reads the API server copy for a KiteVirtualMachine event.
+// ctx controls the Kubernetes get request.
+// dynamicClient reads the namespaced KiteVirtualMachine CRD.
+// namespace and name identify the CRD from an informer event that may be stale.
+// The returned unstructured object and typed VM are used so delete timestamps always win over old events.
+func latestKiteVirtualMachineForReconcile(ctx context.Context, dynamicClient dynamic.Interface, namespace string, name string) (*unstructured.Unstructured, *kite.KiteVirtualMachine, error) {
+	current, err := dynamicClient.Resource(kiteVirtualMachineGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	vm, err := kiteVirtualMachineFromUnstructured(current)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return current, vm, nil
 }
 
 // reconcileKiteVirtualMachineDesiredState applies the real resources for one KiteVirtualMachine.
