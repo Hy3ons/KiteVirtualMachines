@@ -160,9 +160,9 @@
 
 ## SSH Gateway
 
-목적: 외부 SSH 22번 연결을 받아 VM route 또는 host fallback으로 안전하게 전달한다.
+목적: 운영자가 명시적으로 연 외부 SSH 포트에서 VM route 또는 host fallback으로 안전하게 전달한다.
 
-최종 기준: VM `sshId` 사용자는 자기 VM으로 접속하고, VM route가 없는 host 계정은 host sshd fallback으로 로그인할 수 있다.
+최종 기준: fresh install 직후 외부 SSH Service가 없고 host sshd는 변경되지 않는다. Level 3 admin이 SSH Gateway를 활성화하면 `kite-gateway-external` LoadBalancer가 생성되고, VM `sshId` 사용자는 자기 VM으로 접속한다. host fallback은 별도 활성화와 host sshd port 입력이 있을 때만 동작한다.
 
 | 소분류 | 테스트해야 하는 것 |
 | --- | --- |
@@ -172,18 +172,23 @@
 | Public key auth | 지원되는 key 인증 흐름이 있다면 VM route와 Secret 기준으로만 허용되는지 확인한다. |
 | Backend dial | gateway가 `vps-access-<vm>` Service의 22번으로 SSH session을 프록시하는지 확인한다. |
 | VM not ready | VM route는 있지만 Service/VM이 준비되지 않았을 때 명확히 실패하고 연결이 매달리지 않는지 확인한다. |
-| Host fallback | VM route가 없는 username은 configured host sshd 주소로 password/key 인증을 전달하는지 확인한다. |
+| Default internal only | fresh install 후 `kite-gateway`는 ClusterIP이고 `kite-gateway-external` Service가 없는지 확인한다. |
+| Runtime config desired | `kite-runtime-config`의 `sshGatewayExternalEnabled=false`, `sshGatewayExternalPort=""`, `sshGatewayHostFallbackEnabled=false`, `sshGatewayHostSshdPort=""` 기본값을 확인한다. |
+| Gateway status | `kite-gateway-status`가 Disabled/Blocked/Ready/Failed phase와 reason/message/observed 값을 올바르게 기록하는지 확인한다. |
+| External reconcile | Admin Settings 또는 API로 external enabled + valid port를 저장하면 `kite-gateway-external` LoadBalancer가 지정 포트로 생성되는지 확인한다. |
+| Blocked reconcile | external port 누락, host fallback port 누락, external/host port 충돌 시 Blocked가 되고 `kite-gateway-external`이 생성되지 않는지 확인한다. |
+| Host fallback | VM route가 없는 username은 host fallback enabled + configured host sshd 주소일 때만 password/key 인증을 전달하는지 확인한다. |
 | Fallback priority | host username과 VM sshId가 충돌하면 VM route가 우선되는지 확인한다. |
 | Host key Secret | gateway host key Secret이 없으면 생성되고, k3s E2E에서는 실제 host sshd key fingerprint와 Secret 및 실행 중 gateway fingerprint가 일치하는지 확인한다. |
-| Host sshd address env | `ghcr-install.sh`, `build-install.sh`, `uninstall.sh`, `build-clear.sh` 흐름에서 `KITE_GATEWAY_HOST_SSHD_ADDRESS`가 실제 host sshd 포트와 일치하는지 확인한다. |
+| Host sshd address env | controller가 `kite-runtime-config` desired 값 기준으로만 `KITE_GATEWAY_HOST_FALLBACK_ENABLED`와 `KITE_GATEWAY_HOST_SSHD_ADDRESS`를 patch하는지 확인한다. |
 | Timeout | backend VM 또는 host sshd가 응답하지 않을 때 제한 시간 안에 실패하는지 확인한다. |
-| External port handoff | gateway Service가 외부 22번을 받고 host sshd는 선택 포트로 직접 접속 가능한지 확인한다. |
+| Public config privacy | public `/api/v1/config`는 external enabled/port/status만 반환하고 host fallback port/address를 노출하지 않는지 확인한다. |
 
 ## Host SSHD Handoff
 
-목적: gateway가 22번을 사용해야 할 때 기존 host sshd 접속 경로를 안전하게 이동하고 복원한다.
+목적: 과거 또는 별도 실험에서 gateway가 22번을 사용해야 할 때 기존 host sshd 접속 경로를 안전하게 이동하고 복원한다.
 
-최종 기준: 설정 변경 전 검증, 사용자 재확인, 포트 점유 방지, sshd restart 검증, rollback, uninstall/build-clear 복원이 모두 작동한다.
+최종 기준: 기본 install/update 경로에서는 실행되지 않는다. 별도 handoff 테스트에서만 설정 변경 전 검증, 사용자 재확인, 포트 점유 방지, sshd restart 검증, rollback, uninstall/build-clear 복원이 모두 작동한다.
 
 | 소분류 | 테스트해야 하는 것 |
 | --- | --- |
@@ -271,7 +276,7 @@
 | Longhorn install | opt-in일 때 Longhorn manifest 설치와 Ready 대기가 끝까지 수행되는지 확인한다. |
 | KubeVirt install | KubeVirt operator/CR 설치와 Ready 대기가 idempotent하게 동작하는지 확인한다. |
 | CDI install | CDI operator/CR 설치와 Ready 대기가 idempotent하게 동작하는지 확인한다. |
-| all-in-one 순서 | host sshd handoff, storage, KubeVirt, CDI, golden image, app deploy, verify 순서가 지켜지는지 확인한다. |
+| all-in-one 순서 | storage, KubeVirt, CDI, golden image, app deploy, verify 순서가 지켜지고 host sshd handoff가 실행되지 않는지 확인한다. |
 | `ghcr-install.sh` install | GHCR 이미지를 pull하는 설치 흐름에서 이미지 태그와 manifest가 production default와 맞는지 확인한다. |
 | `build-install.sh` install | 로컬 build/import 후 같은 manifest가 새 image tag로 배포되는지 확인한다. |
 | component deploy | api/controller/gateway/frontend 단일 rebuild가 해당 Deployment만 갱신하고 다른 workload를 깨지 않는지 확인한다. |
@@ -325,7 +330,7 @@
 
 ## SSH Handoff Acceptance Gate
 
-목적: 실제 k3s host에서 port 22를 gateway가 받고 host sshd가 선택 포트로 이동하는 위험 경로를 별도 검증한다.
+목적: legacy 또는 별도 실험에서 실제 k3s host의 port 22를 gateway가 받고 host sshd가 선택 포트로 이동하는 위험 경로를 별도 검증한다.
 
 최종 기준: `./test/all-test-k3s-ssh-handoff.sh`가 host 접속 경로를 잃지 않고 gateway와 host fallback을 모두 검증한다.
 

@@ -12,6 +12,10 @@ write CRDs, reconcile controller output, and boot a Kite VM successfully?
 If the answer is not proven by an automated command, the change is not ready to
 ship.
 
+The full test inventory lives in [Test-Specification.md](./Test-Specification.md).
+The deferred VMware SSH gateway verification plan lives in
+[VMware-SSH-Gateway-Checklist.md](./VMware-SSH-Gateway-Checklist.md).
+
 ## Testing Philosophy
 
 Kite is a Kubernetes control plane, so mock-only confidence is not enough.
@@ -141,8 +145,9 @@ and the golden image using the existing deployment helpers. Default: `true`.
 
 `TEST_MANAGE_HOST_SSHD`
 
-When `true`, dependency setup may allow gateway host sshd handoff. Default:
-`false` because remote server access can be affected.
+Legacy-only switch for older SSH handoff experiments. General k3s, minikube,
+and k8s E2E scripts keep host sshd untouched and expect the gateway to stay
+internal until Admin Settings enables `kite-gateway-external`.
 
 `TEST_GATEWAY_HOST_KEY_SOURCE`
 
@@ -172,7 +177,7 @@ manifest path `/etc/kite-gateway/ssh/ssh_host_rsa_key`.
 `./test/all-test-k3s-ssh-handoff.sh`
 
 This is the dangerous SSH acceptance gate for k3s hosts. It intentionally
-checks the full external SSH handoff:
+checks the legacy full external SSH handoff outside the normal install path:
 
 - host sshd is moved away from port `22` to `TEST_HOST_SSHD_PORT` (default `2022`),
 - the selected host sshd port is rejected before any config change when another process already uses it,

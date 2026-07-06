@@ -44,14 +44,18 @@ func main() {
 		}
 	}()
 
+	hostFallbackEnabled := envBool("KITE_GATEWAY_HOST_FALLBACK_ENABLED", false)
+	hostFallbackAddress := envString("KITE_GATEWAY_HOST_SSHD_ADDRESS", "")
+	log.Printf("host SSH fallback enabled=%t addressConfigured=%t", hostFallbackEnabled, hostFallbackAddress != "")
+
 	server, err := gateway.NewServer(gateway.ServerConfig{
 		ListenAddress:        envString("KITE_GATEWAY_LISTEN_ADDRESS", defaultListenAddress),
 		HostKeyPath:          envString("KITE_GATEWAY_HOST_KEY_PATH", ""),
 		BackendTimeout:       time.Duration(envInt("KITE_GATEWAY_BACKEND_TIMEOUT_SECONDS", defaultBackendTimeoutSecond)) * time.Second,
 		BackendRetryInterval: time.Duration(envInt("KITE_GATEWAY_BACKEND_RETRY_SECONDS", defaultBackendRetrySecond)) * time.Second,
 		LoginBanner:          envString("KITE_GATEWAY_LOGIN_BANNER", ""),
-		HostFallbackEnabled:  envBool("KITE_GATEWAY_HOST_FALLBACK_ENABLED", true),
-		HostFallbackAddress:  envString("KITE_GATEWAY_HOST_SSHD_ADDRESS", ""),
+		HostFallbackEnabled:  hostFallbackEnabled,
+		HostFallbackAddress:  hostFallbackAddress,
 		HostFallbackTimeout:  time.Duration(envInt("KITE_GATEWAY_HOST_FALLBACK_TIMEOUT_SECONDS", defaultHostFallbackTimeout)) * time.Second,
 	}, clientManager.DynamicClient, routeTable)
 	if err != nil {

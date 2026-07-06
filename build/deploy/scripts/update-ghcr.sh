@@ -152,12 +152,6 @@ normalize_components() {
   printf '%s\n' "${normalized[@]}"
 }
 
-gateway_fallback_address() {
-  kubectl -n "${KITE_NAMESPACE}" get deployment kite-gateway \
-    -o jsonpath='{range .spec.template.spec.containers[?(@.name=="kite-gateway")].env[?(@.name=="KITE_GATEWAY_HOST_SSHD_ADDRESS")]}{.value}{end}' \
-    2>/dev/null || true
-}
-
 save_old_image() {
   local component="$1"
   local deployment
@@ -269,16 +263,11 @@ component_selected() {
 }
 
 apply_gateway_preserved_settings() {
-  local fallback_address="$1"
-
   if ! component_selected gateway; then
     return 0
   fi
 
   run_cmd "${ROOT_DIR}/build/deploy/scripts/ensure-gateway-host-key-secret.sh"
-  if [[ -n "${fallback_address}" ]]; then
-    run_cmd kubectl -n "${KITE_NAMESPACE}" set env deployment/kite-gateway "KITE_GATEWAY_HOST_SSHD_ADDRESS=${fallback_address}"
-  fi
 }
 
 wait_rollout() {
@@ -368,7 +357,6 @@ run_verify() {
 
 main() {
   local component
-  local fallback_address
 
   require_command kubectl
   configure_interactive_update_options
@@ -378,7 +366,6 @@ main() {
     kubectl get nodes >/dev/null
   fi
 
-  fallback_address="$(gateway_fallback_address)"
   apply_common_manifests
 
   while read -r component; do
@@ -386,7 +373,7 @@ main() {
     apply_component "${component}"
   done < <(normalize_components "${KITE_UPDATE_COMPONENTS}")
 
-  apply_gateway_preserved_settings "${fallback_address}"
+  apply_gateway_preserved_settings
 
   if ! while read -r component; do
     [[ -z "${component}" ]] && continue

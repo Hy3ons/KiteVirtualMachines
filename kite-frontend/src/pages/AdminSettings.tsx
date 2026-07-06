@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { SEO } from '../components/SEO';
 import { adminApi } from '../api';
-import { App as AntdApp, Layout, Typography, Form, Input, Button, Card, Space, Avatar, Switch } from 'antd';
-import { GlobalOutlined, SafetyCertificateOutlined, LogoutOutlined, ReloadOutlined } from '@ant-design/icons';
+import { App as AntdApp, Layout, Typography, Form, Input, Button, Card, Space, Avatar, Switch, Alert, Descriptions, Tag } from 'antd';
+import { GlobalOutlined, SafetyCertificateOutlined, LogoutOutlined, ReloadOutlined, CloudServerOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../store/useAuthStore';
 import { useLogout } from '../hooks/useLogout';
 import { useNavigate } from 'react-router-dom';
 import { GlobalHeader } from '../components/GlobalHeader';
 import { UI_EXAMPLE_BASE_DOMAIN } from '../config/uiDefaults';
+import type { SSHGatewaySettings } from '../api/types';
 
 type DomainSettingsForm = {
   readonly baseDomain: string;
@@ -22,9 +23,36 @@ type AdminContactForm = {
   readonly adminContact: string;
 };
 
+type SSHGatewaySettingsForm = {
+  readonly externalEnabled: boolean;
+  readonly externalPort: string;
+  readonly hostFallbackEnabled: boolean;
+  readonly hostSshdPort: string;
+};
+
 const { Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
+
+const gatewayPhaseColor = (phase?: string): string => {
+  switch (phase) {
+    case 'Ready':
+      return 'success';
+    case 'Blocked':
+      return 'warning';
+    case 'Failed':
+      return 'error';
+    case 'Reconciling':
+      return 'processing';
+    default:
+      return 'default';
+  }
+};
+
+const validPort = (value: string): boolean => {
+  const port = Number(value.trim());
+  return Number.isInteger(port) && port >= 1 && port <= 65535;
+};
 
 export const AdminSettings: React.FC = () => {
   const { message } = AntdApp.useApp();
@@ -37,11 +65,14 @@ export const AdminSettings: React.FC = () => {
   const [loadingContact, setLoadingContact] = useState(false);
   const [loadingRuntime, setLoadingRuntime] = useState(false);
   const [loadingCert, setLoadingCert] = useState(false);
+  const [loadingSSHGateway, setLoadingSSHGateway] = useState(false);
   const [forceHTTPS, setForceHTTPS] = useState(false);
   const [runtimeStatus, setRuntimeStatus] = useState<{ hasJWTSecret?: boolean; hasPasswordSalt?: boolean }>({});
+  const [sshGateway, setSSHGateway] = useState<SSHGatewaySettings | undefined>();
   
   const [domainForm] = Form.useForm();
   const [contactForm] = Form.useForm();
+  const [sshGatewayForm] = Form.useForm<SSHGatewaySettingsForm>();
   const [certForm] = Form.useForm();
 
   useEffect(() => {
@@ -55,11 +86,18 @@ export const AdminSettings: React.FC = () => {
           hasJWTSecret: data.config.hasJWTSecret,
           hasPasswordSalt: data.config.hasPasswordSalt,
         });
+        setSSHGateway(data.config.sshGateway);
+        sshGatewayForm.setFieldsValue({
+          externalEnabled: Boolean(data.config.sshGateway?.externalEnabled),
+          externalPort: data.config.sshGateway?.externalPort || '',
+          hostFallbackEnabled: Boolean(data.config.sshGateway?.hostFallbackEnabled),
+          hostSshdPort: data.config.sshGateway?.hostSshdPort || '',
+        });
       }
     }).catch(() => {
       // ignore
     });
-  }, [contactForm, domainForm]);
+  }, [contactForm, domainForm, sshGatewayForm]);
 
   const handleSaveDomain = async (values: DomainSettingsForm) => {
     try {
@@ -97,6 +135,41 @@ export const AdminSettings: React.FC = () => {
       message.error('관리자 연락처 저장에 실패했습니다.');
     } finally {
       setLoadingContact(false);
+    }
+  };
+
+  const handleSaveSSHGateway = async (values: SSHGatewaySettingsForm) => {
+    const externalPort = values.externalPort?.trim() || '';
+    const hostSshdPort = values.hostSshdPort?.trim() || '';
+    if (values.externalEnabled && !validPort(externalPort)) {
+      message.error('사용자 접속 포트는 1-65535 사이의 TCP 포트여야 합니다.');
+      return;
+    }
+    if (values.hostFallbackEnabled && !validPort(hostSshdPort)) {
+      message.error('host sshd 포트는 1-65535 사이의 TCP 포트여야 합니다.');
+      return;
+    }
+    if (values.externalEnabled && values.hostFallbackEnabled && externalPort === hostSshdPort) {
+      message.error('사용자 접속 포트와 host sshd 포트는 달라야 합니다.');
+      return;
+    }
+
+    try {
+      setLoadingSSHGateway(true);
+      const data = await adminApi.saveSSHGateway({
+        externalEnabled: Boolean(values.externalEnabled),
+        externalPort,
+        hostFallbackEnabled: Boolean(values.hostFallbackEnabled),
+        hostSshdPort,
+      });
+      if (data.config?.sshGateway) {
+        setSSHGateway(data.config.sshGateway);
+      }
+      message.success('SSH gateway 설정이 저장되었습니다. 컨트롤러가 외부 노출 상태를 조정합니다.');
+    } catch {
+      message.error('SSH gateway 설정 저장에 실패했습니다.');
+    } finally {
+      setLoadingSSHGateway(false);
     }
   };
 
@@ -178,6 +251,60 @@ export const AdminSettings: React.FC = () => {
             <Switch checked={forceHTTPS} loading={loadingHTTPS} onChange={handleToggleForceHTTPS} />
             <Text strong>{forceHTTPS ? 'HTTP 요청을 HTTPS로 강제 전환' : 'HTTP 접속 허용'}</Text>
           </Space>
+        </Card>
+
+        <Card hoverable className="admin-settings-card">
+          <Title level={4}><CloudServerOutlined style={{ marginRight: 8 }} /> SSH Gateway</Title>
+          <Paragraph style={{ color: '#666' }}>
+            설치 직후에는 외부 VM SSH 접속을 열지 않습니다. 운영자가 사용자 접속 포트를 명시하면 컨트롤러가 별도 LoadBalancer Service를 생성합니다.
+            host fallback은 기존 host sshd 포트를 알고 있을 때만 켜세요.
+          </Paragraph>
+
+          <Alert
+            type={sshGateway?.status?.phase === 'Failed' ? 'error' : sshGateway?.status?.phase === 'Blocked' ? 'warning' : 'info'}
+            showIcon
+            style={{ marginBottom: 16 }}
+            title={
+              <Space>
+                <Text strong>현재 상태</Text>
+                <Tag color={gatewayPhaseColor(sshGateway?.status?.phase)}>{sshGateway?.status?.phase || 'Disabled'}</Tag>
+              </Space>
+            }
+            description={sshGateway?.status?.message || '외부 VM SSH gateway가 아직 활성화되지 않았습니다.'}
+          />
+
+          <Descriptions bordered size="small" column={{ xs: 1, sm: 1, md: 2 }} style={{ marginBottom: 20 }}>
+            <Descriptions.Item label="Desired external port">{sshGateway?.externalPort || '-'}</Descriptions.Item>
+            <Descriptions.Item label="Observed external port">{sshGateway?.status?.observedExternalPort || '-'}</Descriptions.Item>
+            <Descriptions.Item label="Host fallback desired">{sshGateway?.hostFallbackEnabled ? 'Enabled' : 'Disabled'}</Descriptions.Item>
+            <Descriptions.Item label="Observed service">{sshGateway?.status?.observedServiceName || '-'}</Descriptions.Item>
+            <Descriptions.Item label="Reason">{sshGateway?.status?.reason || '-'}</Descriptions.Item>
+            <Descriptions.Item label="Last transition">{sshGateway?.status?.lastTransitionTime || '-'}</Descriptions.Item>
+          </Descriptions>
+
+          <Form form={sshGatewayForm} layout="vertical" onFinish={handleSaveSSHGateway} initialValues={{ externalEnabled: false, externalPort: '', hostFallbackEnabled: false, hostSshdPort: '' }}>
+            <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+              <Form.Item name="externalEnabled" label="외부 VM SSH gateway 활성화" valuePropName="checked">
+                <Switch />
+              </Form.Item>
+
+              <Form.Item name="externalPort" label="사용자 접속 포트">
+                <Input placeholder="예: 22 또는 40022" size="large" inputMode="numeric" />
+              </Form.Item>
+
+              <Form.Item name="hostFallbackEnabled" label="host fallback 활성화" valuePropName="checked">
+                <Switch />
+              </Form.Item>
+
+              <Form.Item name="hostSshdPort" label="host sshd 포트">
+                <Input placeholder="예: 22, 2222, 40001" size="large" inputMode="numeric" />
+              </Form.Item>
+            </Space>
+
+            <div style={{ textAlign: 'right', marginTop: 8 }}>
+              <Button type="primary" htmlType="submit" loading={loadingSSHGateway}>SSH Gateway 설정 저장</Button>
+            </div>
+          </Form>
         </Card>
 
         <Card hoverable className="admin-settings-card">

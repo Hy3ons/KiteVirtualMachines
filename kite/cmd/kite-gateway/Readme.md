@@ -77,21 +77,11 @@ public key and disables password SSH login inside the VM.
 ## Host Port Handoff
 
 The gateway listens on container port `2222`. The base Kubernetes Service is
-internal so raw manifest apply does not steal host SSH port `22`. The public
-install scripts move or detect the host sshd listener first, then promote the
-gateway Service to `LoadBalancer` port `22`.
-If host sshd already listens on another global port, the scripts do not move it;
-they patch `KITE_GATEWAY_HOST_SSHD_ADDRESS` to that detected port instead.
-
-The handoff is handled by `build/deploy/scripts/manage-host-sshd.sh`:
-
-- non-Linux hosts are skipped,
-- hosts without systemd OpenSSH are skipped,
-- hosts whose sshd is already not using `22` are skipped,
-- occupied target ports are rejected before any sshd config is changed,
-- interactive runs require typing the selected port again before applying it,
-- confirmed changes are backed up under `/etc/kite/host-sshd`,
-- `./build-clear.sh`, `./uninstall.sh`, and `uninstall-kite.sh` can restore that backup.
+internal so raw manifest apply and public install scripts do not steal host SSH
+port `22`. A Level 3 admin enables external VM SSH access later from Admin
+Settings. The controller then creates `service/kite-gateway-external` and, only
+when host fallback is explicitly enabled, patches the gateway Deployment with a
+configured host sshd address.
 
 ## Environment
 
@@ -100,8 +90,8 @@ The handoff is handled by `build/deploy/scripts/manage-host-sshd.sh`:
 - `KITE_GATEWAY_BACKEND_TIMEOUT_SECONDS`: VM sshd wait timeout. Default `90`.
 - `KITE_GATEWAY_BACKEND_RETRY_SECONDS`: backend retry interval. Default `2`.
 - `KITE_GATEWAY_LOGIN_BANNER`: optional pre-authentication SSH banner shown before the password prompt. Empty disables the banner.
-- `KITE_GATEWAY_HOST_FALLBACK_ENABLED`: whether unknown SSH usernames may fall back to host sshd. Default `true`.
-- `KITE_GATEWAY_HOST_SSHD_ADDRESS`: host sshd fallback address. The default manifest sets this to `$(KITE_NODE_IP):2222`; install/test scripts patch it to the selected host sshd port after handoff.
+- `KITE_GATEWAY_HOST_FALLBACK_ENABLED`: whether unknown SSH usernames may fall back to host sshd. Default `false`.
+- `KITE_GATEWAY_HOST_SSHD_ADDRESS`: host sshd fallback address. It must be set when fallback is enabled, and is normally patched by the controller from Admin Settings.
 - `KITE_GATEWAY_HOST_FALLBACK_TIMEOUT_SECONDS`: host fallback password auth timeout. Default `5`.
 
 ## Host Key

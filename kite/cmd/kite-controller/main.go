@@ -25,6 +25,7 @@ func main() {
 	go apps.RunKiteVirtualMachineDataVolumeReconciler(clientManager, stopCh)
 	go apps.RunKiteVirtualMachineOfferCleanup(clientManager, stopCh)
 	go apps.RunKitePlatformIngressReconciler(clientManager, stopCh)
+	go apps.RunKiteGatewayExposureReconciler(clientManager, stopCh)
 
 	select {}
 }

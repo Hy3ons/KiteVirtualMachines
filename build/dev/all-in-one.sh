@@ -18,8 +18,6 @@ set -euo pipefail
 #   APPLY_GOLDEN_IMAGE: default true
 #   DEPLOY_KITE: default true
 #   RUN_VERIFY: default true
-#   MANAGE_HOST_SSHD: default true
-#   KITE_HOST_SSHD_PORT: default 2222
 #   KITE_LONGHORN_USE_DEDICATED_DISK: default false
 #   KITE_GATEWAY_HOST_KEY_REFRESH: default false
 #   FRONTEND_VITE_USE_MOCK: default false
@@ -44,8 +42,6 @@ APPLY_STORAGECLASS_WAS_SET="${APPLY_STORAGECLASS+x}"
 APPLY_GOLDEN_IMAGE_WAS_SET="${APPLY_GOLDEN_IMAGE+x}"
 DEPLOY_KITE_WAS_SET="${DEPLOY_KITE+x}"
 RUN_VERIFY_WAS_SET="${RUN_VERIFY+x}"
-MANAGE_HOST_SSHD_WAS_SET="${MANAGE_HOST_SSHD+x}"
-KITE_HOST_SSHD_PORT_WAS_SET="${KITE_HOST_SSHD_PORT+x}"
 KITE_LONGHORN_USE_DEDICATED_DISK_WAS_SET="${KITE_LONGHORN_USE_DEDICATED_DISK+x}"
 KITE_GATEWAY_HOST_KEY_REFRESH_WAS_SET="${KITE_GATEWAY_HOST_KEY_REFRESH+x}"
 FRONTEND_VITE_USE_MOCK_WAS_SET="${FRONTEND_VITE_USE_MOCK+x}"
@@ -63,9 +59,6 @@ APPLY_STORAGECLASS="${APPLY_STORAGECLASS:-true}"
 APPLY_GOLDEN_IMAGE="${APPLY_GOLDEN_IMAGE:-true}"
 DEPLOY_KITE="${DEPLOY_KITE:-true}"
 RUN_VERIFY="${RUN_VERIFY:-true}"
-MANAGE_HOST_SSHD="${MANAGE_HOST_SSHD:-true}"
-KITE_HOST_SSHD_PORT="${KITE_HOST_SSHD_PORT:-2222}"
-KITE_HOST_SSHD_STATE="${KITE_HOST_SSHD_STATE:-/etc/kite/host-sshd/state.env}"
 KITE_LONGHORN_USE_DEDICATED_DISK="${KITE_LONGHORN_USE_DEDICATED_DISK:-false}"
 KITE_GATEWAY_HOST_KEY_REFRESH="${KITE_GATEWAY_HOST_KEY_REFRESH:-false}"
 FRONTEND_VITE_USE_MOCK="${FRONTEND_VITE_USE_MOCK:-false}"
@@ -139,80 +132,10 @@ ensure_kite_namespace() {
   kubectl apply -f "${ROOT_DIR}/build/kite/namespace.yaml"
 }
 
-# Kite-managed host sshd state is written by manage-host-sshd.sh and tells the gateway where fallback SSH lives.
-managed_host_sshd_port() {
-  local state
-  local port
-
-  if [[ -f "${KITE_HOST_SSHD_STATE}" ]]; then
-    state="$(cat "${KITE_HOST_SSHD_STATE}")"
-  elif command -v sudo >/dev/null 2>&1 && sudo test -f "${KITE_HOST_SSHD_STATE}" 2>/dev/null; then
-    state="$(sudo cat "${KITE_HOST_SSHD_STATE}")"
-  else
-    port="$("${ROOT_DIR}/build/deploy/scripts/manage-host-sshd.sh" print-port 2>/dev/null || true)"
-    echo "${port:-${KITE_HOST_SSHD_PORT}}"
-    return 0
-  fi
-
-  port="$(printf '%s\n' "${state}" | awk -F= '$1 == "PORT" { print $2; exit }')"
-  echo "${port:-${KITE_HOST_SSHD_PORT}}"
-}
-
-# The gateway pod needs the same host sshd port that the host handoff selected.
-patch_gateway_host_sshd_address() {
-  local port
-
-  if [[ "${MANAGE_HOST_SSHD}" != "true" ]]; then
-    return 0
-  fi
-
-  port="$(managed_host_sshd_port)"
-  log "configuring kite-gateway host fallback address with host sshd port ${port}"
-  kubectl -n kite set env deployment/kite-gateway "KITE_GATEWAY_HOST_SSHD_ADDRESS=\$(KITE_NODE_IP):${port}"
-  kubectl -n kite rollout status deployment/kite-gateway --timeout=180s
-}
-
-configure_gateway_service_exposure() {
-  local node_port
-
-  if [[ "${MANAGE_HOST_SSHD}" == "true" ]]; then
-    log "exposing kite-gateway Service on external SSH port 22"
-    kubectl -n kite patch service kite-gateway --type=merge -p '{
-      "spec": {
-        "type": "LoadBalancer",
-        "ports": [
-          {
-            "name": "ssh",
-            "port": 22,
-            "targetPort": "ssh",
-            "protocol": "TCP"
-          }
-        ]
-      }
-    }'
-    return
-  fi
-
-  log "keeping kite-gateway Service internal because MANAGE_HOST_SSHD=false"
-  node_port="$(kubectl -n kite get service kite-gateway -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || true)"
-  if [[ -n "${node_port}" ]]; then
-    kubectl -n kite patch service kite-gateway --type=json -p='[
-      {"op":"replace","path":"/spec/type","value":"ClusterIP"},
-      {"op":"remove","path":"/spec/ports/0/nodePort"}
-    ]'
-  else
-    kubectl -n kite patch service kite-gateway --type=merge -p '{"spec":{"type":"ClusterIP"}}'
-  fi
-}
-
 configure_interactive_install_options() {
   kite_prompt_interactive || return 0
 
   log "interactive install options"
-  kite_prompt_configure_bool MANAGE_HOST_SSHD "${MANAGE_HOST_SSHD_WAS_SET}" "Kite gateway가 22번을 쓸 수 있게 host sshd handoff를 확인할까요?"
-  if [[ "${MANAGE_HOST_SSHD}" == "true" ]]; then
-    kite_prompt_value KITE_HOST_SSHD_PORT "${KITE_HOST_SSHD_PORT_WAS_SET}" "KITE_HOST_SSHD_PORT 값을 정합니다." "host sshd가 22번에서 이동할 포트입니다. 실제 적용 전 점유 확인을 거칩니다."
-  fi
   kite_prompt_configure_bool INSTALL_LONGHORN "${INSTALL_LONGHORN_WAS_SET}" "Longhorn을 설치할까요?"
   kite_prompt_configure_bool CONFIGURE_LONGHORN "${CONFIGURE_LONGHORN_WAS_SET}" "Longhorn disk/tag 설정을 적용할까요?"
   if [[ "${CONFIGURE_LONGHORN}" == "true" ]]; then
@@ -246,11 +169,10 @@ configure_interactive_install_options() {
   fi
   kite_prompt_configure_bool RUN_VERIFY "${RUN_VERIFY_WAS_SET}" "설치 후 verify 스크립트를 실행할까요?"
 
-  log "install choices: MANAGE_HOST_SSHD=${MANAGE_HOST_SSHD}, KITE_HOST_SSHD_PORT=${KITE_HOST_SSHD_PORT}, INSTALL_LONGHORN=${INSTALL_LONGHORN}, CONFIGURE_LONGHORN=${CONFIGURE_LONGHORN}, KITE_LONGHORN_USE_DEDICATED_DISK=${KITE_LONGHORN_USE_DEDICATED_DISK}, APPLY_STORAGECLASS=${APPLY_STORAGECLASS}, INSTALL_KUBEVIRT=${INSTALL_KUBEVIRT}, INSTALL_CDI=${INSTALL_CDI}, APPLY_GOLDEN_IMAGE=${APPLY_GOLDEN_IMAGE}, DEPLOY_KITE=${DEPLOY_KITE}, FRONTEND_VITE_USE_MOCK=${FRONTEND_VITE_USE_MOCK}, K3S_IMPORT_IMAGES=${K3S_IMPORT_IMAGES}, K3D_LOAD_IMAGES=${K3D_LOAD_IMAGES}, KIND_LOAD_IMAGES=${KIND_LOAD_IMAGES}, MINIKUBE_START=${MINIKUBE_START}, PUSH_IMAGES=${PUSH_IMAGES}, KITE_GATEWAY_HOST_KEY_REFRESH=${KITE_GATEWAY_HOST_KEY_REFRESH}, RUN_VERIFY=${RUN_VERIFY}"
+  log "install choices: INSTALL_LONGHORN=${INSTALL_LONGHORN}, CONFIGURE_LONGHORN=${CONFIGURE_LONGHORN}, KITE_LONGHORN_USE_DEDICATED_DISK=${KITE_LONGHORN_USE_DEDICATED_DISK}, APPLY_STORAGECLASS=${APPLY_STORAGECLASS}, INSTALL_KUBEVIRT=${INSTALL_KUBEVIRT}, INSTALL_CDI=${INSTALL_CDI}, APPLY_GOLDEN_IMAGE=${APPLY_GOLDEN_IMAGE}, DEPLOY_KITE=${DEPLOY_KITE}, FRONTEND_VITE_USE_MOCK=${FRONTEND_VITE_USE_MOCK}, K3S_IMPORT_IMAGES=${K3S_IMPORT_IMAGES}, K3D_LOAD_IMAGES=${K3D_LOAD_IMAGES}, KIND_LOAD_IMAGES=${KIND_LOAD_IMAGES}, MINIKUBE_START=${MINIKUBE_START}, PUSH_IMAGES=${PUSH_IMAGES}, KITE_GATEWAY_HOST_KEY_REFRESH=${KITE_GATEWAY_HOST_KEY_REFRESH}, RUN_VERIFY=${RUN_VERIFY}"
 }
 
 export_install_options() {
-  export KITE_HOST_SSHD_PORT
   export KITE_LONGHORN_USE_DEDICATED_DISK
   export KITE_GATEWAY_HOST_KEY_REFRESH
   export FRONTEND_VITE_USE_MOCK
@@ -259,13 +181,6 @@ export_install_options() {
   export KIND_LOAD_IMAGES
   export MINIKUBE_START
   export PUSH_IMAGES
-  if [[ "${MANAGE_HOST_SSHD}" == "true" ]]; then
-    if [[ -z "${KITE_MANAGE_HOST_SSHD:-}" ]]; then
-      export KITE_MANAGE_HOST_SSHD=true
-    fi
-  else
-    export KITE_MANAGE_HOST_SSHD=false
-  fi
 }
 
 # 개발용 전체 설치 순서다. 각 단계는 run_step으로 감싸져 있어 환경변수로 on/off할 수 있다.
@@ -276,8 +191,6 @@ main() {
   kubectl get nodes >/dev/null
   configure_interactive_install_options
   export_install_options
-  # gateway가 22번 포트를 쓰는 배포에서는 host sshd handoff가 먼저 필요할 수 있다.
-  run_step "${MANAGE_HOST_SSHD}" "checking host sshd handoff for Kite gateway" "${ROOT_DIR}/build/deploy/scripts/manage-host-sshd.sh" ensure
 
   run_step "${INSTALL_LONGHORN}" "installing Longhorn" "${ROOT_DIR}/build/deploy/scripts/install-longhorn.sh"
   run_step "${CONFIGURE_LONGHORN}" "waiting for Longhorn" "${ROOT_DIR}/build/deploy/scripts/wait-longhorn.sh"
@@ -295,12 +208,7 @@ main() {
   run_step "${APPLY_GOLDEN_IMAGE}" "applying Ubuntu golden image" kubectl apply -f "${ROOT_DIR}/build/kite-storage/golden-images"
   run_step "${APPLY_GOLDEN_IMAGE}" "waiting for Ubuntu golden image" "${ROOT_DIR}/build/deploy/scripts/wait-golden-image.sh" ubuntu-22.04
 
-  if [[ "${DEPLOY_KITE}" == "true" ]] && kubectl -n kite get service kite-gateway >/dev/null 2>&1; then
-    configure_gateway_service_exposure
-  fi
   run_step "${DEPLOY_KITE}" "building local Kite images and deploying Kite" "${ROOT_DIR}/build/dev/dev.sh"
-  run_step "${DEPLOY_KITE}" "configuring gateway Service exposure" configure_gateway_service_exposure
-  run_step "${DEPLOY_KITE}" "configuring gateway host sshd fallback port" patch_gateway_host_sshd_address
   run_step "${RUN_VERIFY}" "verifying Kite installation" "${ROOT_DIR}/build/deploy/scripts/verify.sh"
 
   log "all-in-one install complete"

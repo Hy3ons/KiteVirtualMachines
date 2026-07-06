@@ -39,7 +39,7 @@ flowchart TD
     end
 
     user --> frontend
-    user -->|"ssh sshId@node-ip:22"| gateway
+    user -->|"ssh -p configured-port sshId@node-ip"| gateway
     frontend --> api
     api -->|"create/update desired state"| kiteUser
     api -->|"create/update desired state"| kiteVM
@@ -86,12 +86,14 @@ Namespace, KubeVirt VM, DataVolume, Service, Secret, Ingress 상태를 맞춥니
 
 Kite는 VM별 NodePort를 만들지 않습니다. VM마다 외부 포트를 하나씩 소모하면
 포트 관리가 어려워지고, VM 삭제 실패 시 고아 포트가 남을 수 있기 때문입니다.
-대신 `kite-gateway`가 외부 SSH 22번을 받고, SSH login username을
+대신 `kite-gateway`가 하나의 SSH 진입점을 받고, SSH login username을
 `KiteVirtualMachine.spec.sshId`와 매칭해 내부 `vps-access-<vmName>` ClusterIP
-Service로 프록시합니다.
+Service로 프록시합니다. 설치 직후에는 외부 SSH LoadBalancer를 만들지 않으며,
+Level 3 admin이 Admin Settings에서 “SSH Gateway”를 활성화하고 사용자 접속
+포트를 지정해야 `kite-gateway-external` Service가 생성됩니다.
 
 ```text
-ssh <sshId>@<node-ip>:22
+ssh -p <configured-port> <sshId>@<node-ip>
   -> kite-gateway
   -> KiteVirtualMachine(spec.sshId) lookup
   -> vps-access-<vmName>.<namespace>.svc.cluster.local:22
@@ -102,22 +104,11 @@ ssh <sshId>@<node-ip>:22
 controller가 만든 SSH key Secret을 사용합니다. VM cloud-init에는 이 public key만
 들어가며 VM 내부 password login은 꺼져 있습니다.
 
-기존 host sshd도 고려합니다. 설치 시 host sshd가 22번을 쓰고 있으면 이동할
-포트를 한 번 물어봅니다. 선택한 포트가 이미 사용 중이면 아무 설정도 바꾸지 않고
-다시 묻거나 실패합니다. `kite-gateway`는
-VM route가 없는 username에 한해 host sshd `<node-ip>:선택포트`로 fallback합니다.
-그래서 기존 host 계정도 계속 아래 방식으로 접속할 수 있습니다.
-
-```sh
-ssh <host-user>@<node-ip>
-```
-
-단, host Linux username과 VM `sshId`가 같으면 VM route가 우선입니다. 이때 host
-관리는 설치 때 선택한 host sshd 포트를 명시합니다.
-
-```sh
-ssh <host-user>@<node-ip> -p <selected-host-sshd-port>
-```
+Kite는 기본 설치 중 host sshd 설정을 이동하거나 수정하지 않습니다. 운영자가
+Admin Settings에서 host fallback을 켠 경우에만 controller가 gateway Deployment에
+`<node-ip>:<host-sshd-port>` fallback 주소를 주입합니다. fallback은 VM route가
+없는 username에만 적용되며, VM `sshId`가 존재하는 경우 host 계정으로 우회하지
+않습니다.
 
 ## Components
 
@@ -203,18 +194,13 @@ Kite has two top-level install entrypoints and one GHCR update entrypoint:
   PVCs, runtime config, and shared infrastructure while reapplying Kite manifests
   and rolling Deployments to a selected GHCR image tag.
 
-Both install modes deploy `kite-gateway` as the external SSH entrypoint by
-default. The install flow first checks whether host `sshd` already avoids port
-`22`. If it does, Kite does not move it and patches gateway fallback to that
-existing port. If host `sshd` still needs to move, the flow moves it to
-`KITE_HOST_SSHD_PORT` (default `2222`) before exposing `kite-gateway` on
-external port `22`. In interactive runs the selected port is asked once and is
-checked for occupancy before changing the host. The original config is backed up
-under `/etc/kite/host-sshd`, and
-`./build-clear.sh`, `./uninstall.sh`, or `build/deploy/scripts/uninstall-kite.sh`
-can restore it from that backup. Hosts without OpenSSH, systemd, Linux, or an
-active port `22` listener are skipped safely. Set `MANAGE_HOST_SSHD=false` only
-when you intentionally want the gateway Service to stay internal.
+Both install modes deploy `kite-gateway` with only an internal `ClusterIP`
+Service. They do not move host `sshd`, do not expose external SSH, and do not
+claim port `22`. A Level 3 admin enables VM SSH exposure later from Admin
+Settings by setting the SSH Gateway external port. The controller then creates
+or updates `service/kite-gateway-external` as a `LoadBalancer`. If host fallback
+is also enabled, the admin must explicitly provide the host sshd port; Kite does
+not guess it.
 
 The gateway host key is also part of the install contract. On Linux hosts the
 installer tries to reuse the existing OpenSSH host key from `/etc/ssh` so users
@@ -267,8 +253,7 @@ The remote updater downloads the selected GitHub archive into a temporary
 directory and runs `build/deploy/scripts/update-ghcr.sh`. It does not remove
 Kite users, VMs, PVCs, Longhorn, KubeVirt, CDI, or host sshd settings. It
 applies CRDs/RBAC/runtime manifests, preserves an existing
-`kite-runtime-config`, restores the current gateway host sshd fallback address
-after manifest apply, changes Deployment images, waits for rollout, and rolls
+`kite-runtime-config`, changes Deployment images, waits for rollout, and rolls
 back to the previous images if rollout or smoke checks fail.
 
 Uninstall Kite resources without cloning this repository:
@@ -327,17 +312,16 @@ CLEAR_LONGHORN=true KITE_CLUSTER=k3s ./build-clear.sh
 CLEAR_LONGHORN_DATA=true CLEAR_LONGHORN_DATA_CONFIRM=true KITE_CLUSTER=k3s ./build-clear.sh
 ```
 
-More details are in `build/dev/README.md`. The full `build` directory layout
-and root command naming contract are documented in `build/README.md`.
-
-Host SSHD handoff can be controlled with environment variables:
+Legacy host SSHD restore can still be controlled for clusters that were installed
+with older Kite handoff behavior:
 
 ```sh
-KITE_MANAGE_HOST_SSHD=true KITE_CLUSTER=k3s ./build-install.sh
-MANAGE_HOST_SSHD=false KITE_CLUSTER=k3s ./build-install.sh
 KITE_RESTORE_HOST_SSHD=true KITE_CLUSTER=k3s ./build-clear.sh
 RESTORE_HOST_SSHD=false KITE_CLUSTER=k3s ./build-clear.sh
 ```
+
+More details are in `build/dev/README.md`. The full `build` directory layout
+and root command naming contract are documented in `build/README.md`.
 
 ## Production-Oriented k3s Install
 
@@ -393,13 +377,10 @@ build/deploy/scripts/uninstall-kite.sh
 The remote cleanup commands are listed in
 [Quick Install and Uninstall](#quick-install-and-uninstall). The cleanup removes
 Kite application resources and Kite CRDs first, then optionally restores the
-host SSHD handoff and removes Kite Longhorn disk data only when the explicit
+legacy host SSHD handoff state and removes Kite Longhorn disk data only when the explicit
 cleanup environment variables are set.
 
 More details are in `build/deploy/README.md`.
-
-The same host SSHD handoff variables are supported by `./ghcr-install.sh`,
-`./uninstall.sh`, and `build/deploy/scripts/uninstall-kite.sh`.
 
 ## GHCR Update
 
@@ -491,9 +472,9 @@ verify the SSH gateway.
 TEST_IMAGE_REGISTRY=registry.example.com/kite ./test/all-test-k8s.sh
 ```
 
-k3s E2E additionally verifies that the gateway host key Secret and the running
-gateway SSH port reuse the host sshd fingerprint. The dangerous external SSH
-handoff path is separated into:
+k3s E2E additionally verifies that default install keeps `kite-gateway` internal
+until Admin Settings enables external exposure. The legacy dangerous external
+SSH handoff path remains separated into:
 
 ```sh
 TEST_HOST_SSH_USER=<host-user> \

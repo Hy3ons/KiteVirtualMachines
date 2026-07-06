@@ -98,6 +98,10 @@ func NewServer(config ServerConfig, dynamicClient dynamic.Interface, routes *Rou
 	if config.HostFallbackTimeout <= 0 {
 		config.HostFallbackTimeout = defaultHostSSHWait
 	}
+	config.HostFallbackAddress = strings.TrimSpace(config.HostFallbackAddress)
+	if config.HostFallbackEnabled && config.HostFallbackAddress == "" {
+		return nil, errors.New("host fallback address is required when host fallback is enabled")
+	}
 
 	signer, err := loadOrGenerateHostSigner(config.HostKeyPath)
 	if err != nil {

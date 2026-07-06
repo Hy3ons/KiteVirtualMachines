@@ -36,6 +36,19 @@ func TestNewServerSkipsEmptyLoginBanner(t *testing.T) {
 	}
 }
 
+// TestNewServerRejectsEnabledHostFallbackWithoutAddress verifies fallback cannot start half-configured.
+// t is the Go test handle used for assertions.
+// The test protects host access by forcing operators to provide an explicit host sshd address.
+func TestNewServerRejectsEnabledHostFallbackWithoutAddress(t *testing.T) {
+	_, err := NewServer(ServerConfig{
+		HostFallbackEnabled: true,
+		HostFallbackAddress: "  ",
+	}, fake.NewSimpleDynamicClient(runtime.NewScheme()), NewRouteTable("fallback-test-salt"))
+	if err == nil {
+		t.Fatal("expected host fallback without address to fail")
+	}
+}
+
 // TestServerSendsLoginBannerBeforeAuthentication verifies real SSH clients receive the banner.
 // t is the Go test handle used for assertions.
 // The test drives the gateway through an SSH handshake before password auth fails.

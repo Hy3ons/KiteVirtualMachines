@@ -83,6 +83,17 @@ export const defaultDebugState: DebugState = {
     hasJWTSecret: true,
     hasPasswordSalt: true,
     hasTLSCertificate: true,
+    sshGateway: {
+      externalEnabled: false,
+      externalPort: '',
+      hostFallbackEnabled: false,
+      hostSshdPort: '',
+      status: {
+        phase: 'Disabled',
+        reason: 'ExternalDisabled',
+        message: 'External VM SSH gateway is disabled.',
+      },
+    },
   },
   nextVmId: 3,
   nextOfferId: 2,

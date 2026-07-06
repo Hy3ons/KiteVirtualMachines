@@ -7,6 +7,8 @@ import type {
   GlobalVmsResponse,
   HTTPSPolicyPayload,
   RuntimeSecretRotation,
+  SSHGatewayPayload,
+  SSHGatewayPhase,
   UserVm,
   VmResponse,
 } from './types';
@@ -80,6 +82,51 @@ export const debugAdminApi = {
   saveHTTPSPolicy: async (payload: HTTPSPolicyPayload): Promise<ConfigResponse> => {
     const state = readDebugState();
     const config = { ...state.config, forceHttps: payload.forceHttps };
+    writeDebugState({ ...state, config });
+    return { config };
+  },
+
+  saveSSHGateway: async (payload: SSHGatewayPayload): Promise<ConfigResponse> => {
+    const state = readDebugState();
+    const blockedByMissingExternalPort = payload.externalEnabled && payload.externalPort.trim() === '';
+    const blockedByMissingHostPort = payload.hostFallbackEnabled && payload.hostSshdPort.trim() === '';
+    const blockedByConflict =
+      payload.externalEnabled &&
+      payload.hostFallbackEnabled &&
+      payload.externalPort.trim() !== '' &&
+      payload.externalPort.trim() === payload.hostSshdPort.trim();
+    const phase: SSHGatewayPhase = blockedByMissingExternalPort || blockedByMissingHostPort || blockedByConflict
+      ? 'Blocked'
+      : payload.externalEnabled
+        ? 'Ready'
+        : 'Disabled';
+    const reason = blockedByMissingExternalPort
+      ? 'MissingExternalPort'
+      : blockedByMissingHostPort
+        ? 'MissingHostFallbackPort'
+        : blockedByConflict
+          ? 'PortConflict'
+          : payload.externalEnabled
+            ? 'ServiceApplied'
+            : 'ExternalDisabled';
+    const config = {
+      ...state.config,
+      sshGateway: {
+        externalEnabled: payload.externalEnabled,
+        externalPort: payload.externalPort.trim(),
+        hostFallbackEnabled: payload.hostFallbackEnabled,
+        hostSshdPort: payload.hostSshdPort.trim(),
+        status: {
+          phase,
+          reason,
+          message: payload.externalEnabled ? 'Debug SSH gateway setting was saved.' : 'External VM SSH gateway is disabled.',
+          observedExternalPort: payload.externalEnabled ? payload.externalPort.trim() : '',
+          observedHostFallbackAddress: payload.hostFallbackEnabled ? `node-ip:${payload.hostSshdPort.trim()}` : '',
+          observedServiceName: payload.externalEnabled ? 'kite-gateway-external' : '',
+          lastTransitionTime: new Date().toISOString(),
+        },
+      },
+    };
     writeDebugState({ ...state, config });
     return { config };
   },

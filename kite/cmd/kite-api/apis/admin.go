@@ -37,6 +37,13 @@ type runtimeSecretRotateRequest struct {
 	RotatePasswordSalt bool `json:"rotatePasswordSalt"`
 }
 
+type sshGatewayUpdateRequest struct {
+	ExternalEnabled     bool   `json:"externalEnabled"`
+	ExternalPort        string `json:"externalPort"`
+	HostFallbackEnabled bool   `json:"hostFallbackEnabled"`
+	HostSshdPort        string `json:"hostSshdPort"`
+}
+
 // RegisterAdmin attaches admin and manager routes to the versioned API router.
 // api is the /api/v1 router group.
 // deps provides auth, config, and Kubernetes dependencies.
@@ -56,6 +63,7 @@ func RegisterAdmin(api *gin.RouterGroup, deps Dependencies) {
 	admin.POST("/domain", RequireAccessLevel(deps, auth.AccessLevelAdmin), adminDomainUpdateHandler(deps))
 	admin.POST("/admin-contact", RequireAccessLevel(deps, auth.AccessLevelAdmin), adminContactUpdateHandler(deps))
 	admin.POST("/https", RequireAccessLevel(deps, auth.AccessLevelAdmin), adminHTTPSUpdateHandler(deps))
+	admin.POST("/ssh-gateway", RequireAccessLevel(deps, auth.AccessLevelAdmin), adminSSHGatewayUpdateHandler(deps))
 	admin.POST("/runtime-secrets/rotate", RequireAccessLevel(deps, auth.AccessLevelAdmin), adminRuntimeSecretRotateHandler(deps))
 	admin.POST("/cert", RequireAccessLevel(deps, auth.AccessLevelAdmin), adminCertUpdateHandler(deps))
 }
@@ -192,7 +200,7 @@ func adminVMDeleteHandler(deps Dependencies) gin.HandlerFunc {
 // Sensitive TLS material is never returned.
 func configGetHandler(deps Dependencies) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		settings, err := platform.NewService(deps.DynamicClient).Get(c.Request.Context())
+		settings, err := platform.NewService(deps.DynamicClient).GetPublic(c.Request.Context())
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to read platform settings"})
 			return
@@ -206,7 +214,15 @@ func configGetHandler(deps Dependencies) gin.HandlerFunc {
 // deps provides Kubernetes access through the platform settings service.
 // Sensitive TLS material is not returned; only whether it exists.
 func adminSettingsGetHandler(deps Dependencies) gin.HandlerFunc {
-	return configGetHandler(deps)
+	return func(c *gin.Context) {
+		settings, err := platform.NewService(deps.DynamicClient).Get(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to read platform settings"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"config": settings})
+	}
 }
 
 // adminDomainUpdateHandler updates the platform base domain ConfigMap.
@@ -272,6 +288,33 @@ func adminHTTPSUpdateHandler(deps Dependencies) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "HTTPS enforcement updated", "config": settings})
+	}
+}
+
+// adminSSHGatewayUpdateHandler stores operator desired SSH gateway exposure settings.
+// deps provides Kubernetes access through the platform settings service.
+// The controller later reconciles the external Service and gateway Deployment from these values.
+// This handler is restricted to Level 3 admins by RegisterAdmin.
+func adminSSHGatewayUpdateHandler(deps Dependencies) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req sshGatewayUpdateRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "invalid request body"})
+			return
+		}
+
+		settings, err := platform.NewService(deps.DynamicClient).UpdateSSHGateway(c.Request.Context(), platform.SSHGatewayDesired{
+			ExternalEnabled:     req.ExternalEnabled,
+			ExternalPort:        req.ExternalPort,
+			HostFallbackEnabled: req.HostFallbackEnabled,
+			HostSshdPort:        req.HostSshdPort,
+		})
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "SSH gateway settings updated", "config": settings})
 	}
 }
 

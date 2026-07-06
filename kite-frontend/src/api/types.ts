@@ -34,14 +34,38 @@ export type SignupResponse = {
   };
 };
 
+export type SSHGatewayPhase = 'Disabled' | 'Reconciling' | 'Ready' | 'Blocked' | 'Failed';
+
+export type SSHGatewayStatus = {
+  readonly phase: SSHGatewayPhase;
+  readonly reason: string;
+  readonly message: string;
+  readonly observedExternalPort?: string;
+  readonly observedHostFallbackAddress?: string;
+  readonly observedServiceName?: string;
+  readonly lastTransitionTime?: string;
+};
+
+export type SSHGatewaySettings = {
+  readonly externalEnabled: boolean;
+  readonly externalPort: string;
+  readonly hostFallbackEnabled?: boolean;
+  readonly hostSshdPort?: string;
+  readonly phase?: SSHGatewayPhase;
+  readonly reason?: string;
+  readonly message?: string;
+  readonly status?: SSHGatewayStatus;
+};
+
 export type ConfigResponse = {
   readonly config: {
     readonly baseDomain: string;
     readonly forceHttps: boolean;
     readonly adminContact: string;
-    readonly hasJWTSecret: boolean;
-    readonly hasPasswordSalt: boolean;
-    readonly hasTLSCertificate: boolean;
+    readonly hasJWTSecret?: boolean;
+    readonly hasPasswordSalt?: boolean;
+    readonly hasTLSCertificate?: boolean;
+    readonly sshGateway: SSHGatewaySettings;
   };
 };
 
@@ -174,6 +198,13 @@ export type RuntimeSecretRotation = {
 
 export type HTTPSPolicyPayload = {
   readonly forceHttps: boolean;
+};
+
+export type SSHGatewayPayload = {
+  readonly externalEnabled: boolean;
+  readonly externalPort: string;
+  readonly hostFallbackEnabled: boolean;
+  readonly hostSshdPort: string;
 };
 
 export type CertPayload = {
