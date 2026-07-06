@@ -103,8 +103,8 @@ controller가 만든 SSH key Secret을 사용합니다. VM cloud-init에는 이 
 들어가며 VM 내부 password login은 꺼져 있습니다.
 
 기존 host sshd도 고려합니다. 설치 시 host sshd가 22번을 쓰고 있으면 이동할
-포트를 물어보고, 같은 포트를 한 번 더 입력해야 설정을 바꿉니다. 선택한 포트가
-이미 사용 중이면 아무 설정도 바꾸지 않고 다시 묻거나 실패합니다. `kite-gateway`는
+포트를 한 번 물어봅니다. 선택한 포트가 이미 사용 중이면 아무 설정도 바꾸지 않고
+다시 묻거나 실패합니다. `kite-gateway`는
 VM route가 없는 username에 한해 host sshd `<node-ip>:선택포트`로 fallback합니다.
 그래서 기존 host 계정도 계속 아래 방식으로 접속할 수 있습니다.
 
@@ -208,9 +208,9 @@ default. The install flow first checks whether host `sshd` already avoids port
 `22`. If it does, Kite does not move it and patches gateway fallback to that
 existing port. If host `sshd` still needs to move, the flow moves it to
 `KITE_HOST_SSHD_PORT` (default `2222`) before exposing `kite-gateway` on
-external port `22`. In interactive runs the selected port is checked for
-occupancy and must be typed again before changing the host. The original config
-is backed up under `/etc/kite/host-sshd`, and
+external port `22`. In interactive runs the selected port is asked once and is
+checked for occupancy before changing the host. The original config is backed up
+under `/etc/kite/host-sshd`, and
 `./build-clear.sh`, `./uninstall.sh`, or `build/deploy/scripts/uninstall-kite.sh`
 can restore it from that backup. Hosts without OpenSSH, systemd, Linux, or an
 active port `22` listener are skipped safely. Set `MANAGE_HOST_SSHD=false` only

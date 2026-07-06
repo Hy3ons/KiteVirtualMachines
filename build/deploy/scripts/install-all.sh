@@ -181,7 +181,7 @@ configure_interactive_install_options() {
   log "interactive install options"
   kite_prompt_configure_bool MANAGE_HOST_SSHD "${MANAGE_HOST_SSHD_WAS_SET}" "Kite gateway가 22번을 쓸 수 있게 host sshd handoff를 확인할까요?"
   if [[ "${MANAGE_HOST_SSHD}" == "true" ]]; then
-    kite_prompt_value KITE_HOST_SSHD_PORT "${KITE_HOST_SSHD_PORT_WAS_SET}" "KITE_HOST_SSHD_PORT 값을 정합니다." "host sshd가 22번에서 이동할 포트입니다. 실제 적용 전 점유 확인과 재입력 확인을 한 번 더 거칩니다."
+    kite_prompt_value KITE_HOST_SSHD_PORT "${KITE_HOST_SSHD_PORT_WAS_SET}" "KITE_HOST_SSHD_PORT 값을 정합니다." "host sshd가 22번에서 이동할 포트입니다. 실제 적용 전 점유 확인을 거칩니다."
   fi
   kite_prompt_configure_bool INSTALL_LONGHORN "${INSTALL_LONGHORN_WAS_SET}" "Longhorn 기본 manifest를 설치할까요?"
   kite_prompt_configure_bool CONFIGURE_LONGHORN "${CONFIGURE_LONGHORN_WAS_SET}" "Longhorn에 Kite 전용 disk/tag 설정을 적용할까요?"
@@ -205,9 +205,6 @@ export_install_options() {
   if [[ "${MANAGE_HOST_SSHD}" == "true" ]]; then
     if [[ -z "${KITE_MANAGE_HOST_SSHD:-}" ]]; then
       export KITE_MANAGE_HOST_SSHD=true
-    fi
-    if kite_prompt_interactive && [[ -z "${KITE_HOST_SSHD_PORT_RECONFIRM:-}" ]]; then
-      export KITE_HOST_SSHD_PORT_RECONFIRM=true
     fi
   else
     export KITE_MANAGE_HOST_SSHD=false

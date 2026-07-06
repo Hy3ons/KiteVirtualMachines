@@ -21,7 +21,7 @@ set -euo pipefail
 #   KITE_GHCR_INSTALL_ARCHIVE_URL: default empty; 직접 archive URL을 지정할 때 쓴다. prompt 없음.
 #   KITE_ASSUME_DEFAULTS: default false; true면 모든 interactive 질문을 건너뛰고 env/default 값으로 실행한다.
 #   MANAGE_HOST_SSHD: default true; gateway가 22번을 쓰도록 host sshd handoff를 수행할지 초반에 묻는다.
-#   KITE_HOST_SSHD_PORT: default 2222; host sshd handoff 대상 포트다. handoff가 필요하면 초반에 확인한다.
+#   KITE_HOST_SSHD_PORT: default 2222; host sshd handoff 대상 포트다. 원격 curl 실행에서도 초반에 한 번 묻는다.
 #   INSTALL_LONGHORN: default true; Longhorn 기본 manifest를 설치할지 초반에 묻는다.
 #   KITE_INSTALL_LONGHORN_HOST_PACKAGES: default true; apt 기반 host에서 Longhorn 필수 패키지를 자동 설치할지 정한다.
 #   CONFIGURE_LONGHORN: default true; Longhorn disk/tag 설정을 적용할지 초반에 묻는다.
@@ -36,8 +36,9 @@ set -euo pipefail
 #   NO_COLOR: default empty; 설정하면 컬러 로그를 끈다.
 #
 # Interactive Behavior:
-#   TTY에서 실행하고 env가 없는 항목은 설치 초반에 모두 질문한다. 하위 스크립트
-#   실행 중에는 같은 항목을 다시 묻지 않도록 env를 export한다.
+#   TTY에서 실행하고 env가 없는 항목은 설치 초반에 모두 질문한다. curl pipe 실행은
+#   stdin이 pipe이므로 /dev/tty가 있으면 host sshd 이동 포트만 bootstrap에서 한 번 묻는다.
+#   하위 스크립트 실행 중에는 같은 항목을 다시 묻지 않도록 env를 export한다.
 #
 # Noninteractive Behavior:
 #   env가 있으면 그 값을 그대로 쓰고 질문하지 않는다. env가 없으면 위 기본값으로
@@ -45,7 +46,7 @@ set -euo pipefail
 #
 # Dangerous Options:
 #   MANAGE_HOST_SSHD=true가 기본값이며 host sshd 포트를 바꿀 수 있다. KITE_HOST_SSHD_PORT는
-#   적용 전 점유 확인과 재입력 확인을 거친다.
+#   적용 전 점유 확인을 거친다.
 #
 # Side Effects:
 #   Kubernetes 리소스 적용, dependency 설치, host sshd handoff를 수행할 수 있다.
@@ -55,6 +56,9 @@ KITE_GHCR_INSTALL_REPOSITORY="${KITE_GHCR_INSTALL_REPOSITORY:-Hy3ons/KiteVirtual
 KITE_GHCR_INSTALL_REF="${KITE_GHCR_INSTALL_REF:-main}"
 KITE_GHCR_INSTALL_ARCHIVE_URL="${KITE_GHCR_INSTALL_ARCHIVE_URL:-}"
 KITE_GHCR_INSTALL_TMPDIR=""
+MANAGE_HOST_SSHD="${MANAGE_HOST_SSHD:-true}"
+KITE_HOST_SSHD_PORT_WAS_SET="${KITE_HOST_SSHD_PORT+x}"
+KITE_HOST_SSHD_PORT="${KITE_HOST_SSHD_PORT:-2222}"
 
 log_color_enabled() {
   [[ "${KITE_LOG_COLOR:-auto}" != "false" && -z "${NO_COLOR:-}" && -t 1 ]]
@@ -97,6 +101,39 @@ require_command() {
   fi
 }
 
+valid_tcp_port() {
+  local port="$1"
+
+  [[ "${port}" =~ ^[0-9]+$ ]] || return 1
+  (( port >= 1 && port <= 65535 ))
+}
+
+prompt_remote_host_sshd_port() {
+  local answer
+
+  [[ "${MANAGE_HOST_SSHD}" == "true" ]] || return 0
+  [[ "${KITE_ASSUME_DEFAULTS:-false}" != "true" ]] || return 0
+  [[ -z "${KITE_HOST_SSHD_PORT_WAS_SET}" ]] || return 0
+  [[ ! -t 0 && -r /dev/tty && -w /dev/tty ]] || return 0
+
+  while true; do
+    {
+      printf '%s\n' "Kite gateway가 외부 SSH 22번을 사용하기 전에 host sshd를 어떤 포트로 옮길까요?"
+      printf '  기본값은 %s입니다. 이 포트는 나중에 host SSH 직접 접속과 gateway fallback에 사용됩니다.\n' "${KITE_HOST_SSHD_PORT}"
+      printf '  포트 점유 여부는 실제 적용 직전에 다시 확인합니다.\n'
+      printf '포트 입력 [기본: %s] ' "${KITE_HOST_SSHD_PORT}"
+    } > /dev/tty
+    IFS= read -r answer < /dev/tty
+    answer="${answer:-${KITE_HOST_SSHD_PORT}}"
+    if valid_tcp_port "${answer}"; then
+      KITE_HOST_SSHD_PORT="${answer}"
+      export KITE_HOST_SSHD_PORT
+      return 0
+    fi
+    printf '[kite-ghcr-install] WARNING: port must be a number between 1 and 65535\n' > /dev/tty
+  done
+}
+
 # @description 현재 스크립트가 checkout 안에서 실행 중인지 판단하기 위해 자신의 위치를 구한다.
 # @stdout 절대 경로 형태의 스크립트 디렉터리를 출력한다.
 script_dir() {
@@ -133,6 +170,7 @@ install_from_remote_archive() {
   require_command curl
   require_command tar
   require_command mktemp
+  prompt_remote_host_sshd_port
 
   trap cleanup EXIT
   KITE_GHCR_INSTALL_TMPDIR="$(mktemp -d "${TMPDIR:-/tmp}/kite-ghcr-install.XXXXXX")"

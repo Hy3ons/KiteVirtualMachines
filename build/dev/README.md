@@ -196,9 +196,9 @@ When the host is Linux with systemd OpenSSH, `build/dev/dev.sh` asks before movi
 sshd away from port `22`. If host sshd already listens on another global port,
 Kite leaves it there and patches gateway fallback to that detected port. If it
 must move, Kite backs up `/etc/ssh/sshd_config` under `/etc/kite/host-sshd`,
-asks which port host sshd should use, checks that the port is free, and requires
-typing the same port again before restarting the service so the gateway can own
-port `22`. `./build-clear.sh` asks before restoring that backup. Set
+asks once which port host sshd should use, and checks that the port is free
+before restarting the service so the gateway can own port `22`. `./build-clear.sh`
+asks before restoring that backup. Set
 `KITE_HOST_SSHD_PORT=<port>` to choose a different non-interactive handoff port,
 and set `MANAGE_HOST_SSHD=false` or `RESTORE_HOST_SSHD=false` only to skip these
 host changes.
