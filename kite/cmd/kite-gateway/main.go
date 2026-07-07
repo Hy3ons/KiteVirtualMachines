@@ -18,7 +18,6 @@ const (
 	defaultListenAddress        = ":2222"
 	defaultBackendTimeoutSecond = 90
 	defaultBackendRetrySecond   = 2
-	defaultHostFallbackTimeout  = 5
 )
 
 // main starts kite-gateway.
@@ -50,9 +49,6 @@ func main() {
 		BackendTimeout:       time.Duration(envInt("KITE_GATEWAY_BACKEND_TIMEOUT_SECONDS", defaultBackendTimeoutSecond)) * time.Second,
 		BackendRetryInterval: time.Duration(envInt("KITE_GATEWAY_BACKEND_RETRY_SECONDS", defaultBackendRetrySecond)) * time.Second,
 		LoginBanner:          envString("KITE_GATEWAY_LOGIN_BANNER", ""),
-		HostFallbackEnabled:  envBool("KITE_GATEWAY_HOST_FALLBACK_ENABLED", true),
-		HostFallbackAddress:  envString("KITE_GATEWAY_HOST_SSHD_ADDRESS", ""),
-		HostFallbackTimeout:  time.Duration(envInt("KITE_GATEWAY_HOST_FALLBACK_TIMEOUT_SECONDS", defaultHostFallbackTimeout)) * time.Second,
 	}, clientManager.DynamicClient, routeTable)
 	if err != nil {
 		log.Fatalf("failed to initialize gateway server: %v", err)
@@ -89,22 +85,4 @@ func envInt(name string, fallback int) int {
 		return fallback
 	}
 	return parsed
-}
-
-// envBool reads one boolean environment variable.
-// name is the environment variable key.
-// fallback is returned when the variable is empty or not a recognized boolean value.
-// This helper is used for optional gateway features such as host sshd fallback.
-func envBool(name string, fallback bool) bool {
-	value := os.Getenv(name)
-	switch value {
-	case "true", "1", "yes", "YES", "y", "Y":
-		return true
-	case "false", "0", "no", "NO", "n", "N":
-		return false
-	case "":
-		return fallback
-	default:
-		return fallback
-	}
 }

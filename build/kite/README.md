@@ -36,20 +36,28 @@ legacy ConfigMap secret values into that Secret on startup.
 ## SSH Gateway
 
 `gateway.yaml` deploys `kite-gateway` behind an internal `ClusterIP` Service.
-Install scripts promote that Service to `LoadBalancer` port `22` after host sshd
-handoff succeeds. This keeps raw manifest apply from taking host SSH by itself.
+Install scripts keep this Service internal. The controller creates a separate
+`kite-gateway-external` `LoadBalancer` Service only after a Level 3 admin enables
+SSH Gateway exposure in Admin Settings.
 
 ```text
-handoff-enabled external SSH :22
-  -> service/kite-gateway port 22 when exposed
+user-facing SSH port
+  -> service/kite-gateway-external when enabled
+  -> service/kite-gateway port 22 inside the cluster
   -> deployment/kite-gateway container port 2222
   -> vps-access-<vmName>.<namespace>.svc.cluster.local:22
 ```
+
+Admin Settings stores the Kubernetes Service port separately from the port shown
+to users. This supports router/NAT layouts such as public `22 -> 12311`, where
+`12311` is the LoadBalancer/Service port and `22` is the command shown in the
+Dashboard.
 
 The gateway reads `KiteVirtualMachine` CRDs, VM SSH key Secrets, and VM access
 Services through Kubernetes RBAC. It does not create host Linux users.
 
 `build/kite` expects the optional `kite-gateway-host-key` Secret when stable SSH
-host fingerprints are required. `./build-install.sh` and `./ghcr-install.sh` create this Secret
-automatically when it is missing. Manual `kubectl apply -k build/kite` still
-starts the gateway with an ephemeral host key if the Secret does not exist.
+host fingerprints are required. `./build-install.sh` and `./ghcr-install.sh`
+create this Secret automatically when it is missing. Manual
+`kubectl apply -k build/kite` still starts the gateway with an ephemeral host key
+if the Secret does not exist.

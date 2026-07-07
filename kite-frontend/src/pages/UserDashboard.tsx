@@ -14,7 +14,7 @@ import { UserVmOffersSection } from './UserVmOffersSection';
 import { UserDashboardToolbar } from './UserDashboardToolbar';
 import { createUserDashboardColumns } from './UserDashboardColumns';
 import { LEVEL_1_FIXED_CPU, LEVEL_1_FIXED_DISK_GI, LEVEL_1_FIXED_MEMORY, LEVEL_1_VM_QUOTA, MIN_DISK_GI, getAccessLevelDescription } from './userDashboardAccess';
-import type { VmOffer } from '../api/types';
+import type { SSHGatewaySettings, VmOffer } from '../api/types';
 import type { DashboardVm, VmCreateFormValues, VmOfferClaimFormValues } from './UserDashboardTypes';
 
 const { Content } = Layout;
@@ -32,6 +32,7 @@ export const UserDashboard: React.FC = () => {
   const [loadingOffers, setLoadingOffers] = useState(true);
   const [baseDomain, setBaseDomain] = useState('');
   const [adminContact, setAdminContact] = useState('');
+  const [sshGateway, setSSHGateway] = useState<SSHGatewaySettings | undefined>();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [form] = Form.useForm();
 
@@ -56,9 +57,11 @@ export const UserDashboard: React.FC = () => {
       const data = await configApi.getConfig();
       setBaseDomain(data.config?.baseDomain || '');
       setAdminContact(data.config?.adminContact || '');
+      setSSHGateway(data.config?.sshGateway);
     } catch {
       setBaseDomain('');
       setAdminContact('');
+      setSSHGateway(undefined);
       message.error('접속 도메인 설정을 불러오는데 실패했습니다.');
     }
   }, [message]);
@@ -267,6 +270,7 @@ export const UserDashboard: React.FC = () => {
         open={isDrawerVisible}
         vm={selectedVm}
         baseDomain={baseDomain}
+        sshGateway={sshGateway}
         onClose={() => setIsDrawerVisible(false)}
       />
     </Layout>

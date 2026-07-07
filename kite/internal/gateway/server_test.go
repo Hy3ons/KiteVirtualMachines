@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -94,6 +95,63 @@ func TestServerSendsLoginBannerBeforeAuthentication(t *testing.T) {
 	t.Fatal("timed out waiting for SSH login banner")
 }
 
+// TestServerRejectsUnknownUserWithoutHostProxy verifies missing VM routes fail at the gateway.
+// t is the Go test handle used for assertions.
+// The test protects the policy that kite-gateway never proxies host Linux accounts.
+func TestServerRejectsUnknownUserWithoutHostProxy(t *testing.T) {
+	hostListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to start host proxy probe listener: %v", err)
+	}
+	defer hostListener.Close()
+
+	hostDialed := make(chan struct{}, 1)
+	go func() {
+		conn, acceptErr := hostListener.Accept()
+		if acceptErr != nil {
+			return
+		}
+		_ = conn.Close()
+		hostDialed <- struct{}{}
+	}()
+
+	address := freeLoopbackAddress(t)
+	server := newServerWithConfigForBannerTest(t, ServerConfig{ListenAddress: address})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- server.ListenAndServe(ctx)
+	}()
+
+	clientConfig := &ssh.ClientConfig{
+		User:            "host-linux-user",
+		Auth:            []ssh.AuthMethod{ssh.Password("host-password")},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         250 * time.Millisecond,
+	}
+
+	err = dialUntilAuthRejected(address, clientConfig, 3*time.Second)
+	if err == nil {
+		t.Fatal("expected unknown SSH username to be rejected")
+	}
+	if !strings.Contains(err.Error(), "unable to authenticate") {
+		t.Fatalf("expected authentication failure, got %v", err)
+	}
+
+	select {
+	case <-hostDialed:
+		t.Fatal("gateway dialed a host listener for an unknown VM route")
+	case <-time.After(150 * time.Millisecond):
+	}
+
+	cancel()
+	if listenErr := <-errCh; listenErr != nil {
+		t.Fatalf("gateway listener stopped with error: %v", listenErr)
+	}
+}
+
 func newServerForBannerTest(t *testing.T, banner string) *Server {
 	t.Helper()
 
@@ -108,6 +166,24 @@ func newServerWithConfigForBannerTest(t *testing.T, config ServerConfig) *Server
 		t.Fatalf("failed to create gateway server: %v", err)
 	}
 	return server
+}
+
+func dialUntilAuthRejected(address string, clientConfig *ssh.ClientConfig, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	var lastErr error
+	for time.Now().Before(deadline) {
+		client, err := ssh.Dial("tcp", address, clientConfig)
+		if err == nil {
+			_ = client.Close()
+			return nil
+		}
+		lastErr = err
+		if strings.Contains(err.Error(), "unable to authenticate") {
+			return err
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	return lastErr
 }
 
 func freeLoopbackAddress(t *testing.T) string {

@@ -76,7 +76,7 @@ export const LandingPage: React.FC = () => {
                 </div>
                 <Paragraph className="landing-subtitle">
                   Kubernetes 위에서 돌아가는 KubeVirt를 응용해 더욱 추상화된 VM 상태 관리를 제공합니다.
-                  간단한 웹 UI로 VM을 대여하고, 서버 호스트의 sshd를 대신하는 kite-sshgateway로 접속 흐름을 최적화합니다.
+                  간단한 웹 UI로 VM을 대여하고, 별도 설정 가능한 kite-sshgateway로 접속 흐름을 최적화합니다.
                 </Paragraph>
 
                 <div className="landing-feature-list">

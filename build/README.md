@@ -9,6 +9,7 @@ commands say what they do before the user has to read the implementation.
 | Name | Meaning | Primary entrypoint |
 | --- | --- | --- |
 | `ghcr-install.sh` | 일반 사용자/운영자가 GHCR 이미지를 pull해서 설치한다. | `./ghcr-install.sh` -> `build/deploy/scripts/install-all.sh` |
+| `ghcr-stage-install.sh` | 메인테이너가 stage GHCR 이미지를 production 설치 흐름으로 검증한다. | `./ghcr-stage-install.sh` -> `./ghcr-install.sh` -> `build/deploy/scripts/install-all.sh` |
 | `build-install.sh` | 개발자가 현재 checkout 이미지를 빌드해서 설치한다. | `./build-install.sh` -> `build/dev/all-in-one.sh` |
 | `uninstall.sh` | 일반 사용자/운영자가 Kite 배포를 제거한다. | `./uninstall.sh` -> `build/deploy/scripts/clean.sh` |
 | `build-clear.sh` | 개발자가 local build/deploy 산출물을 제거한다. | `./build-clear.sh` -> `build/dev/clear.sh` |
@@ -31,7 +32,7 @@ automation.
 | Path | Role |
 | --- | --- |
 | `build/dev` | Development build, rollout, component rebuild, and development cleanup scripts. These scripts may build local images and load them into minikube, k3s, k3d, kind, or another selected cluster. |
-| `build/deploy` | Pull-based deployment documentation and scripts. All install, verify, uninstall, Longhorn, KubeVirt, CDI, host sshd, and remote cleanup scripts live under `build/deploy/scripts`. |
+| `build/deploy` | Pull-based deployment documentation and scripts. Install, verify, uninstall, Longhorn, KubeVirt, CDI, gateway host key, and remote cleanup scripts live under `build/deploy/scripts`. |
 | `build/kite` | Kite-owned Kubernetes manifests: CRDs, namespace, RBAC, API, controller, frontend, gateway, component service accounts, runtime ConfigMap, and runtime Secret bootstrap path. |
 | `build/kite-storage` | Kite storage manifests: Longhorn StorageClass, optional Longhorn disk directory setup/cleanup, and CDI golden image DataVolumes. |
 | `build/examples` | Example Kite CRs for manual testing after the CRDs are installed. |
@@ -53,6 +54,10 @@ bootstrap compatibility:
 ./ghcr-install.sh
   -> build/deploy/scripts/install-all.sh
   -> when piped from curl, downloads the selected archive first
+
+./ghcr-stage-install.sh
+  -> sets stage ref and stage image tag
+  -> ghcr-install.sh
 
 ./uninstall.sh
   -> build/deploy/scripts/clean.sh
@@ -111,9 +116,8 @@ curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/uni
 ```
 
 The deployment cleanup path removes Kite resources by default. Golden image,
-Longhorn uninstall, Longhorn host data removal, and host sshd restoration are
-controlled by explicit prompts or environment variables documented in
-`build/deploy/README.md`.
+Longhorn uninstall, and Longhorn host data removal are controlled by explicit
+prompts or environment variables documented in `build/deploy/README.md`.
 
 ## Manifests
 

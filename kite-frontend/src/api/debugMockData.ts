@@ -83,6 +83,16 @@ export const defaultDebugState: DebugState = {
     hasJWTSecret: true,
     hasPasswordSalt: true,
     hasTLSCertificate: true,
+    sshGateway: {
+      externalEnabled: false,
+      externalPort: '',
+      publicPort: '',
+      status: {
+        phase: 'Disabled',
+        reason: 'ExternalDisabled',
+        message: '외부 VM SSH gateway가 비활성화되어 있습니다. VM SSH 접속을 열려면 Admin Settings에서 Service 포트와 사용자 안내 포트를 설정하세요.',
+      },
+    },
   },
   nextVmId: 3,
   nextOfferId: 2,

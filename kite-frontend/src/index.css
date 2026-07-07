@@ -1225,6 +1225,8 @@ html, body {
     padding-inline: 8px;
   }
 
+  .global-header-session .ant-btn-text span:not(.ant-btn-icon),
+  .global-header-session .ant-btn .ant-btn-icon + span,
   .global-header-session .ant-btn-text .ant-btn-icon + span {
     display: none;
   }

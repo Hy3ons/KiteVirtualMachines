@@ -7,6 +7,8 @@ import type {
   GlobalVmsResponse,
   HTTPSPolicyPayload,
   RuntimeSecretRotation,
+  SSHGatewayPayload,
+  SSHGatewayPhase,
   UserVm,
   VmResponse,
 } from './types';
@@ -80,6 +82,41 @@ export const debugAdminApi = {
   saveHTTPSPolicy: async (payload: HTTPSPolicyPayload): Promise<ConfigResponse> => {
     const state = readDebugState();
     const config = { ...state.config, forceHttps: payload.forceHttps };
+    writeDebugState({ ...state, config });
+    return { config };
+  },
+
+  saveSSHGateway: async (payload: SSHGatewayPayload): Promise<ConfigResponse> => {
+    const state = readDebugState();
+    const blockedByMissingExternalPort = payload.externalEnabled && payload.externalPort.trim() === '';
+    const phase: SSHGatewayPhase = blockedByMissingExternalPort
+      ? 'Blocked'
+      : payload.externalEnabled
+        ? 'Ready'
+        : 'Disabled';
+    const reason = blockedByMissingExternalPort
+      ? 'MissingExternalPort'
+      : payload.externalEnabled
+        ? 'ServiceApplied'
+        : 'ExternalDisabled';
+    const config = {
+      ...state.config,
+      sshGateway: {
+        externalEnabled: payload.externalEnabled,
+        externalPort: payload.externalPort.trim(),
+        publicPort: payload.publicPort.trim() || payload.externalPort.trim(),
+        status: {
+          phase,
+          reason,
+          message: payload.externalEnabled
+            ? '외부 VM SSH gateway가 준비되었습니다. 사용자는 Dashboard에 표시된 SSH 명령으로 VM에 접속할 수 있습니다.'
+            : '외부 VM SSH gateway가 비활성화되어 있습니다. VM SSH 접속을 열려면 Admin Settings에서 Service 포트와 사용자 안내 포트를 설정하세요.',
+          observedExternalPort: payload.externalEnabled ? payload.externalPort.trim() : '',
+          observedServiceName: payload.externalEnabled ? 'kite-gateway-external' : '',
+          lastTransitionTime: new Date().toISOString(),
+        },
+      },
+    };
     writeDebugState({ ...state, config });
     return { config };
   },

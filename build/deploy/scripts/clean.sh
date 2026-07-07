@@ -16,7 +16,7 @@ set -euo pipefail
 #   NO_COLOR: default (unset)
 #
 # Side Effects:
-#   Kubernetes 리소스, 선택적 Longhorn/host sshd 상태를 변경하거나 삭제할 수 있다.
+#   Kubernetes 리소스와 선택적 Longhorn 상태를 변경하거나 삭제할 수 있다.
 # ==============================================================================
 
 KITE_UNINSTALL_REPOSITORY="${KITE_UNINSTALL_REPOSITORY:-Hy3ons/KiteVirtualMachines}"

@@ -117,7 +117,7 @@ func ReconcileKiteVirtualMachineDataVolume(ctx context.Context, dynamicClient dy
 		return fmt.Errorf("failed to read owning KiteVirtualMachine %s/%s: %w", kiteVMNamespace, kiteVMName, err)
 	}
 
-	if deleted {
+	if deleted || kiteVMObject.GetDeletionTimestamp() != nil {
 		return ReconcileKiteVirtualMachine(ctx, dynamicClient, kiteVMObject)
 	}
 
@@ -204,6 +204,9 @@ func updateKiteVirtualMachineDataVolumeStatus(ctx context.Context, dynamicClient
 		}
 		if err != nil {
 			return fmt.Errorf("failed to read KiteVirtualMachine %s/%s before DataVolume status update: %w", vm.Namespace, vm.Name, err)
+		}
+		if current.GetDeletionTimestamp() != nil {
+			return nil
 		}
 
 		observedGeneration := current.GetGeneration()

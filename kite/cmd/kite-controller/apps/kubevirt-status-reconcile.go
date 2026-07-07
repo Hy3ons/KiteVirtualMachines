@@ -125,7 +125,7 @@ func ReconcileKubeVirtVirtualMachineStatus(ctx context.Context, dynamicClient dy
 		return err
 	}
 
-	if deleted {
+	if deleted || kiteVMObject.GetDeletionTimestamp() != nil {
 		return ReconcileKiteVirtualMachine(ctx, dynamicClient, kiteVMObject)
 	}
 

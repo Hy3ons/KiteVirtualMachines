@@ -44,8 +44,11 @@
 
 `stage`에 올릴 수 있는 조건:
 
-- 현재 checkout 기준으로 `build-install.sh` 또는 `ghcr-install.sh` 흐름을 따라
-  빌드/설치해도 즉시 치명적인 문제가 없어야 한다.
+- 현재 checkout 기준으로 `build-install.sh`가 동작하고, stage GHCR image가
+  publish된 뒤 `ghcr-stage-install.sh`로 production과 같은 설치 흐름을
+  검증할 수 있어야 한다.
+- `stage` push가 GHCR에 publish하는 image는 `stage`와 `stage-sha-<commit>`
+  tag를 사용한다. `stage-sha-*` tag는 cleanup 정책상 10일만 보관한다.
 - 전체 Kite 코드 설계 철학과 맞아야 한다.
   - API는 CRD desired state를 기록한다.
   - controller는 CRD를 watch하고 reconcile한다.
@@ -97,7 +100,7 @@
 
 - k3s, minikube, generic k8s release E2E가 완료되어야 한다.
 - legacy etcd/CRD compatibility가 필요한 변경은 호환성 검증이 완료되어야 한다.
-- install, uninstall, cleanup, host sshd handoff 같은 운영 흐름이 깨지지 않아야 한다.
+- install, uninstall, cleanup, gateway exposure 같은 운영 흐름이 깨지지 않아야 한다.
 - 문서, 테스트 명세, 실제 스크립트 이름이 서로 일치해야 한다.
 
 ## 관련 문서

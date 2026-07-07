@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
-	"encoding/hex"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -13,7 +12,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -26,11 +24,9 @@ const (
 	defaultBackendTimeout  = 90 * time.Second
 	defaultBackendInterval = 2 * time.Second
 	defaultHandshakeWait   = 15 * time.Second
-	defaultHostSSHWait     = 5 * time.Second
 	channelCloseGrace      = 2 * time.Second
 	channelRejectGrace     = 1 * time.Second
 	backendTypeVM          = "vm"
-	backendTypeHost        = "host"
 	startingMessage        = "VirtualMachine is starting sshd server.\n"
 )
 
@@ -41,9 +37,6 @@ const (
 // BackendRetryInterval controls the wait between VM sshd dial attempts.
 // HandshakeTimeout limits how long a raw TCP client may take to complete SSH handshake.
 // LoginBanner is shown by SSH clients before authentication when it is not empty.
-// HostFallbackEnabled allows non-Kite SSH users to be proxied to the host sshd.
-// HostFallbackAddress is the host sshd address, usually the node IP on port 2222.
-// HostFallbackTimeout controls password auth timeout when checking the host sshd.
 type ServerConfig struct {
 	ListenAddress        string
 	HostKeyPath          string
@@ -51,25 +44,15 @@ type ServerConfig struct {
 	BackendRetryInterval time.Duration
 	HandshakeTimeout     time.Duration
 	LoginBanner          string
-	HostFallbackEnabled  bool
-	HostFallbackAddress  string
-	HostFallbackTimeout  time.Duration
-}
-
-type pendingHostBackend struct {
-	client *ssh.Client
-	timer  *time.Timer
 }
 
 // Server terminates external SSH connections and proxies them to Kite VM SSH Services.
 // It reads routes from RouteTable and Kubernetes Secret/Service state through dynamicClient.
 type Server struct {
-	config              ServerConfig
-	dynamicClient       dynamic.Interface
-	routes              *RouteTable
-	sshConfig           *ssh.ServerConfig
-	pendingHostBackends map[string]pendingHostBackend
-	hostBackendMu       sync.Mutex
+	config        ServerConfig
+	dynamicClient dynamic.Interface
+	routes        *RouteTable
+	sshConfig     *ssh.ServerConfig
 }
 
 // NewServer creates a Kite gateway server.
@@ -95,9 +78,6 @@ func NewServer(config ServerConfig, dynamicClient dynamic.Interface, routes *Rou
 	if config.HandshakeTimeout <= 0 {
 		config.HandshakeTimeout = defaultHandshakeWait
 	}
-	if config.HostFallbackTimeout <= 0 {
-		config.HostFallbackTimeout = defaultHostSSHWait
-	}
 
 	signer, err := loadOrGenerateHostSigner(config.HostKeyPath)
 	if err != nil {
@@ -105,10 +85,9 @@ func NewServer(config ServerConfig, dynamicClient dynamic.Interface, routes *Rou
 	}
 
 	server := &Server{
-		config:              config,
-		dynamicClient:       dynamicClient,
-		routes:              routes,
-		pendingHostBackends: make(map[string]pendingHostBackend),
+		config:        config,
+		dynamicClient: dynamicClient,
+		routes:        routes,
 	}
 	sshConfig := &ssh.ServerConfig{
 		NoClientAuth: false,
@@ -123,20 +102,6 @@ func NewServer(config ServerConfig, dynamicClient dynamic.Interface, routes *Rou
 						"vmName":      route.VMName,
 					},
 				}, nil
-			}
-
-			if errors.Is(err, ErrRouteNotFound) && server.config.HostFallbackEnabled {
-				hostBackend, hostErr := dialPasswordSSH(server.config.HostFallbackAddress, conn.User(), password, server.config.HostFallbackTimeout)
-				if hostErr == nil {
-					server.storePendingHostBackend(conn.SessionID(), hostBackend)
-					return &ssh.Permissions{
-						Extensions: map[string]string{
-							"backend":  backendTypeHost,
-							"username": conn.User(),
-						},
-					}, nil
-				}
-				log.Printf("host SSH fallback rejected for user=%s remote=%s: %v", conn.User(), conn.RemoteAddr(), hostErr)
 			}
 
 			log.Printf("SSH auth rejected for user=%s remote=%s: %v", conn.User(), conn.RemoteAddr(), err)
@@ -209,18 +174,6 @@ func (s *Server) handleConnection(ctx context.Context, tcpConn net.Conn) {
 	defer serverConn.Close()
 	go ssh.DiscardRequests(reqs)
 
-	if serverConn.Permissions != nil && serverConn.Permissions.Extensions["backend"] == backendTypeHost {
-		backend, ok := s.takePendingHostBackend(serverConn.SessionID())
-		if !ok {
-			log.Printf("authenticated host fallback user has no pending backend user=%s remote=%s", serverConn.User(), serverConn.RemoteAddr())
-			rejectAllChannels(chans, "Host SSH session is not available.\n")
-			return
-		}
-		defer backend.Close()
-		s.proxyBackendChannels(chans, backend, "host", serverConn.User(), "", "")
-		return
-	}
-
 	route, err := s.routes.Get(serverConn.User())
 	if err != nil {
 		log.Printf("authenticated user has no current route user=%s remote=%s: %v", serverConn.User(), serverConn.RemoteAddr(), err)
@@ -241,8 +194,8 @@ func (s *Server) handleConnection(ctx context.Context, tcpConn net.Conn) {
 
 // proxyBackendChannels forwards all SSH channels from one authenticated frontend connection.
 // chans is the frontend channel stream returned by ssh.NewServerConn.
-// backend is an already-authenticated SSH client, either a Kite VM or host sshd fallback.
-// backendKind is used only for logs and should be "vm" or "host".
+// backend is an already-authenticated SSH client connected to a Kite VM.
+// backendKind is used only for logs and should be "vm".
 // username, namespace, and name identify the route for debugging.
 // This method waits until the frontend channel stream closes and all accepted channel proxies return.
 func (s *Server) proxyBackendChannels(chans <-chan ssh.NewChannel, backend *ssh.Client, backendKind string, username string, namespace string, name string) {
@@ -314,87 +267,6 @@ func dialSSH(route Route, privateKey string) (*ssh.Client, error) {
 		return nil, fmt.Errorf("failed to connect VM SSH target %s: %w", route.TargetAddress(), err)
 	}
 	return client, nil
-}
-
-// dialPasswordSSH opens an SSH client connection with username/password auth.
-// address is the target SSH server address, for example "10.0.0.1:2222".
-// username and password come from the external SSH password callback.
-// timeout bounds host fallback authentication.
-// This function is used only for host sshd fallback when a username is not a Kite VM route.
-func dialPasswordSSH(address string, username string, password []byte, timeout time.Duration) (*ssh.Client, error) {
-	if strings.TrimSpace(address) == "" {
-		return nil, errors.New("host SSH fallback address is not configured")
-	}
-	config := &ssh.ClientConfig{
-		User: strings.TrimSpace(username),
-		Auth: []ssh.AuthMethod{
-			ssh.Password(string(password)),
-		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         timeout,
-	}
-	client, err := ssh.Dial("tcp", address, config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to authenticate host sshd %s: %w", address, err)
-	}
-	return client, nil
-}
-
-// storePendingHostBackend keeps one authenticated host sshd backend until SSH handshake completes.
-// sessionID identifies the frontend SSH session that authenticated through host fallback.
-// client is closed automatically if the frontend disconnects before handleConnection takes it.
-// This method is used by PasswordCallback because the password is not available after handshake.
-func (s *Server) storePendingHostBackend(sessionID []byte, client *ssh.Client) {
-	key := sessionKey(sessionID)
-	timer := time.AfterFunc(s.config.HandshakeTimeout, func() {
-		s.hostBackendMu.Lock()
-		pending, ok := s.pendingHostBackends[key]
-		if ok {
-			delete(s.pendingHostBackends, key)
-		}
-		s.hostBackendMu.Unlock()
-		if ok {
-			_ = pending.client.Close()
-		}
-	})
-
-	s.hostBackendMu.Lock()
-	if previous, ok := s.pendingHostBackends[key]; ok {
-		previous.timer.Stop()
-		_ = previous.client.Close()
-	}
-	s.pendingHostBackends[key] = pendingHostBackend{
-		client: client,
-		timer:  timer,
-	}
-	s.hostBackendMu.Unlock()
-}
-
-// takePendingHostBackend returns and removes one authenticated host sshd backend.
-// sessionID must match the SSH session that passed PasswordCallback.
-// The boolean return is false when the backend expired or was already consumed.
-// This method is used by handleConnection immediately after ssh.NewServerConn succeeds.
-func (s *Server) takePendingHostBackend(sessionID []byte) (*ssh.Client, bool) {
-	key := sessionKey(sessionID)
-
-	s.hostBackendMu.Lock()
-	pending, ok := s.pendingHostBackends[key]
-	if ok {
-		delete(s.pendingHostBackends, key)
-	}
-	s.hostBackendMu.Unlock()
-	if !ok {
-		return nil, false
-	}
-	pending.timer.Stop()
-	return pending.client, true
-}
-
-// sessionKey converts an SSH session id into a stable map key.
-// sessionID comes from ssh.ConnMetadata or ssh.ServerConn.
-// The returned hex string avoids using raw binary bytes as a map key in logs or debugging.
-func sessionKey(sessionID []byte) string {
-	return hex.EncodeToString(sessionID)
 }
 
 // proxyChannel mirrors one frontend SSH channel to a backend VM SSH channel.

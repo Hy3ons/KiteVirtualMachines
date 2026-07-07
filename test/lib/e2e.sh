@@ -8,8 +8,8 @@ KITE_NAMESPACE_WAS_SET="${KITE_NAMESPACE+x}"
 TEST_IMAGE_REGISTRY_WAS_SET="${TEST_IMAGE_REGISTRY+x}"
 TEST_IMAGE_TAG_WAS_SET="${TEST_IMAGE_TAG+x}"
 TEST_INSTALL_DEPS_WAS_SET="${TEST_INSTALL_DEPS+x}"
-TEST_MANAGE_HOST_SSHD_WAS_SET="${TEST_MANAGE_HOST_SSHD+x}"
 TEST_CLEANUP_WAS_SET="${TEST_CLEANUP+x}"
+TEST_CLEANUP_TIMEOUT_WAS_SET="${TEST_CLEANUP_TIMEOUT+x}"
 TEST_VM_TIMEOUT_WAS_SET="${TEST_VM_TIMEOUT+x}"
 TEST_DRY_RUN_WAS_SET="${TEST_DRY_RUN+x}"
 TEST_API_LOCAL_PORT_WAS_SET="${TEST_API_LOCAL_PORT+x}"
@@ -22,6 +22,8 @@ TEST_USERNAME_WAS_SET="${TEST_USERNAME+x}"
 TEST_EMAIL_WAS_SET="${TEST_EMAIL+x}"
 TEST_PASSWORD_WAS_SET="${TEST_PASSWORD+x}"
 TEST_VM_NAME_WAS_SET="${TEST_VM_NAME+x}"
+TEST_VM_DOMAIN_PREFIX_WAS_SET="${TEST_VM_DOMAIN_PREFIX+x}"
+TEST_VM_DISK_WAS_SET="${TEST_VM_DISK+x}"
 TEST_VM_SSH_ID_WAS_SET="${TEST_VM_SSH_ID+x}"
 TEST_VM_SSH_PASSWORD_WAS_SET="${TEST_VM_SSH_PASSWORD+x}"
 K3S_CTR_CMD_WAS_SET="${K3S_CTR_CMD+x}"
@@ -56,8 +58,8 @@ default_gateway_host_key_refresh() {
 KITE_NAMESPACE="${KITE_NAMESPACE:-kite}"
 TEST_IMAGE_TAG="${TEST_IMAGE_TAG:-test-$(date +%Y%m%d%H%M%S)}"
 TEST_INSTALL_DEPS="${TEST_INSTALL_DEPS:-true}"
-TEST_MANAGE_HOST_SSHD="${TEST_MANAGE_HOST_SSHD:-false}"
 TEST_CLEANUP="${TEST_CLEANUP:-true}"
+TEST_CLEANUP_TIMEOUT="${TEST_CLEANUP_TIMEOUT:-5m}"
 TEST_VM_TIMEOUT="${TEST_VM_TIMEOUT:-20m}"
 TEST_DRY_RUN="${TEST_DRY_RUN:-false}"
 TEST_API_LOCAL_PORT="${TEST_API_LOCAL_PORT:-18080}"
@@ -70,6 +72,8 @@ TEST_USERNAME="${TEST_USERNAME:-e2e-$(date +%s)}"
 TEST_EMAIL="${TEST_EMAIL:-${TEST_USERNAME}@example.com}"
 TEST_PASSWORD="${TEST_PASSWORD:-Kite-e2e-password-1}"
 TEST_VM_NAME="${TEST_VM_NAME:-kite-e2e-vm-$(date +%s)}"
+TEST_VM_DOMAIN_PREFIX="${TEST_VM_DOMAIN_PREFIX:-${TEST_VM_NAME}}"
+TEST_VM_DISK="${TEST_VM_DISK:-20Gi}"
 TEST_VM_SSH_ID="${TEST_VM_SSH_ID:-kitee2e}"
 TEST_VM_SSH_PASSWORD="${TEST_VM_SSH_PASSWORD:-Kite-e2e-vm-password-1}"
 K3S_CTR_CMD="${K3S_CTR_CMD:-sudo k3s ctr -n k8s.io}"
@@ -96,6 +100,7 @@ TEST_USER_NAMESPACE=""
 API_PORT_FORWARD_PID=""
 FRONTEND_PORT_FORWARD_PID=""
 GATEWAY_PORT_FORWARD_PID=""
+HOST_SSHD_PORTS_BEFORE=""
 
 source "${ROOT_DIR}/build/lib/prompt.sh"
 
@@ -192,6 +197,9 @@ configure_interactive_test_options() {
   prompt_value TEST_EMAIL "${TEST_EMAIL_WAS_SET}" "TEST_EMAIL 값을 정합니다." "테스트 사용자가 API login에 사용할 email입니다. signup 후 이 email/password로 실제 API 로그인을 검증합니다."
   prompt_value TEST_PASSWORD "${TEST_PASSWORD_WAS_SET}" "TEST_PASSWORD 값을 정합니다." "테스트 사용자의 API login password입니다. CRD에는 hash로 저장되고, 테스트 중 cookie 발급 확인에 사용됩니다."
   prompt_value TEST_VM_NAME "${TEST_VM_NAME_WAS_SET}" "TEST_VM_NAME 값을 정합니다." "테스트가 생성할 KiteVirtualMachine 이름입니다. 같은 namespace 안에서 겹치면 안 됩니다."
+  TEST_VM_DOMAIN_PREFIX="${TEST_VM_DOMAIN_PREFIX:-${TEST_VM_NAME}}"
+  prompt_value TEST_VM_DOMAIN_PREFIX "${TEST_VM_DOMAIN_PREFIX_WAS_SET}" "TEST_VM_DOMAIN_PREFIX 값을 정합니다." "테스트 VM의 HTTP hostname prefix입니다. API가 domainPrefix를 필수로 요구하므로 비워둘 수 없고, 기본값은 TEST_VM_NAME과 같습니다."
+  prompt_value TEST_VM_DISK "${TEST_VM_DISK_WAS_SET}" "TEST_VM_DISK 값을 정합니다." "테스트 VM의 root disk 요청량입니다. 표준 기본값은 20Gi이고, 작은 단일 노드 Longhorn 환경에서는 8Gi처럼 낮춰 실행할 수 있습니다."
   prompt_value TEST_VM_SSH_ID "${TEST_VM_SSH_ID_WAS_SET}" "TEST_VM_SSH_ID 값을 정합니다." "VM guest OS와 gateway 라우팅에 쓰는 Linux login id입니다. 소문자/숫자/밑줄/하이픈 규칙을 따라야 합니다."
   prompt_value TEST_VM_SSH_PASSWORD "${TEST_VM_SSH_PASSWORD_WAS_SET}" "TEST_VM_SSH_PASSWORD 값을 정합니다." "VM 생성 API가 guest login Secret과 cloud-init password hash를 만들 때 사용하는 테스트용 비밀번호입니다."
 
@@ -209,12 +217,12 @@ configure_interactive_test_options() {
   esac
 
   kite_prompt_configure_bool TEST_INSTALL_DEPS "${TEST_INSTALL_DEPS_WAS_SET}" $'TEST_INSTALL_DEPS 값을 정합니다.\n  예를 고르면 Longhorn/KubeVirt/CDI/StorageClass/golden image를 기존 설치 스크립트로 준비합니다. 이미 완전히 준비된 클러스터만 확인하려면 아니오를 고르세요.'
-  kite_prompt_configure_bool TEST_MANAGE_HOST_SSHD "${TEST_MANAGE_HOST_SSHD_WAS_SET}" $'TEST_MANAGE_HOST_SSHD 값을 정합니다.\n  예를 고르면 gateway가 22번을 쓰도록 host sshd handoff를 허용합니다. 원격 서버 접속 경로가 바뀔 수 있어 기본값은 아니오입니다.'
   kite_prompt_configure_bool TEST_GATEWAY_HOST_KEY_REFRESH "${TEST_GATEWAY_HOST_KEY_REFRESH_WAS_SET}" $'TEST_GATEWAY_HOST_KEY_REFRESH 값을 정합니다.\n  예를 고르면 기존 gateway host key Secret이 있어도 다시 만듭니다. host key 재사용 테스트에서는 예여야 예전 generate key가 남아 fingerprint 검증을 속이지 않습니다.'
   kite_prompt_configure_bool TEST_CLEANUP "${TEST_CLEANUP_WAS_SET}" $'TEST_CLEANUP 값을 정합니다.\n  예를 고르면 테스트가 만든 VM, KiteUser, 사용자 namespace를 끝나고 삭제합니다. 실패 상태를 직접 조사하려면 아니오가 좋습니다.'
+  prompt_value TEST_CLEANUP_TIMEOUT "${TEST_CLEANUP_TIMEOUT_WAS_SET}" "TEST_CLEANUP_TIMEOUT 값을 정합니다." "TEST_CLEANUP=true일 때 테스트 VM/User/namespace가 실제로 삭제될 때까지 기다리는 최대 시간입니다."
   kite_prompt_configure_bool TEST_DRY_RUN "${TEST_DRY_RUN_WAS_SET}" $'TEST_DRY_RUN 값을 정합니다.\n  예를 고르면 실제 빌드/배포/VM 생성 없이 어떤 명령을 실행할지 계획만 출력합니다.'
 
-  log "e2e choices: cluster=${TEST_CLUSTER}, namespace=${KITE_NAMESPACE}, image=${TEST_IMAGE_REGISTRY}/<component>:${TEST_IMAGE_TAG}, install_deps=${TEST_INSTALL_DEPS}, manage_host_sshd=${TEST_MANAGE_HOST_SSHD}, gateway_host_key_source=${TEST_GATEWAY_HOST_KEY_SOURCE}, gateway_host_key_refresh=${TEST_GATEWAY_HOST_KEY_REFRESH}, cleanup=${TEST_CLEANUP}, vm_timeout=${TEST_VM_TIMEOUT}, dry_run=${TEST_DRY_RUN}"
+  log "e2e choices: cluster=${TEST_CLUSTER}, namespace=${KITE_NAMESPACE}, image=${TEST_IMAGE_REGISTRY}/<component>:${TEST_IMAGE_TAG}, install_deps=${TEST_INSTALL_DEPS}, gateway_host_key_source=${TEST_GATEWAY_HOST_KEY_SOURCE}, gateway_host_key_refresh=${TEST_GATEWAY_HOST_KEY_REFRESH}, cleanup=${TEST_CLEANUP}, cleanup_timeout=${TEST_CLEANUP_TIMEOUT}, vm_name=${TEST_VM_NAME}, vm_domain_prefix=${TEST_VM_DOMAIN_PREFIX}, vm_disk=${TEST_VM_DISK}, vm_timeout=${TEST_VM_TIMEOUT}, dry_run=${TEST_DRY_RUN}"
 }
 
 validate_static_options() {
@@ -239,6 +247,65 @@ validate_static_options() {
       exit 1
       ;;
   esac
+}
+
+host_sshd_port_snapshot() {
+  local sshd_bin=""
+  local output
+  local ports
+
+  [[ "${TEST_CLUSTER}" == "k3s" ]] || return 1
+  [[ "$(uname -s 2>/dev/null || true)" == "Linux" ]] || return 1
+  for candidate in /usr/sbin/sshd /usr/local/sbin/sshd sshd; do
+    if command -v "${candidate}" >/dev/null 2>&1 || [[ -x "${candidate}" ]]; then
+      sshd_bin="${candidate}"
+      break
+    fi
+  done
+  [[ -n "${sshd_bin}" ]] || return 1
+
+  output="$(sudo -n "${sshd_bin}" -T 2>/dev/null || "${sshd_bin}" -T 2>/dev/null || true)"
+  ports="$(printf '%s\n' "${output}" | awk 'tolower($1) == "port" { print $2 }' | sort -n | paste -sd, -)"
+  if [[ -n "${ports}" ]]; then
+    printf '%s\n' "${ports}"
+    return 0
+  fi
+
+  ports="$(grep -hE '^[[:space:]]*Port[[:space:]]+' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null \
+    | awk '{ print $2 }' \
+    | sort -n \
+    | paste -sd, -)"
+  if [[ -n "${ports}" ]]; then
+    printf '%s\n' "${ports}"
+    return 0
+  fi
+
+  printf '22\n'
+}
+
+record_host_sshd_ports() {
+  HOST_SSHD_PORTS_BEFORE="$(host_sshd_port_snapshot || true)"
+  if [[ -z "${HOST_SSHD_PORTS_BEFORE}" ]]; then
+    warn "skipping host sshd port preservation check because sshd effective config could not be read"
+    return 0
+  fi
+  log "host sshd ports before E2E: ${HOST_SSHD_PORTS_BEFORE}"
+}
+
+verify_host_sshd_ports_unchanged() {
+  local after
+
+  [[ -n "${HOST_SSHD_PORTS_BEFORE}" ]] || return 0
+  after="$(host_sshd_port_snapshot || true)"
+  if [[ -z "${after}" ]]; then
+    warn "host sshd ports could not be read after E2E"
+    return 1
+  fi
+  if [[ "${after}" != "${HOST_SSHD_PORTS_BEFORE}" ]]; then
+    warn "host sshd ports changed during E2E: before=${HOST_SSHD_PORTS_BEFORE}, after=${after}"
+    return 1
+  fi
+  log "host sshd ports unchanged after E2E: ${after}"
 }
 
 run_cmd() {
@@ -493,7 +560,6 @@ prepare_dependencies() {
     APPLY_GOLDEN_IMAGE=true \
     DEPLOY_KITE=false \
     RUN_VERIFY=false \
-    MANAGE_HOST_SSHD="${TEST_MANAGE_HOST_SSHD}" \
     KITE_ASSUME_DEFAULTS=true \
     KITE_CLUSTER="${TEST_CLUSTER}" \
     KITE_NAMESPACE="${KITE_NAMESPACE}" \
@@ -767,7 +833,7 @@ create_test_vm() {
   log "creating test VM ${TEST_VM_NAME}"
   response="$(curl -fsS -b "${COOKIE_JAR}" -X POST "http://127.0.0.1:${TEST_API_LOCAL_PORT}/api/v1/vms" \
     -H "Content-Type: application/json" \
-    -d "{\"name\":\"${TEST_VM_NAME}\",\"cpu\":2,\"memory\":\"4Gi\",\"image\":\"ubuntu-22.04\",\"disk\":\"20Gi\",\"sshId\":\"${TEST_VM_SSH_ID}\",\"sshPassword\":\"${TEST_VM_SSH_PASSWORD}\",\"powerState\":\"On\"}")"
+    -d "{\"name\":\"${TEST_VM_NAME}\",\"domainPrefix\":\"${TEST_VM_DOMAIN_PREFIX}\",\"cpu\":2,\"memory\":\"4Gi\",\"image\":\"ubuntu-22.04\",\"disk\":\"${TEST_VM_DISK}\",\"sshId\":\"${TEST_VM_SSH_ID}\",\"sshPassword\":\"${TEST_VM_SSH_PASSWORD}\",\"powerState\":\"On\"}")"
 
   if [[ "$(require_json_field "${response}" "vm.name")" != "${TEST_VM_NAME}" ]]; then
     warn "VM create response did not include expected vm.name: ${response}"
@@ -932,8 +998,19 @@ run_e2e_checks() {
   verify_gateway
 }
 
+wait_for_cleanup_delete() {
+  local resource="$1"
+
+  if ! kubectl get "${resource}" >/dev/null 2>&1; then
+    return 0
+  fi
+  log "waiting for cleanup deletion of ${resource}"
+  kubectl wait --for=delete "${resource}" --timeout="${TEST_CLEANUP_TIMEOUT}" >/dev/null
+}
+
 cleanup() {
   local status=$?
+  local cleanup_status=0
 
   for pid in "${API_PORT_FORWARD_PID}" "${FRONTEND_PORT_FORWARD_PID}" "${GATEWAY_PORT_FORWARD_PID}"; do
     if [[ -n "${pid}" ]]; then
@@ -952,6 +1029,18 @@ cleanup() {
     fi
     if [[ -n "${TEST_USER_NAMESPACE}" ]]; then
       kubectl delete namespace "${TEST_USER_NAMESPACE}" --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
+    fi
+    if [[ -n "${TEST_USER_NAMESPACE}" ]]; then
+      wait_for_cleanup_delete "namespace/${TEST_USER_NAMESPACE}" || cleanup_status=1
+    fi
+    if [[ -n "${TEST_USER_NAME}" ]]; then
+      wait_for_cleanup_delete "kiteusers.hy3ons.github.io/${TEST_USER_NAME}" || cleanup_status=1
+    fi
+    if [[ "${cleanup_status}" -ne 0 ]]; then
+      warn "cleanup did not finish within ${TEST_CLEANUP_TIMEOUT}"
+      if [[ "${status}" -eq 0 ]]; then
+        status=1
+      fi
     fi
   fi
 
@@ -1000,7 +1089,6 @@ print_plan() {
   image prefix:   ${TEST_IMAGE_REGISTRY}
   image tag:      ${TEST_IMAGE_TAG}
   install deps:   ${TEST_INSTALL_DEPS}
-  host sshd:      ${TEST_MANAGE_HOST_SSHD}
   gateway key:    ${TEST_GATEWAY_HOST_KEY_SOURCE}
   key refresh:    ${TEST_GATEWAY_HOST_KEY_REFRESH}
   key file:       ${TEST_GATEWAY_HOST_KEY_FILE_NAME}
@@ -1008,6 +1096,7 @@ print_plan() {
   vm timeout:     ${TEST_VM_TIMEOUT}
   test user:      ${TEST_USERNAME} <${TEST_EMAIL}>
   test vm:        ${TEST_VM_NAME}
+  test vm disk:   ${TEST_VM_DISK}
   dry run:        ${TEST_DRY_RUN}
 
 EOF
@@ -1036,12 +1125,14 @@ main() {
   fi
 
   preflight
+  record_host_sshd_ports
   prepare_minikube
   prepare_dependencies
   build_and_distribute_images
   render_manifest
   apply_kite_runtime
   run_e2e_checks
+  verify_host_sshd_ports_unchanged
   log "E2E test complete"
 }
 

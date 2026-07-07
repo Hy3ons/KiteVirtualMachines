@@ -153,7 +153,7 @@ delete shared KubeVirt, CDI, or Longhorn installations, because those components
 may already be used by workloads outside Kite.
 
 The prompt separately asks whether to delete local images, uninstall Longhorn,
-delete Kite Longhorn host data, or restore host sshd back to port 22. Longhorn
+or delete Kite Longhorn host data. Longhorn
 cleanup is disabled by default because it can delete VM disk data. Non-terminal
 automation can still set the existing environment variables directly.
 `KITE_ASSUME_DEFAULTS=true` skips prompts and uses defaults/env values.
@@ -165,12 +165,14 @@ folder-level map and naming rules are documented in `build/README.md`.
 ## Gateway
 
 `build/dev/dev.sh` also builds and deploys `kite-gateway`. `build-install.sh`
-uses it as the external SSH entrypoint by default: host sshd is moved or
-detected away from port `22` first, then the gateway Service is promoted to
-`LoadBalancer` port `22`.
+keeps it internal by default and never moves host sshd. External VM SSH access
+is enabled later from Admin Settings, which drives `kite-runtime-config` and the
+controller-owned `kite-gateway-external` Service. Admin Settings separates the
+Gateway Service port from the user-facing port shown in the UI, so router/NAT
+layouts such as public `22 -> 12311` can still show users the plain SSH command.
 
 ```sh
-ssh <sshId>@<node-ip>
+ssh -p <user-facing-port> <sshId>@<node-ip>
 ```
 
 The current implementation authenticates with `KiteVirtualMachine.spec.sshPasswordHash`
@@ -180,9 +182,9 @@ VM SSH key Secret created by `kite-controller`.
 `build/dev/dev.sh` creates `kite-gateway-host-key` automatically when it does not exist.
 On Linux hosts it first tries to copy the existing OpenSSH host key from
 `/etc/ssh/ssh_host_ed25519_key`, `ssh_host_ecdsa_key`, or `ssh_host_rsa_key`.
-That keeps the SSH fingerprint consistent when Kite takes over port `22`. If no
-host key is available, or automatic mode cannot read it, the script generates a
-gateway key instead.
+That can keep the gateway fingerprint familiar if the operator later exposes the
+gateway on a public SSH port. If no host key is available, or automatic mode
+cannot read it, the script generates a gateway key instead.
 
 Existing Secrets are kept by default so client fingerprints do not change on
 every deploy. To intentionally replace an already-created gateway key from the
@@ -192,20 +194,5 @@ host key, run:
 KITE_GATEWAY_HOST_KEY_REFRESH=true KITE_GATEWAY_HOST_KEY_SOURCE=host KITE_CLUSTER=k3s build/dev/dev.sh
 ```
 
-When the host is Linux with systemd OpenSSH, `build/dev/dev.sh` asks before moving host
-sshd away from port `22`. If host sshd already listens on another global port,
-Kite leaves it there and patches gateway fallback to that detected port. If it
-must move, Kite backs up `/etc/ssh/sshd_config` under `/etc/kite/host-sshd`,
-asks once which port host sshd should use, and checks that the port is free
-before restarting the service so the gateway can own port `22`. `./build-clear.sh`
-asks before restoring that backup. Set
-`KITE_HOST_SSHD_PORT=<port>` to choose a different non-interactive handoff port,
-and set `MANAGE_HOST_SSHD=false` or `RESTORE_HOST_SSHD=false` only to skip these
-host changes.
-
-When no Kite VM uses the SSH login username, `kite-gateway` falls back to the
-host sshd at the node IP on the selected host sshd port. This lets existing host
-accounts keep using `ssh <host-user>@<node-ip>` on port `22` after the gateway
-is installed. If a Kite VM `sshId` conflicts with a host user, the VM route has
-priority and host administration should use
-`ssh <host-user>@<node-ip> -p <selected-host-sshd-port>`.
+When no Kite VM uses the SSH login username, authentication fails. Kite does
+not proxy host Linux accounts and never manages the host sshd port.

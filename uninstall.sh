@@ -27,8 +27,6 @@ set -euo pipefail
 #   DELETE_LONGHORN_DATA_CONFIRM: default false; host data 삭제 명시 확인값이다.
 #   DELETE_LONGHORN: default false; Longhorn 설치 자체 제거 여부를 초반에 묻는다.
 #   DELETE_LONGHORN_FORCE: default false; Longhorn PV가 남아도 강제 삭제할지 초반에 묻는다.
-#   RESTORE_HOST_SSHD: default true; host sshd를 22번으로 복원할지 초반에 묻는다.
-#   KITE_RESTORE_HOST_SSHD: default ask; restore worker 확인값이며 루트에서 초반 선택으로 true/false를 확정한다.
 #   KITE_LOG_COLOR: default auto; 컬러 로그 여부다.
 #   NO_COLOR: default empty; 설정하면 컬러 로그를 끈다.
 #
@@ -46,7 +44,7 @@ set -euo pipefail
 #   infrastructure를 삭제할 수 있다. force 기본값은 항상 false다.
 #
 # Side Effects:
-#   Kubernetes 리소스, 선택적 Longhorn/host sshd 상태를 변경하거나 삭제할 수 있다.
+#   Kubernetes 리소스와 선택적 Longhorn 상태를 변경하거나 삭제할 수 있다.
 # ==============================================================================
 
 KITE_UNINSTALL_REPOSITORY="${KITE_UNINSTALL_REPOSITORY:-Hy3ons/KiteVirtualMachines}"

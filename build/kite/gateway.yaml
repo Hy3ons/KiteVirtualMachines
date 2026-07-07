@@ -41,17 +41,6 @@ spec:
               value: |
                 This server is Kite Gateway.
                 Use your Kite VM sshId to connect to a VM.
-                If this is a host account, authentication may be proxied to the host sshd.
-            - name: KITE_GATEWAY_HOST_FALLBACK_ENABLED
-              value: "true"
-            - name: KITE_NODE_IP
-              valueFrom:
-                fieldRef:
-                  fieldPath: status.hostIP
-            - name: KITE_GATEWAY_HOST_SSHD_ADDRESS
-              value: "$(KITE_NODE_IP):2222"
-            - name: KITE_GATEWAY_HOST_FALLBACK_TIMEOUT_SECONDS
-              value: "5"
           ports:
             - name: ssh
               containerPort: 2222

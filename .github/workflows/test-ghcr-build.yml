@@ -1,4 +1,4 @@
-name: Test GHCR Image Builds
+name: Stage GHCR Image Builds
 
 on:
   pull_request:
@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  packages: write
 
 env:
   REGISTRY: ghcr.io
@@ -48,16 +49,25 @@ jobs:
         with:
           driver: docker
 
-      - name: Build ${{ matrix.component }} without push
+      - name: Log in to GHCR for stage publish
+        if: github.event_name == 'push' && github.ref == 'refs/heads/stage'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Build ${{ matrix.component }} image
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
-          push: false
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/stage' }}
           platforms: linux/amd64
           build-args: |
             VITE_BUILD_MODE=production
             VITE_API_BASE_URL=/api/v1
             VITE_USE_MOCK=false
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image }}:ci-${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image }}:stage
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image }}:stage-sha-${{ github.sha }}

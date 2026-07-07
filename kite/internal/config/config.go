@@ -28,6 +28,9 @@ const (
 	DefaultVMImageKey            = "defaultVmImage"
 	ForceHTTPSConfigKey          = "forceHttps"
 	AdminContactKey              = "adminContact"
+	SSHGatewayExternalEnabledKey = "sshGatewayExternalEnabled"
+	SSHGatewayExternalPortKey    = "sshGatewayExternalPort"
+	SSHGatewayPublicPortKey      = "sshGatewayPublicPort"
 	DefaultVMStorageClassName    = "kite-vm-storage"
 	DefaultGoldenImageNamespace  = "kite"
 	DefaultVMImage               = "ubuntu-22.04"
@@ -261,7 +264,7 @@ func normalizedRuntimeData(obj *unstructured.Unstructured) (map[string]string, b
 	changed := false
 	defaults := defaultRuntimeData()
 	for key, value := range defaults {
-		if data[key] == "" {
+		if _, exists := data[key]; !exists {
 			data[key] = value
 			changed = true
 		}
@@ -275,12 +278,15 @@ func normalizedRuntimeData(obj *unstructured.Unstructured) (map[string]string, b
 // Secret material is stored separately in kite-runtime-secret.
 func defaultRuntimeData() map[string]string {
 	return map[string]string{
-		AccessTokenTTLMinutesKey: strconv.Itoa(DefaultAccessTokenTTLMinutes),
-		VMStorageClassNameKey:    DefaultVMStorageClassName,
-		GoldenImageNamespaceKey:  DefaultGoldenImageNamespace,
-		DefaultVMImageKey:        DefaultVMImage,
-		ForceHTTPSConfigKey:      strconv.FormatBool(false),
-		AdminContactKey:          "",
+		AccessTokenTTLMinutesKey:     strconv.Itoa(DefaultAccessTokenTTLMinutes),
+		VMStorageClassNameKey:        DefaultVMStorageClassName,
+		GoldenImageNamespaceKey:      DefaultGoldenImageNamespace,
+		DefaultVMImageKey:            DefaultVMImage,
+		ForceHTTPSConfigKey:          strconv.FormatBool(false),
+		AdminContactKey:              "",
+		SSHGatewayExternalEnabledKey: strconv.FormatBool(false),
+		SSHGatewayExternalPortKey:    "",
+		SSHGatewayPublicPortKey:      "",
 	}
 }
 

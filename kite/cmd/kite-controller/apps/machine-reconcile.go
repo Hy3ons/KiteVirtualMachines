@@ -205,7 +205,25 @@ func ReconcileKiteVirtualMachine(ctx context.Context, dynamicClient dynamic.Inte
 		return nil
 	}
 
-	if vm.DeletionTimestamp != nil {
+	currentResource, currentVM, err := latestKiteVirtualMachineForReconcile(ctx, dynamicClient, vm.Namespace, vm.Name)
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	resource = currentResource
+	vm = currentVM
+
+	namespaceTerminating, err := kiteVirtualMachineNamespaceTerminating(ctx, dynamicClient, vm.Namespace)
+	if err != nil {
+		return err
+	}
+	if namespaceTerminating {
+		return reconcileKiteVirtualMachineDeletion(ctx, dynamicClient, resource, vm)
+	}
+
+	if resource.GetDeletionTimestamp() != nil {
 		return reconcileKiteVirtualMachineDeletion(ctx, dynamicClient, resource, vm)
 	}
 
@@ -252,6 +270,42 @@ func ReconcileKiteVirtualMachine(ctx context.Context, dynamicClient dynamic.Inte
 
 	log.Printf("deleted KiteVirtualMachine CRD after KubeVirt VirtualMachine was absent: %s/%s", vm.Namespace, vm.Name)
 	return nil
+}
+
+// latestKiteVirtualMachineForReconcile reads the API server copy for a KiteVirtualMachine event.
+// ctx controls the Kubernetes get request.
+// dynamicClient reads the namespaced KiteVirtualMachine CRD.
+// namespace and name identify the CRD from an informer event that may be stale.
+// The returned unstructured object and typed VM are used so delete timestamps always win over old events.
+func latestKiteVirtualMachineForReconcile(ctx context.Context, dynamicClient dynamic.Interface, namespace string, name string) (*unstructured.Unstructured, *kite.KiteVirtualMachine, error) {
+	current, err := dynamicClient.Resource(kiteVirtualMachineGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	vm, err := kiteVirtualMachineFromUnstructured(current)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return current, vm, nil
+}
+
+// kiteVirtualMachineNamespaceTerminating checks whether a VM namespace is being deleted.
+// ctx controls the Kubernetes get request.
+// dynamicClient reads core/v1 Namespace through the dynamic client.
+// namespace identifies the namespace that contains a KiteVirtualMachine and its child resources.
+// A true return prevents stale VM events from creating resources while namespace finalization is running.
+func kiteVirtualMachineNamespaceTerminating(ctx context.Context, dynamicClient dynamic.Interface, namespace string) (bool, error) {
+	current, err := dynamicClient.Resource(namespaceGVR).Get(ctx, namespace, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to read KiteVirtualMachine namespace %s: %w", namespace, err)
+	}
+
+	return current.GetDeletionTimestamp() != nil, nil
 }
 
 // reconcileKiteVirtualMachineDesiredState applies the real resources for one KiteVirtualMachine.
@@ -828,13 +882,22 @@ func kiteVirtualMachineFromEventObject(eventObj interface{}) (*kite.KiteVirtualM
 // eventObj is the new KiteVirtualMachine object from an update or resync event.
 // A true result allows delete cleanup and dependency/provisioning retries to run from informer resyncs.
 func kiteVirtualMachineNeedsSameGenerationReconcile(eventObj interface{}) bool {
+	resource, err := kiteVirtualMachineResourceFromEventObject(eventObj)
+	if err != nil {
+		log.Printf("failed to inspect KiteVirtualMachine same-generation reconcile metadata: %v", err)
+		return false
+	}
+	if resource.GetDeletionTimestamp() != nil {
+		return true
+	}
+
 	vm, err := kiteVirtualMachineFromEventObject(eventObj)
 	if err != nil {
 		log.Printf("failed to inspect KiteVirtualMachine same-generation reconcile need: %v", err)
 		return false
 	}
 
-	if vm.Spec.Delete || vm.DeletionTimestamp != nil {
+	if vm.Spec.Delete {
 		return true
 	}
 
@@ -947,6 +1010,9 @@ func updateKiteVirtualMachineStatus(ctx context.Context, dynamicClient dynamic.I
 		}
 		if err != nil {
 			return fmt.Errorf("failed to read KiteVirtualMachine %s/%s before status update: %w", vm.Namespace, vm.Name, err)
+		}
+		if current.GetDeletionTimestamp() != nil {
+			return nil
 		}
 
 		observedGeneration := current.GetGeneration()
@@ -1162,13 +1228,23 @@ func sshKeySecretName(vmName string) string {
 // updateKiteVirtualMachineFinalizers updates finalizers on one KiteVirtualMachine CRD.
 // ctx controls the Kubernetes API update request.
 // dynamicClient writes hy3ons.github.io/v1 kitevirtualmachines in the resource namespace.
-// resource is copied so the informer cache object is not mutated unexpectedly.
+// resource identifies the KiteVirtualMachine; the latest resourceVersion is read before update.
 // finalizers is the complete replacement finalizer list.
 func updateKiteVirtualMachineFinalizers(ctx context.Context, dynamicClient dynamic.Interface, resource *unstructured.Unstructured, finalizers []string) error {
-	next := resource.DeepCopy()
-	next.SetFinalizers(finalizers)
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		current, err := dynamicClient.Resource(kiteVirtualMachineGVR).Namespace(resource.GetNamespace()).Get(ctx, resource.GetName(), metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
 
-	_, err := dynamicClient.Resource(kiteVirtualMachineGVR).Namespace(next.GetNamespace()).Update(ctx, next, metav1.UpdateOptions{})
+		next := current.DeepCopy()
+		next.SetFinalizers(finalizers)
+		_, err = dynamicClient.Resource(kiteVirtualMachineGVR).Namespace(next.GetNamespace()).Update(ctx, next, metav1.UpdateOptions{})
+		return err
+	})
 	return err
 }
 

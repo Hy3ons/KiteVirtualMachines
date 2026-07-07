@@ -42,12 +42,23 @@ var secretGVR = schema.GroupVersionResource{
 // HasTLSCertificate reports whether kite/global-tls-secret contains TLS material.
 // This struct is returned by kite-api config endpoints.
 type Settings struct {
-	BaseDomain        string `json:"baseDomain"`
-	ForceHTTPS        bool   `json:"forceHttps"`
-	AdminContact      string `json:"adminContact"`
-	HasJWTSecret      bool   `json:"hasJWTSecret"`
-	HasPasswordSalt   bool   `json:"hasPasswordSalt"`
-	HasTLSCertificate bool   `json:"hasTLSCertificate"`
+	BaseDomain        string                  `json:"baseDomain"`
+	ForceHTTPS        bool                    `json:"forceHttps"`
+	AdminContact      string                  `json:"adminContact"`
+	HasJWTSecret      bool                    `json:"hasJWTSecret"`
+	HasPasswordSalt   bool                    `json:"hasPasswordSalt"`
+	HasTLSCertificate bool                    `json:"hasTLSCertificate"`
+	SSHGateway        SSHGatewayAdminSettings `json:"sshGateway"`
+}
+
+// PublicSettings contains frontend-readable settings for unauthenticated and ordinary user pages.
+// SSHGateway contains the user-facing VM SSH gateway status.
+type PublicSettings struct {
+	BaseDomain        string                   `json:"baseDomain"`
+	ForceHTTPS        bool                     `json:"forceHttps"`
+	AdminContact      string                   `json:"adminContact"`
+	HasTLSCertificate bool                     `json:"hasTLSCertificate"`
+	SSHGateway        SSHGatewayPublicSettings `json:"sshGateway"`
 }
 
 // Service manages Kite platform-wide settings stored in Kubernetes resources.
@@ -77,10 +88,15 @@ func (s *Service) Get(ctx context.Context) (Settings, error) {
 	if err != nil {
 		return Settings{}, err
 	}
+	status, err := s.GetSSHGatewayStatus(ctx)
+	if err != nil {
+		return Settings{}, err
+	}
 	secretData, err := s.runtimeSecretData(ctx)
 	if err != nil {
 		return Settings{}, err
 	}
+	desired := SSHGatewayDesiredFromConfigData(data)
 
 	return Settings{
 		BaseDomain:        data[BaseDomainConfigKey],
@@ -89,6 +105,34 @@ func (s *Service) Get(ctx context.Context) (Settings, error) {
 		HasJWTSecret:      secretData[config.JWTSecretKey] != "",
 		HasPasswordSalt:   secretData[config.PasswordSaltKey] != "",
 		HasTLSCertificate: hasTLS,
+		SSHGateway:        desired.Admin(status),
+	}, nil
+}
+
+// GetPublic returns frontend-readable platform settings.
+// ctx controls Kubernetes API calls.
+// This function is used by the public /api/v1/config route.
+func (s *Service) GetPublic(ctx context.Context) (PublicSettings, error) {
+	data, err := s.runtimeConfigData(ctx)
+	if err != nil {
+		return PublicSettings{}, err
+	}
+	hasTLS, err := s.HasTLSCertificate(ctx)
+	if err != nil {
+		return PublicSettings{}, err
+	}
+	status, err := s.GetSSHGatewayStatus(ctx)
+	if err != nil {
+		return PublicSettings{}, err
+	}
+	desired := SSHGatewayDesiredFromConfigData(data)
+
+	return PublicSettings{
+		BaseDomain:        data[BaseDomainConfigKey],
+		ForceHTTPS:        strings.EqualFold(data[config.ForceHTTPSConfigKey], "true"),
+		AdminContact:      data[config.AdminContactKey],
+		HasTLSCertificate: hasTLS,
+		SSHGateway:        desired.Public(status),
 	}, nil
 }
 

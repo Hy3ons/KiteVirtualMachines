@@ -12,6 +12,10 @@ write CRDs, reconcile controller output, and boot a Kite VM successfully?
 If the answer is not proven by an automated command, the change is not ready to
 ship.
 
+The full test inventory lives in [Test-Specification.md](./Test-Specification.md).
+The deferred VMware SSH gateway verification plan lives in
+[VMware-SSH-Gateway-Checklist.md](./VMware-SSH-Gateway-Checklist.md).
+
 ## Testing Philosophy
 
 Kite is a Kubernetes control plane, so mock-only confidence is not enough.
@@ -139,11 +143,6 @@ prefix such as `registry.example.com/kite`.
 When `true`, the script prepares Longhorn, KubeVirt, CDI, the Kite StorageClass,
 and the golden image using the existing deployment helpers. Default: `true`.
 
-`TEST_MANAGE_HOST_SSHD`
-
-When `true`, dependency setup may allow gateway host sshd handoff. Default:
-`false` because remote server access can be affected.
-
 `TEST_GATEWAY_HOST_KEY_SOURCE`
 
 How the general cluster E2E scripts create the `kite-gateway` SSH host key
@@ -169,34 +168,11 @@ The file name stored inside the gateway host key Secret and mounted into the
 gateway container. Default: `ssh_host_rsa_key`, matching the production
 manifest path `/etc/kite-gateway/ssh/ssh_host_rsa_key`.
 
-`./test/all-test-k3s-ssh-handoff.sh`
-
-This is the dangerous SSH acceptance gate for k3s hosts. It intentionally
-checks the full external SSH handoff:
-
-- host sshd is moved away from port `22` to `TEST_HOST_SSHD_PORT` (default `2022`),
-- the selected host sshd port is rejected before any config change when another process already uses it,
-- `svc/kite-gateway` is exposed as a `LoadBalancer` on external port `22`,
-- port `22` returns the `kite-gateway` SSH banner,
-- `TEST_HOST_SSHD_PORT` returns the host sshd banner,
-- the external gateway port and the moved host sshd port expose the same SSH
-  host key fingerprint,
-- a username that is not a Kite VM route can still log into the host through
-  gateway fallback using the host account password.
-
-Run it only from a place where you can recover the server console or connect
-with `ssh -p <TEST_HOST_SSHD_PORT>` if something goes wrong:
-
-```sh
-TEST_HOST_SSH_USER=hhs2003 \
-TEST_HOST_SSH_PASSWORD='<host-password>' \
-TEST_HOST_SSHD_PORT=2022 \
-./test/all-test-k3s-ssh-handoff.sh
-```
-
-If the host does not have Go installed, the script automatically runs the SSH
-probe through Docker with `golang:1.25-alpine` and host networking. Override this
-with `TEST_SSH_PROBE_RUNNER=go` or `TEST_SSH_PROBE_RUNNER=docker` when needed.
+The old k3s host-sshd mutation test has been removed. Kite installers no longer
+move, restore, or otherwise manage the host sshd port. Host SSH is treated as
+operator-owned infrastructure and must remain reachable through the operator's
+own path. Gateway external exposure is tested through Admin Settings/runtime
+ConfigMap reconcile and routes only Kite VM `sshId` users.
 
 The general cluster E2E scripts do not perform this check. They patch
 `kite-gateway` to `ClusterIP` and verify the gateway through `kubectl
@@ -209,10 +185,28 @@ When `true`, the script deletes the test VM, test KiteUser, and generated user
 namespace after the run. Default: `true`. Set it to `false` when you need to
 inspect a failed cluster state.
 
+`TEST_CLEANUP_TIMEOUT`
+
+How long the E2E gate waits for the test namespace and KiteUser to actually
+disappear after cleanup starts. Default: `5m`. A successful E2E run fails if
+cleanup does not converge within this timeout.
+
 `TEST_VM_TIMEOUT`
 
 How long the E2E gate waits for the VM to reach `Running`. Default: `20m`.
 Use a larger value for slow storage or first-time image imports.
+
+`TEST_VM_DOMAIN_PREFIX`
+
+The HTTP hostname prefix used by the test VM. The VM create API requires
+`domainPrefix`, so the E2E script sends this field explicitly instead of
+depending on an API default. Default: the same value as `TEST_VM_NAME`.
+
+`TEST_VM_DISK`
+
+The root disk size requested for the test VM. Default: `20Gi`. Use a smaller
+value, such as `8Gi`, on small single-node Longhorn test servers where CDI clone
+creates temporary PVCs and Longhorn must keep its reserved free-space threshold.
 
 `TEST_DRY_RUN`
 
@@ -342,7 +336,11 @@ Tests in this repository must be boring, explicit, and hard to fake.
 - Do not require a human to copy/paste intermediate values.
 - Do not depend on frontend mock data for E2E.
 - Do not mutate production `main` images during test runs.
-- Do not push `latest`, `main`, or `production` tags from E2E scripts.
+- Stage QA may pull `stage` images through `./ghcr-stage-install.sh`; E2E
+  scripts must still avoid pushing `latest`, `main`, or `production` tags.
+- GHCR cleanup must protect moving tags and unknown tags. Only `sha-*` images
+  from `main` older than 30 days and `stage-sha-*` images from `stage` older
+  than 10 days are cleanup candidates.
 
 ## Acceptance Criteria For New E2E Checks
 

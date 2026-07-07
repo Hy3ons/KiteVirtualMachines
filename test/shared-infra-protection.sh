@@ -124,8 +124,6 @@ run_kite_cleanup() {
         DELETE_LONGHORN_FORCE=true \
         DELETE_LONGHORN_DATA=true \
         DELETE_LONGHORN_DATA_CONFIRM=true \
-        RESTORE_HOST_SSHD=false \
-        KITE_RESTORE_HOST_SSHD=false \
         "${ROOT_DIR}/uninstall.sh"
       ;;
     build-clear)
@@ -135,8 +133,6 @@ run_kite_cleanup() {
         CLEAR_LONGHORN_FORCE=true \
         CLEAR_LONGHORN_DATA=true \
         CLEAR_LONGHORN_DATA_CONFIRM=true \
-        RESTORE_HOST_SSHD=false \
-        KITE_RESTORE_HOST_SSHD=false \
         "${ROOT_DIR}/build/dev/clear.sh"
       ;;
     *)

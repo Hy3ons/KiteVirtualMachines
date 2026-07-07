@@ -10,3 +10,6 @@ data:
   goldenImageNamespace: "kite"
   defaultVmImage: "ubuntu-22.04"
   forceHttps: "false"
+  sshGatewayExternalEnabled: "false"
+  sshGatewayExternalPort: ""
+  sshGatewayPublicPort: ""

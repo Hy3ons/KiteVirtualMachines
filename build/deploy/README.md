@@ -22,12 +22,16 @@ Install without git or a repository clone:
 curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/ghcr-install.sh | bash
 ```
 
-Use a specific branch or tag:
+Maintainer stage QA uses the same install flow with the stage wrapper:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/ghcr-install.sh \
-  | KITE_GHCR_INSTALL_REF=stage bash
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/stage/ghcr-stage-install.sh | bash
 ```
+
+`ghcr-stage-install.sh` sets the repository ref and image tag to `stage` before
+calling `ghcr-install.sh`. This keeps the installation process identical to
+production while avoiding maintainer mistakes from memorized environment
+variables.
 
 By default the installer applies Longhorn, KubeVirt, CDI, Kite storage, golden
 image, and Kite runtime manifests. On apt-based Linux hosts it also installs
@@ -115,14 +119,16 @@ DELETE_LONGHORN_DATA=true DELETE_LONGHORN_DATA_CONFIRM=true build/deploy/scripts
 
 ## Gateway
 
-Kite installs `kite-gateway` as a Kubernetes Deployment and exposes it as the
-external SSH entrypoint by default. The installer first moves or detects host
-sshd away from port `22`; only then is the Service promoted to `LoadBalancer`
-and forwarded to the pod's internal `2222` port. Set `MANAGE_HOST_SSHD=false`
-only when you intentionally want the gateway Service to stay internal.
+Kite installs `kite-gateway` as a Kubernetes Deployment and keeps the default
+Service internal. The installer does not move, restore, or rewrite host sshd.
+External VM SSH access is enabled later from Admin Settings, which updates
+`kite-runtime-config` and lets the controller create `service/kite-gateway-external`.
+Admin Settings stores the Gateway Service port separately from the user-facing
+port shown in Dashboard/VM Detail, so an external router can map public `22` to
+a custom Service port without confusing users.
 
 ```sh
-ssh <sshId>@<node-ip>
+ssh -p <user-facing-port> <sshId>@<node-ip>
 ```
 
 The host OS does not need Kite-managed Linux users for this path. The gateway
@@ -132,9 +138,9 @@ SSH session to the VM access Service inside the cluster.
 `./ghcr-install.sh` creates `kite-gateway-host-key` automatically when it does not
 exist. On Linux hosts it first tries to copy the existing OpenSSH host key from
 `/etc/ssh/ssh_host_ed25519_key`, `ssh_host_ecdsa_key`, or `ssh_host_rsa_key`.
-That keeps the SSH fingerprint consistent when Kite takes over port `22`. If no
-host key is available, or automatic mode cannot read it, the script generates a
-gateway key instead.
+That can keep the gateway fingerprint familiar if the operator later exposes the
+gateway on a public SSH port. If no host key is available, or automatic mode
+cannot read it, the script generates a gateway key instead.
 
 Existing Secrets are kept by default so client fingerprints do not change on
 every deploy. To intentionally replace an already-created gateway key from the
@@ -144,20 +150,5 @@ host key, run:
 KITE_GATEWAY_HOST_KEY_REFRESH=true KITE_GATEWAY_HOST_KEY_SOURCE=host ./ghcr-install.sh
 ```
 
-When the host is Linux with systemd OpenSSH, `./ghcr-install.sh` asks before moving
-host sshd away from port `22`. If host sshd already listens on another global
-port, Kite leaves it there and patches gateway fallback to that detected port.
-If it must move, Kite backs up `/etc/ssh/sshd_config` under
-`/etc/kite/host-sshd`, asks once which port host sshd should use, and checks
-that the port is free before restarting the service so the gateway can own port
-`22`. `build/deploy/scripts/uninstall-kite.sh`
-asks before restoring that backup. Set `KITE_HOST_SSHD_PORT=<port>` to choose a
-different non-interactive handoff port, and set `MANAGE_HOST_SSHD=false` or
-`RESTORE_HOST_SSHD=false` only to skip these host changes.
-
-When no Kite VM uses the SSH login username, `kite-gateway` falls back to the
-host sshd at the node IP on the selected host sshd port. This lets existing host
-accounts keep using `ssh <host-user>@<node-ip>` on port `22` after the gateway
-is installed. If a Kite VM `sshId` conflicts with a host user, the VM route has
-priority and host administration should use
-`ssh <host-user>@<node-ip> -p <selected-host-sshd-port>`.
+When no Kite VM uses the SSH login username, authentication fails. Kite does
+not proxy host Linux accounts and never manages the host sshd port.

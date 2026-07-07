@@ -26,8 +26,6 @@ set -euo pipefail
 #   FRONTEND_VITE_USE_MOCK: default false; frontend mock API build 여부를 초반에 묻는다.
 #   K3S_IMPORT_IMAGES, K3D_LOAD_IMAGES, KIND_LOAD_IMAGES, MINIKUBE_START, PUSH_IMAGES: cluster별 image 전달 여부를 초반에 묻는다.
 #   KITE_GATEWAY_HOST_KEY_REFRESH: default false; 기존 gateway host key Secret 갱신 여부를 초반에 묻는다.
-#   MANAGE_HOST_SSHD: default true; gateway 22번 사용을 위한 host sshd handoff 여부를 초반에 묻는다.
-#   KITE_HOST_SSHD_PORT: default 2222; host sshd handoff 대상 포트다.
 #   RUN_VERIFY: default true; 설치 후 verify 실행 여부를 초반에 묻는다.
 #   KITE_ASSUME_DEFAULTS: default false; true면 모든 interactive 질문을 건너뛰고 env/default 값으로 실행한다.
 #
@@ -39,8 +37,7 @@ set -euo pipefail
 #   env가 있으면 그 값을 그대로 쓰고 질문하지 않는다. env가 없으면 위 기본값으로 진행한다.
 #
 # Dangerous Options:
-#   MANAGE_HOST_SSHD=true가 기본값이며 host sshd 포트를 바꿀 수 있다. Longhorn 관련 옵션은
-#   cluster storage 상태를 바꿀 수 있다.
+#   Longhorn 관련 옵션은 cluster storage 상태를 바꿀 수 있다.
 #
 # Side Effects:
 #   Kubernetes 리소스 적용, 컨테이너 이미지 빌드/주입, rollout 대기를 수행할 수 있다.

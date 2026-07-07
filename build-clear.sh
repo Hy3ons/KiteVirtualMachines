@@ -21,8 +21,6 @@ set -euo pipefail
 #   CLEAR_LONGHORN: default false; Longhorn 설치 자체 제거 여부를 초반에 묻는다.
 #   CLEAR_LONGHORN_DATA: default false; Kite Longhorn host data 삭제 여부를 초반에 묻는다.
 #   CLEAR_LONGHORN_FORCE: default false; Longhorn PV가 남아도 강제 삭제할지 초반에 묻는다.
-#   RESTORE_HOST_SSHD: default true; host sshd를 22번으로 복원할지 초반에 묻는다.
-#   KITE_RESTORE_HOST_SSHD: default ask; 루트 선택으로 true/false를 확정해 중간 질문을 막는다.
 #   KITE_ASSUME_DEFAULTS: default false; true면 모든 interactive 질문을 건너뛰고 env/default 값으로 실행한다.
 #
 # Interactive Behavior:
@@ -37,7 +35,7 @@ set -euo pipefail
 #   삭제할 수 있다. CLEAR_LONGHORN_FORCE 기본값은 false다.
 #
 # Side Effects:
-#   Kubernetes 리소스, 이미지 캐시, 선택적 Longhorn/host sshd 상태를 변경하거나 삭제할 수 있다.
+#   Kubernetes 리소스, 이미지 캐시, 선택적 Longhorn 상태를 변경하거나 삭제할 수 있다.
 # ==============================================================================
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

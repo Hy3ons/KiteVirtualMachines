@@ -9,6 +9,7 @@ import type {
   LoginCredentials,
   LogoutResponse,
   RuntimeSecretRotation,
+  SSHGatewayPayload,
   SignupPayload,
   UpdateVmPayload,
 } from './types';
@@ -236,6 +237,13 @@ export const adminApi = {
       return (await loadDebugMockApi()).saveHTTPSPolicy(payload);
     }
     const { data } = await apiClient.post('/admin/https', payload);
+    return data;
+  },
+  saveSSHGateway: async (payload: SSHGatewayPayload) => {
+    if (useMockApi) {
+      return (await loadDebugMockApi()).saveSSHGateway(payload);
+    }
+    const { data } = await apiClient.post('/admin/ssh-gateway', payload);
     return data;
   },
   saveAdminContact: async (adminContact: string) => {

@@ -60,6 +60,94 @@ func TestReconcileKiteVirtualMachineDeleteIntentDeletesCRDWhenKubeVirtMissing(t 
 	}
 }
 
+// TestReconcileKiteVirtualMachineDeletionTimestampRemovesFinalizer verifies namespace cleanup convergence.
+// t is the Go test handle used for assertions.
+// The test keeps deleting CRDs from staying stuck after child resources are already absent.
+func TestReconcileKiteVirtualMachineDeletionTimestampRemovesFinalizer(t *testing.T) {
+	ctx := context.Background()
+	namespace := "user-a"
+	name := "vm-a"
+	vm := newMachineReconcileKiteVirtualMachineSpec(namespace, name)
+	vm.SetFinalizers([]string{kiteVirtualMachineCleanupFinalizer})
+	vm.SetDeletionTimestamp(&metav1.Time{Time: metav1.Now().Time})
+	client := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), machineReconcileListKinds(), vm)
+
+	if err := ReconcileKiteVirtualMachine(ctx, client, vm); err != nil {
+		t.Fatalf("ReconcileKiteVirtualMachine returned error: %v", err)
+	}
+
+	current, err := client.Resource(kiteVirtualMachineGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("expected deleting KiteVirtualMachine to remain in fake client, got %v", err)
+	}
+	if hasKiteVirtualMachineFinalizer(current.GetFinalizers()) {
+		t.Fatalf("expected cleanup finalizer to be removed, got %v", current.GetFinalizers())
+	}
+}
+
+// TestReconcileKiteVirtualMachineStaleEventUsesLatestDeletionTimestamp verifies stale event safety.
+// t is the Go test handle used for assertions.
+// The test prevents old informer events from recreating VM children after the CRD has started deleting.
+func TestReconcileKiteVirtualMachineStaleEventUsesLatestDeletionTimestamp(t *testing.T) {
+	ctx := context.Background()
+	namespace := "user-a"
+	name := "vm-a"
+	current := newMachineReconcileKiteVirtualMachineSpec(namespace, name)
+	current.SetFinalizers([]string{kiteVirtualMachineCleanupFinalizer})
+	current.SetDeletionTimestamp(&metav1.Time{Time: metav1.Now().Time})
+	staleEvent := newMachineReconcileKiteVirtualMachineSpec(namespace, name)
+	client := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), machineReconcileListKinds(),
+		current,
+		newMachineReconcileGuestLoginSecret(namespace, name, "$6$rounds=500000$salt$hash"),
+	)
+
+	if err := ReconcileKiteVirtualMachine(ctx, client, staleEvent); err != nil {
+		t.Fatalf("ReconcileKiteVirtualMachine returned error: %v", err)
+	}
+
+	latest, err := client.Resource(kiteVirtualMachineGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("expected deleting KiteVirtualMachine to remain in fake client, got %v", err)
+	}
+	if hasKiteVirtualMachineFinalizer(latest.GetFinalizers()) {
+		t.Fatalf("expected stale event to remove cleanup finalizer, got %v", latest.GetFinalizers())
+	}
+	if _, err := client.Resource(secretGVR).Namespace(namespace).Get(ctx, sshKeySecretName(name), metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("expected stale event not to create SSH key Secret, got %v", err)
+	}
+}
+
+// TestReconcileKiteVirtualMachineNamespaceTerminationSkipsChildCreation verifies namespace cleanup safety.
+// t is the Go test handle used for assertions.
+// The test prevents VM child resource creation after a user namespace has entered finalization.
+func TestReconcileKiteVirtualMachineNamespaceTerminationSkipsChildCreation(t *testing.T) {
+	ctx := context.Background()
+	namespace := "user-a"
+	name := "vm-a"
+	current := newMachineReconcileKiteVirtualMachineSpec(namespace, name)
+	current.SetFinalizers([]string{kiteVirtualMachineCleanupFinalizer})
+	client := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), machineReconcileListKinds(),
+		newMachineReconcileTerminatingNamespace(namespace),
+		current,
+		newMachineReconcileGuestLoginSecret(namespace, name, "$6$rounds=500000$salt$hash"),
+	)
+
+	if err := ReconcileKiteVirtualMachine(ctx, client, current); err != nil {
+		t.Fatalf("ReconcileKiteVirtualMachine returned error: %v", err)
+	}
+
+	latest, err := client.Resource(kiteVirtualMachineGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("expected KiteVirtualMachine to remain in fake client, got %v", err)
+	}
+	if hasKiteVirtualMachineFinalizer(latest.GetFinalizers()) {
+		t.Fatalf("expected namespace termination to remove cleanup finalizer, got %v", latest.GetFinalizers())
+	}
+	if _, err := client.Resource(secretGVR).Namespace(namespace).Get(ctx, sshKeySecretName(name), metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("expected namespace termination not to create SSH key Secret, got %v", err)
+	}
+}
+
 // TestDeleteOwnedNamespacedResourceSkipsUnlabeledResource verifies destructive cleanup label guards.
 // t is the Go test handle used for assertions.
 // The test protects golden resources such as kite/ubuntu-22.04 from VM cleanup by name alone.
@@ -158,6 +246,21 @@ func TestKiteVirtualMachineNeedsSameGenerationReconcileSkipsReadyPhase(t *testin
 
 	if kiteVirtualMachineNeedsSameGenerationReconcile(vm) {
 		t.Fatal("expected Ready phase to skip same-generation resync")
+	}
+}
+
+// TestKiteVirtualMachineNeedsSameGenerationReconcileKeepsDeletingCRD verifies finalizer retries.
+// t is the Go test handle used for assertions.
+// The test ensures deleting VMs are reconciled even when their last status phase is stable.
+func TestKiteVirtualMachineNeedsSameGenerationReconcileKeepsDeletingCRD(t *testing.T) {
+	vm := newMachineReconcileKiteVirtualMachineSpec("user-a", "vm-a")
+	vm.SetDeletionTimestamp(&metav1.Time{Time: metav1.Now().Time})
+	if err := unstructured.SetNestedField(vm.Object, kiteVMPhaseReady, "status", "phase"); err != nil {
+		t.Fatalf("failed to set status.phase: %v", err)
+	}
+
+	if !kiteVirtualMachineNeedsSameGenerationReconcile(vm) {
+		t.Fatal("expected deleting VM to reconcile even with a stable phase")
 	}
 }
 
@@ -369,6 +472,7 @@ func machineReconcileListKinds() map[schema.GroupVersionResource]string {
 		dataVolumeGVR:             "DataVolumeList",
 		secretGVR:                 "SecretList",
 		configMapGVR:              "ConfigMapList",
+		namespaceGVR:              "NamespaceList",
 	}
 }
 
@@ -469,6 +573,23 @@ func newMachineReconcileDataVolume(namespace string, name string, labels map[str
 			"metadata":   metadata,
 		},
 	}
+}
+
+// newMachineReconcileTerminatingNamespace creates a Namespace test fixture with deletion timestamp.
+// name is metadata.name for the namespace that contains KiteVirtualMachine resources.
+// The returned object is used to model namespace finalization races during VM cleanup.
+func newMachineReconcileTerminatingNamespace(name string) *unstructured.Unstructured {
+	namespace := &unstructured.Unstructured{
+		Object: map[string]any{
+			"apiVersion": "v1",
+			"kind":       "Namespace",
+			"metadata": map[string]any{
+				"name": name,
+			},
+		},
+	}
+	namespace.SetDeletionTimestamp(&metav1.Time{Time: metav1.Now().Time})
+	return namespace
 }
 
 // newMachineReconcileGuestLoginSecret creates a guest login Secret test fixture.
