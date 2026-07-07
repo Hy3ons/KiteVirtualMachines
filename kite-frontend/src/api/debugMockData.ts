@@ -86,12 +86,11 @@ export const defaultDebugState: DebugState = {
     sshGateway: {
       externalEnabled: false,
       externalPort: '',
-      hostFallbackEnabled: false,
-      hostSshdPort: '',
+      publicPort: '',
       status: {
         phase: 'Disabled',
         reason: 'ExternalDisabled',
-        message: 'External VM SSH gateway is disabled.',
+        message: '외부 VM SSH gateway가 비활성화되어 있습니다. VM SSH 접속을 열려면 Admin Settings에서 Service 포트와 사용자 안내 포트를 설정하세요.',
       },
     },
   },

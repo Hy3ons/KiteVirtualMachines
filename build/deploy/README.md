@@ -22,12 +22,16 @@ Install without git or a repository clone:
 curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/ghcr-install.sh | bash
 ```
 
-Use a specific branch or tag:
+Maintainer stage QA uses the same install flow with the stage wrapper:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/ghcr-install.sh \
-  | KITE_GHCR_INSTALL_REF=stage bash
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/stage/ghcr-stage-install.sh | bash
 ```
+
+`ghcr-stage-install.sh` sets the repository ref and image tag to `stage` before
+calling `ghcr-install.sh`. This keeps the installation process identical to
+production while avoiding maintainer mistakes from memorized environment
+variables.
 
 By default the installer applies Longhorn, KubeVirt, CDI, Kite storage, golden
 image, and Kite runtime manifests. On apt-based Linux hosts it also installs
@@ -119,9 +123,12 @@ Kite installs `kite-gateway` as a Kubernetes Deployment and keeps the default
 Service internal. The installer does not move, restore, or rewrite host sshd.
 External VM SSH access is enabled later from Admin Settings, which updates
 `kite-runtime-config` and lets the controller create `service/kite-gateway-external`.
+Admin Settings stores the Gateway Service port separately from the user-facing
+port shown in Dashboard/VM Detail, so an external router can map public `22` to
+a custom Service port without confusing users.
 
 ```sh
-ssh -p <admin-selected-port> <sshId>@<node-ip>
+ssh -p <user-facing-port> <sshId>@<node-ip>
 ```
 
 The host OS does not need Kite-managed Linux users for this path. The gateway
@@ -143,7 +150,5 @@ host key, run:
 KITE_GATEWAY_HOST_KEY_REFRESH=true KITE_GATEWAY_HOST_KEY_SOURCE=host ./ghcr-install.sh
 ```
 
-When no Kite VM uses the SSH login username, `kite-gateway` can optionally fall
-back to host sshd. This is disabled by default. A Level 3 admin must explicitly
-enable host fallback and enter the host sshd port in Admin Settings. Kite then
-patches the gateway Deployment with `$(KITE_NODE_IP):<host-sshd-port>`.
+When no Kite VM uses the SSH login username, authentication fails. Kite does
+not proxy host Linux accounts and never manages the host sshd port.

@@ -23,47 +23,43 @@ const (
 	SSHGatewayPhaseBlocked     = "Blocked"
 	SSHGatewayPhaseFailed      = "Failed"
 
-	SSHGatewayReasonExternalDisabled        = "ExternalDisabled"
-	SSHGatewayReasonMissingExternalPort     = "MissingExternalPort"
-	SSHGatewayReasonMissingHostFallbackPort = "MissingHostFallbackPort"
-	SSHGatewayReasonPortConflict            = "PortConflict"
-	SSHGatewayReasonServicePending          = "ServicePending"
-	SSHGatewayReasonServiceApplied          = "ServiceApplied"
-	SSHGatewayReasonApplyFailed             = "ApplyFailed"
+	SSHGatewayReasonExternalDisabled    = "ExternalDisabled"
+	SSHGatewayReasonMissingExternalPort = "MissingExternalPort"
+	SSHGatewayReasonServicePending      = "ServicePending"
+	SSHGatewayReasonServiceApplied      = "ServiceApplied"
+	SSHGatewayReasonApplyFailed         = "ApplyFailed"
 )
 
 // SSHGatewayDesired contains operator-owned SSH gateway exposure settings used by the admin API and controller.
 type SSHGatewayDesired struct {
-	ExternalEnabled     bool   `json:"externalEnabled"`
-	ExternalPort        string `json:"externalPort"`
-	HostFallbackEnabled bool   `json:"hostFallbackEnabled,omitempty"`
-	HostSshdPort        string `json:"hostSshdPort,omitempty"`
+	ExternalEnabled bool   `json:"externalEnabled"`
+	ExternalPort    string `json:"externalPort"`
+	PublicPort      string `json:"publicPort"`
 }
 
 // SSHGatewayStatus describes the controller-observed SSH gateway exposure state shown in Admin Settings.
 type SSHGatewayStatus struct {
-	Phase                       string `json:"phase"`
-	Reason                      string `json:"reason"`
-	Message                     string `json:"message"`
-	ObservedExternalPort        string `json:"observedExternalPort,omitempty"`
-	ObservedHostFallbackAddress string `json:"observedHostFallbackAddress,omitempty"`
-	ObservedServiceName         string `json:"observedServiceName,omitempty"`
-	LastTransitionTime          string `json:"lastTransitionTime,omitempty"`
+	Phase                string `json:"phase"`
+	Reason               string `json:"reason"`
+	Message              string `json:"message"`
+	ObservedExternalPort string `json:"observedExternalPort,omitempty"`
+	ObservedServiceName  string `json:"observedServiceName,omitempty"`
+	LastTransitionTime   string `json:"lastTransitionTime,omitempty"`
 }
 
 // SSHGatewayAdminSettings combines desired and observed gateway state for Level 3 admins.
 type SSHGatewayAdminSettings struct {
-	ExternalEnabled     bool             `json:"externalEnabled"`
-	ExternalPort        string           `json:"externalPort"`
-	HostFallbackEnabled bool             `json:"hostFallbackEnabled"`
-	HostSshdPort        string           `json:"hostSshdPort"`
-	Status              SSHGatewayStatus `json:"status"`
+	ExternalEnabled bool             `json:"externalEnabled"`
+	ExternalPort    string           `json:"externalPort"`
+	PublicPort      string           `json:"publicPort"`
+	Status          SSHGatewayStatus `json:"status"`
 }
 
-// SSHGatewayPublicSettings exposes only user-facing VM SSH connection state and omits host fallback details.
+// SSHGatewayPublicSettings exposes only user-facing VM SSH connection state.
 type SSHGatewayPublicSettings struct {
 	ExternalEnabled bool   `json:"externalEnabled"`
 	ExternalPort    string `json:"externalPort"`
+	PublicPort      string `json:"publicPort"`
 	Phase           string `json:"phase"`
 	Reason          string `json:"reason"`
 	Message         string `json:"message"`
@@ -72,10 +68,9 @@ type SSHGatewayPublicSettings struct {
 // SSHGatewayDesiredFromConfigData parses SSH gateway desired state from kite-runtime-config data.
 func SSHGatewayDesiredFromConfigData(data map[string]string) SSHGatewayDesired {
 	return SSHGatewayDesired{
-		ExternalEnabled:     strings.EqualFold(data[config.SSHGatewayExternalEnabledKey], "true"),
-		ExternalPort:        strings.TrimSpace(data[config.SSHGatewayExternalPortKey]),
-		HostFallbackEnabled: strings.EqualFold(data[config.SSHGatewayHostFallbackKey], "true"),
-		HostSshdPort:        strings.TrimSpace(data[config.SSHGatewayHostSshdPortKey]),
+		ExternalEnabled: strings.EqualFold(data[config.SSHGatewayExternalEnabledKey], "true"),
+		ExternalPort:    strings.TrimSpace(data[config.SSHGatewayExternalPortKey]),
+		PublicPort:      strings.TrimSpace(data[config.SSHGatewayPublicPortKey]),
 	}
 }
 
@@ -84,20 +79,20 @@ func (d SSHGatewayDesired) Public(status SSHGatewayStatus) SSHGatewayPublicSetti
 	return SSHGatewayPublicSettings{
 		ExternalEnabled: d.ExternalEnabled,
 		ExternalPort:    d.ExternalPort,
+		PublicPort:      d.displayPort(),
 		Phase:           status.Phase,
 		Reason:          status.Reason,
-		Message:         status.Message,
+		Message:         publicSSHGatewayMessage(status),
 	}
 }
 
 // Admin returns the full Level 3 admin SSH gateway settings payload.
 func (d SSHGatewayDesired) Admin(status SSHGatewayStatus) SSHGatewayAdminSettings {
 	return SSHGatewayAdminSettings{
-		ExternalEnabled:     d.ExternalEnabled,
-		ExternalPort:        d.ExternalPort,
-		HostFallbackEnabled: d.HostFallbackEnabled,
-		HostSshdPort:        d.HostSshdPort,
-		Status:              status,
+		ExternalEnabled: d.ExternalEnabled,
+		ExternalPort:    d.ExternalPort,
+		PublicPort:      d.displayPort(),
+		Status:          status,
 	}
 }
 
@@ -108,7 +103,7 @@ func (s *Service) GetSSHGatewayStatus(ctx context.Context) (SSHGatewayStatus, er
 		return SSHGatewayStatus{
 			Phase:   SSHGatewayPhaseDisabled,
 			Reason:  SSHGatewayReasonExternalDisabled,
-			Message: "SSH gateway external access has not been enabled.",
+			Message: "외부 VM SSH gateway가 아직 활성화되지 않았습니다.",
 		}, nil
 	}
 	if err != nil {
@@ -168,8 +163,7 @@ func (s *Service) UpdateSSHGateway(ctx context.Context, desired SSHGatewayDesire
 	}
 	data[config.SSHGatewayExternalEnabledKey] = strconv.FormatBool(normalized.ExternalEnabled)
 	data[config.SSHGatewayExternalPortKey] = normalized.ExternalPort
-	data[config.SSHGatewayHostFallbackKey] = strconv.FormatBool(normalized.HostFallbackEnabled)
-	data[config.SSHGatewayHostSshdPortKey] = normalized.HostSshdPort
+	data[config.SSHGatewayPublicPortKey] = normalized.PublicPort
 	if err := unstructured.SetNestedStringMap(next.Object, data, "data"); err != nil {
 		return Settings{}, err
 	}
@@ -182,17 +176,47 @@ func (s *Service) UpdateSSHGateway(ctx context.Context, desired SSHGatewayDesire
 // NormalizeSSHGatewayDesired trims and validates operator SSH gateway settings.
 func NormalizeSSHGatewayDesired(desired SSHGatewayDesired) (SSHGatewayDesired, error) {
 	desired.ExternalPort = strings.TrimSpace(desired.ExternalPort)
-	desired.HostSshdPort = strings.TrimSpace(desired.HostSshdPort)
+	desired.PublicPort = strings.TrimSpace(desired.PublicPort)
 	if desired.ExternalEnabled && !validTCPPort(desired.ExternalPort) {
 		return SSHGatewayDesired{}, fmt.Errorf("sshGatewayExternalPort must be a TCP port between 1 and 65535")
 	}
-	if desired.HostFallbackEnabled && !validTCPPort(desired.HostSshdPort) {
-		return SSHGatewayDesired{}, fmt.Errorf("sshGatewayHostSshdPort must be a TCP port between 1 and 65535")
+	if desired.ExternalEnabled && desired.PublicPort == "" {
+		desired.PublicPort = desired.ExternalPort
 	}
-	if desired.ExternalEnabled && desired.HostFallbackEnabled && desired.ExternalPort == desired.HostSshdPort {
-		return SSHGatewayDesired{}, fmt.Errorf("sshGatewayExternalPort and sshGatewayHostSshdPort must be different")
+	if desired.PublicPort != "" && !validTCPPort(desired.PublicPort) {
+		return SSHGatewayDesired{}, fmt.Errorf("sshGatewayPublicPort must be a TCP port between 1 and 65535")
 	}
 	return desired, nil
+}
+
+func (d SSHGatewayDesired) displayPort() string {
+	if d.PublicPort != "" {
+		return d.PublicPort
+	}
+	return d.ExternalPort
+}
+
+// publicSSHGatewayMessage converts controller status into a user-facing VM SSH availability message.
+// status is the raw controller-observed gateway state that may contain Kubernetes operation details.
+// The returned string is used by ordinary dashboard and VM connection views, while admins still receive the raw message.
+func publicSSHGatewayMessage(status SSHGatewayStatus) string {
+	switch status.Phase {
+	case SSHGatewayPhaseReady:
+		return "VM SSH gateway가 준비되었습니다."
+	case SSHGatewayPhaseReconciling:
+		return "VM SSH gateway를 준비 중입니다. 잠시 후 다시 시도하세요."
+	case SSHGatewayPhaseBlocked:
+		return "VM SSH gateway 설정이 아직 완료되지 않았습니다. 운영자에게 문의하세요."
+	case SSHGatewayPhaseFailed:
+		return "VM SSH gateway 적용 중 문제가 발생했습니다. 운영자에게 문의하세요."
+	case SSHGatewayPhaseDisabled:
+		return "운영자가 외부 VM SSH gateway를 아직 활성화하지 않았습니다."
+	default:
+		if status.Message != "" {
+			return status.Message
+		}
+		return "VM SSH gateway 상태를 확인할 수 없습니다. 운영자에게 문의하세요."
+	}
 }
 
 // SSHGatewayStatusFromData converts kite-gateway-status ConfigMap data into a typed payload.
@@ -206,26 +230,24 @@ func SSHGatewayStatusFromData(data map[string]string) SSHGatewayStatus {
 		reason = SSHGatewayReasonExternalDisabled
 	}
 	return SSHGatewayStatus{
-		Phase:                       phase,
-		Reason:                      reason,
-		Message:                     data["message"],
-		ObservedExternalPort:        data["observedExternalPort"],
-		ObservedHostFallbackAddress: data["observedHostFallbackAddress"],
-		ObservedServiceName:         data["observedServiceName"],
-		LastTransitionTime:          data["lastTransitionTime"],
+		Phase:                phase,
+		Reason:               reason,
+		Message:              data["message"],
+		ObservedExternalPort: data["observedExternalPort"],
+		ObservedServiceName:  data["observedServiceName"],
+		LastTransitionTime:   data["lastTransitionTime"],
 	}
 }
 
 // SSHGatewayStatusData converts a typed status payload into ConfigMap data.
 func SSHGatewayStatusData(status SSHGatewayStatus) map[string]string {
 	return map[string]string{
-		"phase":                       status.Phase,
-		"reason":                      status.Reason,
-		"message":                     status.Message,
-		"observedExternalPort":        status.ObservedExternalPort,
-		"observedHostFallbackAddress": status.ObservedHostFallbackAddress,
-		"observedServiceName":         status.ObservedServiceName,
-		"lastTransitionTime":          status.LastTransitionTime,
+		"phase":                status.Phase,
+		"reason":               status.Reason,
+		"message":              status.Message,
+		"observedExternalPort": status.ObservedExternalPort,
+		"observedServiceName":  status.ObservedServiceName,
+		"lastTransitionTime":   status.LastTransitionTime,
 	}
 }
 

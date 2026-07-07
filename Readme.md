@@ -39,7 +39,7 @@ flowchart TD
     end
 
     user --> frontend
-    user -->|"ssh -p configured-port sshId@node-ip"| gateway
+    user -->|"ssh -p user-facing-port sshId@node-ip"| gateway
     frontend --> api
     api -->|"create/update desired state"| kiteUser
     api -->|"create/update desired state"| kiteVM
@@ -89,11 +89,14 @@ Kite는 VM별 NodePort를 만들지 않습니다. VM마다 외부 포트를 하�
 대신 `kite-gateway`가 하나의 SSH 진입점을 받고, SSH login username을
 `KiteVirtualMachine.spec.sshId`와 매칭해 내부 `vps-access-<vmName>` ClusterIP
 Service로 프록시합니다. 설치 직후에는 외부 SSH LoadBalancer를 만들지 않으며,
-Level 3 admin이 Admin Settings에서 “SSH Gateway”를 활성화하고 사용자 접속
-포트를 지정해야 `kite-gateway-external` Service가 생성됩니다.
+Level 3 admin이 Admin Settings에서 “SSH Gateway”를 활성화하고 Kubernetes
+Service 포트와 사용자 안내 포트를 지정해야 `kite-gateway-external` Service가
+생성됩니다. 두 포트는 다를 수 있습니다. 예를 들어 공유기나 외부 라우터가
+`22 -> 12311`로 포워딩한다면 Service 포트는 `12311`, 사용자 안내 포트는
+`22`로 저장합니다.
 
 ```text
-ssh -p <configured-port> <sshId>@<node-ip>
+ssh -p <user-facing-port> <sshId>@<node-ip>
   -> kite-gateway
   -> KiteVirtualMachine(spec.sshId) lookup
   -> vps-access-<vmName>.<namespace>.svc.cluster.local:22
@@ -104,11 +107,10 @@ ssh -p <configured-port> <sshId>@<node-ip>
 controller가 만든 SSH key Secret을 사용합니다. VM cloud-init에는 이 public key만
 들어가며 VM 내부 password login은 꺼져 있습니다.
 
-Kite는 기본 설치 중 host sshd 설정을 이동하거나 수정하지 않습니다. 운영자가
-Admin Settings에서 host fallback을 켠 경우에만 controller가 gateway Deployment에
-`<node-ip>:<host-sshd-port>` fallback 주소를 주입합니다. fallback은 VM route가
-없는 username에만 적용되며, VM `sshId`가 존재하는 경우 host 계정으로 우회하지
-않습니다.
+Kite는 host sshd 설정을 이동, 수정, 복원하지 않습니다. 또한 gateway는 VM
+`sshId`와 매칭되는 Kite VM만 프록시하며, VM route가 없는 username을 host
+sshd로 우회하지 않습니다. host 운영 접속은 운영자가 관리하는 기존 SSH 경로를
+그대로 사용해야 합니다.
 
 ## Components
 
@@ -165,6 +167,7 @@ Kite가 관리하는 Kubernetes API는 `build/kite/crds.yaml`에 정의되어 �
 ├── kite-frontend/         # web frontend
 ├── test/                  # release E2E gates for k3s, minikube, and generic k8s
 ├── ghcr-install.sh        # GHCR image pull based install entrypoint
+├── ghcr-stage-install.sh  # maintainer QA wrapper for stage GHCR images
 ├── ghcr-update.sh         # GHCR image pull based update entrypoint
 ├── build-install.sh       # local build based development install entrypoint
 ├── uninstall.sh           # operator-facing Kite uninstall entrypoint
@@ -185,7 +188,11 @@ Kite has two top-level install entrypoints and one GHCR update entrypoint:
 
 - `./ghcr-install.sh`: pull-based install. It installs or waits for Longhorn,
   KubeVirt, CDI, applies the Ubuntu golden image, and deploys Kite manifests
-  that pull prebuilt images from `ghcr.io/hy3ons`.
+  that pull prebuilt production images from `ghcr.io/hy3ons`.
+- `./ghcr-stage-install.sh`: maintainer QA install. It calls the same
+  pull-based installer as `ghcr-install.sh`, but pins the repository ref and
+  image tag to `stage` so maintainers do not have to remember environment
+  variables.
 - `./build-install.sh`: local-build install. It prepares the same infrastructure, builds
   the API, controller, gateway, and frontend images from this checkout, then
   imports or loads those images into the selected local cluster before deploying
@@ -197,10 +204,12 @@ Kite has two top-level install entrypoints and one GHCR update entrypoint:
 Both install modes deploy `kite-gateway` with only an internal `ClusterIP`
 Service. They do not move host `sshd`, do not expose external SSH, and do not
 claim port `22`. A Level 3 admin enables VM SSH exposure later from Admin
-Settings by setting the SSH Gateway external port. The controller then creates
-or updates `service/kite-gateway-external` as a `LoadBalancer`. If host fallback
-is also enabled, the admin must explicitly provide the host sshd port; Kite does
-not guess it.
+Settings by setting the SSH Gateway Service port. The controller then creates
+or updates `service/kite-gateway-external` as a `LoadBalancer`. Admin Settings
+also stores the user-facing SSH port shown in Dashboard/VM Detail. This may be
+different from the Service port when an external router maps public `22` to a
+custom node/LB port. The gateway routes only VM `sshId` logins and never proxies
+host Linux accounts.
 
 The gateway host key is also part of the install contract. On Linux hosts the
 installer tries to reuse the existing OpenSSH host key from `/etc/ssh` so users
@@ -224,11 +233,10 @@ Install Kite on a k3s or Kubernetes host without cloning this repository:
 curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/ghcr-install.sh | bash
 ```
 
-Install from a specific branch or tag:
+Maintainer stage QA uses the same installer path but pulls `stage` images:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/ghcr-install.sh \
-  | KITE_GHCR_INSTALL_REF=stage bash
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/stage/ghcr-stage-install.sh | bash
 ```
 
 The remote installer downloads the selected GitHub archive into a temporary
@@ -430,15 +438,23 @@ The workflow publishes these tags:
 - `sha-<commit>`
 
 The workflow logs in with the `GHCR_TOKEN` GitHub secret. `./ghcr-install.sh`
-and `./ghcr-update.sh` use the GHCR images by default, while
+uses the `production` tag by default through a temporary kustomize overlay, and
+`./ghcr-update.sh` uses GHCR images by default, while
 `./build-install.sh` builds images locally and imports or loads them into the
 selected development cluster.
 
-Before production publishing, `Test GHCR Image Builds` runs on `stage` pushes
-and pull requests. It uses the same image matrix, Dockerfiles, and build args as
-the publish workflow, but sets `push: false` so Dockerfile or production build
-breakage is caught before `main` attempts to publish GHCR tags. The build result
-is only a validation artifact and is not pushed to GHCR.
+Before production publishing, `Stage GHCR Image Builds` runs on `stage` pushes
+and pull requests. Pull requests build the same image matrix without pushing.
+`stage` branch pushes publish `stage` and `stage-sha-<commit>` tags, which
+`./ghcr-stage-install.sh` uses for maintainer QA before `stage` is promoted to
+`main`.
+
+GHCR cleanup is intentionally conservative. Moving tags and unknown tags are
+protected. Only managed SHA tags are removed after their retention window:
+
+- `sha-<commit>` from `main`: keep for 30 days.
+- `stage-sha-<commit>` from `stage`: keep for 10 days.
+- `latest`, `main`, `production`, and `stage`: always keep.
 
 On slow or flaky registry networks, set `KITE_ROLLOUT_TIMEOUT=15m` or higher
 when running `./ghcr-install.sh`; this controls how long the installer waits for

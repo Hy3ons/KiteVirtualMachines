@@ -38,10 +38,9 @@ type runtimeSecretRotateRequest struct {
 }
 
 type sshGatewayUpdateRequest struct {
-	ExternalEnabled     bool   `json:"externalEnabled"`
-	ExternalPort        string `json:"externalPort"`
-	HostFallbackEnabled bool   `json:"hostFallbackEnabled"`
-	HostSshdPort        string `json:"hostSshdPort"`
+	ExternalEnabled bool   `json:"externalEnabled"`
+	ExternalPort    string `json:"externalPort"`
+	PublicPort      string `json:"publicPort"`
 }
 
 // RegisterAdmin attaches admin and manager routes to the versioned API router.
@@ -304,10 +303,9 @@ func adminSSHGatewayUpdateHandler(deps Dependencies) gin.HandlerFunc {
 		}
 
 		settings, err := platform.NewService(deps.DynamicClient).UpdateSSHGateway(c.Request.Context(), platform.SSHGatewayDesired{
-			ExternalEnabled:     req.ExternalEnabled,
-			ExternalPort:        req.ExternalPort,
-			HostFallbackEnabled: req.HostFallbackEnabled,
-			HostSshdPort:        req.HostSshdPort,
+			ExternalEnabled: req.ExternalEnabled,
+			ExternalPort:    req.ExternalPort,
+			PublicPort:      req.PublicPort,
 		})
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})

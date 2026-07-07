@@ -192,7 +192,7 @@ export const KiteDocsPage: React.FC = () => {
             <Row gutter={[20, 12]}>
               <Col xs={24} md={8}>
                 <Text strong>도입한 이유</Text>
-                <Paragraph>VM마다 외부 SSH 포트를 따로 열지 않기 위해 Kite Gateway가 22번 진입점을 하나로 받습니다. Gateway는 SSH username을 `spec.sshId`와 매칭해 대상 VM을 찾습니다.</Paragraph>
+                <Paragraph>VM마다 외부 SSH 포트를 따로 열지 않기 위해 Kite Gateway가 하나의 SSH 진입점을 받습니다. Gateway는 SSH username을 `spec.sshId`와 매칭해 대상 VM을 찾습니다.</Paragraph>
               </Col>
               <Col xs={24} md={8}>
                 <Text strong>로그인 프록시 방식</Text>
@@ -200,7 +200,7 @@ export const KiteDocsPage: React.FC = () => {
               </Col>
               <Col xs={24} md={8}>
                 <Text strong>host SSH 포트</Text>
-                <Paragraph>설치 스크립트는 host sshd 포트를 변경하지 않습니다. 외부 VM SSH 포트는 Level 3 관리자가 Admin Settings에서 명시적으로 열고, host fallback도 host sshd 포트를 직접 입력했을 때만 활성화됩니다.</Paragraph>
+                <Paragraph>설치 스크립트는 host sshd 포트를 변경하지 않습니다. Level 3 관리자는 Admin Settings에서 Gateway Service 포트와 사용자 안내 포트를 따로 저장할 수 있습니다. 예를 들어 외부 라우터가 22번을 Service 12311번으로 넘기면 UI는 사용자에게 22번 접속 명령을 보여줍니다.</Paragraph>
               </Col>
             </Row>
           </Card>

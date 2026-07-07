@@ -23,11 +23,12 @@
 
 목적: 사용자가 저장소 루트에서 기억하기 쉬운 명령만 실행해 설치, 개발 배포, 삭제를 수행한다.
 
-최종 기준: `./ghcr-install.sh`, `./build-install.sh`, `./uninstall.sh`, `./build-clear.sh`가 각각 올바른 하위 스크립트로 위임되고, 사용자의 선택 없이 위험 작업을 수행하지 않는다.
+최종 기준: `./ghcr-install.sh`, `./ghcr-stage-install.sh`, `./build-install.sh`, `./uninstall.sh`, `./build-clear.sh`가 각각 올바른 하위 스크립트로 위임되고, 사용자의 선택 없이 위험 작업을 수행하지 않는다.
 
 | 소분류 | 테스트해야 하는 것 |
 | --- | --- |
 | `./ghcr-install.sh` pull 기반 설치 | git checkout이 있는 경우와 curl pipe 실행 모두에서 deploy install 흐름으로 진입하는지 확인한다. |
+| `./ghcr-stage-install.sh` stage 설치 | 메인테이너가 env를 외우지 않아도 `KITE_GHCR_INSTALL_REF=stage`, `KITE_INSTALL_IMAGE_TAG=stage`에 해당하는 동일 설치 흐름으로 진입하는지 확인한다. |
 | `./build-install.sh` 개발 설치 | 로컬 checkout 이미지를 빌드하고 현재 클러스터에 배포하는 dev all-in-one 흐름으로 진입하는지 확인한다. |
 | `./uninstall.sh` 배포 제거 | pull 기반 배포 제거 경로로 진입하고, git checkout이 없어도 archive download cleanup이 가능한지 확인한다. |
 | `./build-clear.sh` 개발 제거 | 개발 배포 제거 경로로 진입하고, local image 삭제와 클러스터 리소스 삭제 선택이 분리되는지 확인한다. |
@@ -52,6 +53,7 @@
 | build args | frontend `VITE_API_BASE_URL`, `VITE_USE_MOCK`, build mode가 배포 목적에 맞게 들어가는지 확인한다. |
 | registry push | 일반 k8s에서는 registry 설정이 없으면 build 전에 실패하고, 설정이 있으면 push 후 cluster pull이 되는지 확인한다. |
 | local image load | k3s, minikube, k3d, kind별 로컬 image load/import가 실제 runtime image store에 반영되는지 확인한다. |
+| GHCR retention | `main`의 `sha-*` tag는 30일, `stage`의 `stage-sha-*` tag는 10일 뒤 cleanup 대상이 되고, `latest`/`main`/`production`/`stage` 및 알 수 없는 tag는 보호되는지 확인한다. |
 
 ## Kubernetes 매니페스트와 CRD
 
@@ -160,9 +162,9 @@
 
 ## SSH Gateway
 
-목적: 운영자가 명시적으로 연 외부 SSH 포트에서 VM route 또는 host fallback으로 안전하게 전달한다.
+목적: 운영자가 명시적으로 연 외부 SSH 포트에서 VM route만 안전하게 전달한다.
 
-최종 기준: fresh install 직후 외부 SSH Service가 없고 host sshd는 변경되지 않는다. Level 3 admin이 SSH Gateway를 활성화하면 `kite-gateway-external` LoadBalancer가 생성되고, VM `sshId` 사용자는 자기 VM으로 접속한다. host fallback은 별도 활성화와 host sshd port 입력이 있을 때만 동작한다.
+최종 기준: fresh install 직후 외부 SSH Service가 없고 host sshd는 변경되지 않는다. Level 3 admin이 SSH Gateway를 활성화하면 `kite-gateway-external` LoadBalancer가 생성되고, VM `sshId` 사용자는 자기 VM으로 접속한다. Gateway Service 포트와 사용자 안내 포트는 분리되어 저장되며, VM route가 없는 username은 host로 우회되지 않고 거부된다.
 
 | 소분류 | 테스트해야 하는 것 |
 | --- | --- |
@@ -173,17 +175,16 @@
 | Backend dial | gateway가 `vps-access-<vm>` Service의 22번으로 SSH session을 프록시하는지 확인한다. |
 | VM not ready | VM route는 있지만 Service/VM이 준비되지 않았을 때 명확히 실패하고 연결이 매달리지 않는지 확인한다. |
 | Default internal only | fresh install 후 `kite-gateway`는 ClusterIP이고 `kite-gateway-external` Service가 없는지 확인한다. |
-| Runtime config desired | `kite-runtime-config`의 `sshGatewayExternalEnabled=false`, `sshGatewayExternalPort=""`, `sshGatewayHostFallbackEnabled=false`, `sshGatewayHostSshdPort=""` 기본값을 확인한다. |
+| Runtime config desired | `kite-runtime-config`의 `sshGatewayExternalEnabled=false`, `sshGatewayExternalPort=""`, `sshGatewayPublicPort=""` 기본값을 확인하고 legacy host proxy 키가 생성되거나 사용되지 않는지 확인한다. |
 | Gateway status | `kite-gateway-status`가 Disabled/Reconciling/Blocked/Ready/Failed phase와 reason/message/observed 값을 올바르게 기록하는지 확인한다. |
 | External reconcile | Admin Settings 또는 API로 external enabled + valid port를 저장하면 `kite-gateway-external` LoadBalancer가 지정 포트로 생성되는지 확인한다. |
+| Public port display | Service 포트가 `12311`이고 사용자 안내 포트가 `22`일 때 Dashboard, VM Detail, Connection Drawer가 `ssh <sshId>@<domain>`을 표시하고, 사용자 안내 포트가 custom이면 `ssh -p <publicPort> <sshId>@<domain>`을 표시하는지 확인한다. |
 | LoadBalancer pending | Service는 적용됐지만 LoadBalancer ingress가 없으면 Ready가 아니라 Reconciling/ServicePending으로 남는지 확인한다. |
-| Blocked reconcile | external port 누락, host fallback port 누락, external/host port 충돌 시 Blocked가 되고 `kite-gateway-external`이 생성되지 않는지 확인한다. |
-| Host fallback | VM route가 없는 username은 host fallback enabled + configured host sshd 주소일 때만 password/key 인증을 전달하는지 확인한다. |
-| Fallback priority | host username과 VM sshId가 충돌하면 VM route가 우선되는지 확인한다. |
+| Blocked reconcile | external enabled + port 누락 시 Blocked가 되고 `kite-gateway-external`이 생성되지 않는지 확인한다. |
+| No host proxy | VM route가 없는 username은 host sshd로 전달되지 않고 인증 실패하는지 확인한다. |
 | Host key Secret | gateway host key Secret이 없으면 생성되고, k3s E2E에서는 실제 host sshd key fingerprint와 Secret 및 실행 중 gateway fingerprint가 일치하는지 확인한다. |
-| Host sshd address env | controller가 `kite-runtime-config` desired 값 기준으로만 `KITE_GATEWAY_HOST_FALLBACK_ENABLED`와 `KITE_GATEWAY_HOST_SSHD_ADDRESS`를 patch하는지 확인한다. |
-| Timeout | backend VM 또는 host sshd가 응답하지 않을 때 제한 시간 안에 실패하는지 확인한다. |
-| Public config privacy | public `/api/v1/config`는 external enabled/port/status만 반환하고 host fallback port/address를 노출하지 않는지 확인한다. |
+| Timeout | backend VM이 응답하지 않을 때 제한 시간 안에 실패하는지 확인한다. |
+| Public config privacy | public `/api/v1/config`는 external enabled, Service port, 사용자 안내 port, public status만 반환하고 내부 운영 값을 노출하지 않는지 확인한다. |
 
 ## Frontend
 
@@ -361,7 +362,8 @@
 | 소분류 | 테스트해야 하는 것 |
 | --- | --- |
 | Image tag trace | E2E 로그에 build한 image tag와 배포된 pod image가 같이 남는지 확인한다. |
-| GHCR build workflow | `stage` push와 PR에서 publish workflow와 같은 image matrix, Dockerfile, build args로 네 이미지를 `push:false` buildx build 하고 결과물을 버리는지 확인한다. |
+| GHCR build workflow | PR에서는 publish workflow와 같은 image matrix, Dockerfile, build args로 네 이미지를 `push:false` buildx build 하고, `stage` push에서는 `stage`/`stage-sha-<commit>` tag만 GHCR에 push하는지 확인한다. |
+| GHCR cleanup workflow | cleanup workflow가 `sha-*` 30일, `stage-sha-*` 10일 정책만 적용하고 moving tag나 unknown tag가 붙은 version은 삭제하지 않는지 확인한다. |
 | Pod diagnostics | rollout 실패 시 pod describe, logs, events를 출력하는지 확인한다. |
 | CRD diagnostics | VM/User 실패 시 CRD spec/status와 관련 resource 목록을 출력하는지 확인한다. |
 | Storage diagnostics | DataVolume/PVC/PV 실패 시 CDI event와 Longhorn volume 상태를 출력하는지 확인한다. |
@@ -377,7 +379,7 @@
 | Controller reconcile 변경 | fake client reconcile 테스트, idempotency 테스트, 실제 클러스터 resource/status E2E |
 | CRD schema 변경 | schema apply 테스트, API create/update 테스트, controller status E2E |
 | Renderer 변경 | renderer output shape 테스트, controller가 실제 apply하는 E2E |
-| Gateway 변경 | gateway unit 테스트, external exposure reconcile, fallback/password/banner E2E |
+| Gateway 변경 | gateway unit 테스트, external exposure reconcile, VM password/banner E2E |
 | Storage 변경 | Longhorn/CDI wait, golden image import, VM disk clone, cleanup safety 테스트 |
 | Frontend UI 변경 | typecheck/build, route/component E2E, visual QA, backend contract 확인 |
 | Dockerfile/build 변경 | GHCR build workflow, buildx build, local load/push, deployed image tag 확인 |

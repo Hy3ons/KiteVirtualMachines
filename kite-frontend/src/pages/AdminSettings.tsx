@@ -26,8 +26,7 @@ type AdminContactForm = {
 type SSHGatewaySettingsForm = {
   readonly externalEnabled: boolean;
   readonly externalPort: string;
-  readonly hostFallbackEnabled: boolean;
-  readonly hostSshdPort: string;
+  readonly publicPort: string;
 };
 
 const { Content } = Layout;
@@ -90,8 +89,7 @@ export const AdminSettings: React.FC = () => {
         sshGatewayForm.setFieldsValue({
           externalEnabled: Boolean(data.config.sshGateway?.externalEnabled),
           externalPort: data.config.sshGateway?.externalPort || '',
-          hostFallbackEnabled: Boolean(data.config.sshGateway?.hostFallbackEnabled),
-          hostSshdPort: data.config.sshGateway?.hostSshdPort || '',
+          publicPort: data.config.sshGateway?.publicPort || data.config.sshGateway?.externalPort || '',
         });
       }
     }).catch(() => {
@@ -140,17 +138,13 @@ export const AdminSettings: React.FC = () => {
 
   const handleSaveSSHGateway = async (values: SSHGatewaySettingsForm) => {
     const externalPort = values.externalPort?.trim() || '';
-    const hostSshdPort = values.hostSshdPort?.trim() || '';
+    const publicPort = values.publicPort?.trim() || externalPort;
     if (values.externalEnabled && !validPort(externalPort)) {
-      message.error('사용자 접속 포트는 1-65535 사이의 TCP 포트여야 합니다.');
+      message.error('Gateway Service 포트는 1-65535 사이의 TCP 포트여야 합니다.');
       return;
     }
-    if (values.hostFallbackEnabled && !validPort(hostSshdPort)) {
-      message.error('host sshd 포트는 1-65535 사이의 TCP 포트여야 합니다.');
-      return;
-    }
-    if (values.externalEnabled && values.hostFallbackEnabled && externalPort === hostSshdPort) {
-      message.error('사용자 접속 포트와 host sshd 포트는 달라야 합니다.');
+    if (values.externalEnabled && !validPort(publicPort)) {
+      message.error('사용자 안내 포트는 1-65535 사이의 TCP 포트여야 합니다.');
       return;
     }
 
@@ -159,8 +153,7 @@ export const AdminSettings: React.FC = () => {
       const data = await adminApi.saveSSHGateway({
         externalEnabled: Boolean(values.externalEnabled),
         externalPort,
-        hostFallbackEnabled: Boolean(values.hostFallbackEnabled),
-        hostSshdPort,
+        publicPort,
       });
       if (data.config?.sshGateway) {
         setSSHGateway(data.config.sshGateway);
@@ -256,8 +249,9 @@ export const AdminSettings: React.FC = () => {
         <Card hoverable className="admin-settings-card">
           <Title level={4}><CloudServerOutlined style={{ marginRight: 8 }} /> SSH Gateway</Title>
           <Paragraph style={{ color: '#666' }}>
-            설치 직후에는 외부 VM SSH 접속을 열지 않습니다. 운영자가 사용자 접속 포트를 명시하면 컨트롤러가 별도 LoadBalancer Service를 생성합니다.
-            host fallback은 기존 host sshd 포트를 알고 있을 때만 켜세요.
+            설치 직후에는 외부 VM SSH 접속을 열지 않습니다. 운영자가 Gateway Service 포트와 사용자 안내 포트를 명시하면 컨트롤러가 별도 LoadBalancer Service를 생성합니다.
+            외부 라우터가 22번을 Service 12311번으로 넘기는 구조라면 Service 포트는 12311, 사용자 안내 포트는 22로 입력하세요.
+            Kite는 host sshd 포트를 이동하거나 host 계정 로그인을 gateway로 우회하지 않습니다.
           </Paragraph>
 
           <Alert
@@ -274,30 +268,26 @@ export const AdminSettings: React.FC = () => {
           />
 
           <Descriptions bordered size="small" column={{ xs: 1, sm: 1, md: 2 }} style={{ marginBottom: 20 }}>
-            <Descriptions.Item label="Desired external port">{sshGateway?.externalPort || '-'}</Descriptions.Item>
-            <Descriptions.Item label="Observed external port">{sshGateway?.status?.observedExternalPort || '-'}</Descriptions.Item>
-            <Descriptions.Item label="Host fallback desired">{sshGateway?.hostFallbackEnabled ? 'Enabled' : 'Disabled'}</Descriptions.Item>
+            <Descriptions.Item label="Service 포트">{sshGateway?.externalPort || '-'}</Descriptions.Item>
+            <Descriptions.Item label="사용자 안내 포트">{sshGateway?.publicPort || sshGateway?.externalPort || '-'}</Descriptions.Item>
+            <Descriptions.Item label="적용된 Service 포트">{sshGateway?.status?.observedExternalPort || '-'}</Descriptions.Item>
             <Descriptions.Item label="Observed service">{sshGateway?.status?.observedServiceName || '-'}</Descriptions.Item>
             <Descriptions.Item label="Reason">{sshGateway?.status?.reason || '-'}</Descriptions.Item>
             <Descriptions.Item label="Last transition">{sshGateway?.status?.lastTransitionTime || '-'}</Descriptions.Item>
           </Descriptions>
 
-          <Form form={sshGatewayForm} layout="vertical" onFinish={handleSaveSSHGateway} initialValues={{ externalEnabled: false, externalPort: '', hostFallbackEnabled: false, hostSshdPort: '' }}>
+          <Form form={sshGatewayForm} layout="vertical" onFinish={handleSaveSSHGateway} initialValues={{ externalEnabled: false, externalPort: '', publicPort: '' }}>
             <Space orientation="vertical" size={16} style={{ width: '100%' }}>
               <Form.Item name="externalEnabled" label="외부 VM SSH gateway 활성화" valuePropName="checked">
                 <Switch />
               </Form.Item>
 
-              <Form.Item name="externalPort" label="사용자 접속 포트">
-                <Input placeholder="예: 22 또는 40022" size="large" inputMode="numeric" />
+              <Form.Item name="externalPort" label="Gateway Service 포트">
+                <Input placeholder="예: 12311 또는 40022" size="large" inputMode="numeric" />
               </Form.Item>
 
-              <Form.Item name="hostFallbackEnabled" label="host fallback 활성화" valuePropName="checked">
-                <Switch />
-              </Form.Item>
-
-              <Form.Item name="hostSshdPort" label="host sshd 포트">
-                <Input placeholder="예: 22, 2222, 40001" size="large" inputMode="numeric" />
+              <Form.Item name="publicPort" label="사용자 안내 포트">
+                <Input placeholder="예: 공유기가 22 -> 12311로 전달하면 22" size="large" inputMode="numeric" />
               </Form.Item>
             </Space>
 

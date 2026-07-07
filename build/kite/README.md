@@ -41,12 +41,17 @@ Install scripts keep this Service internal. The controller creates a separate
 SSH Gateway exposure in Admin Settings.
 
 ```text
-configured external SSH port
+user-facing SSH port
   -> service/kite-gateway-external when enabled
   -> service/kite-gateway port 22 inside the cluster
   -> deployment/kite-gateway container port 2222
   -> vps-access-<vmName>.<namespace>.svc.cluster.local:22
 ```
+
+Admin Settings stores the Kubernetes Service port separately from the port shown
+to users. This supports router/NAT layouts such as public `22 -> 12311`, where
+`12311` is the LoadBalancer/Service port and `22` is the command shown in the
+Dashboard.
 
 The gateway reads `KiteVirtualMachine` CRDs, VM SSH key Secrets, and VM access
 Services through Kubernetes RBAC. It does not create host Linux users.

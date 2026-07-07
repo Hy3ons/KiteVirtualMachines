@@ -52,7 +52,7 @@ type Settings struct {
 }
 
 // PublicSettings contains frontend-readable settings for unauthenticated and ordinary user pages.
-// SSHGateway omits host fallback details because those are operator-only settings.
+// SSHGateway contains the user-facing VM SSH gateway status.
 type PublicSettings struct {
 	BaseDomain        string                   `json:"baseDomain"`
 	ForceHTTPS        bool                     `json:"forceHttps"`
@@ -109,7 +109,7 @@ func (s *Service) Get(ctx context.Context) (Settings, error) {
 	}, nil
 }
 
-// GetPublic returns frontend-readable platform settings without operator-only SSH fallback values.
+// GetPublic returns frontend-readable platform settings.
 // ctx controls Kubernetes API calls.
 // This function is used by the public /api/v1/config route.
 func (s *Service) GetPublic(ctx context.Context) (PublicSettings, error) {

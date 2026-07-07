@@ -9,6 +9,7 @@ commands say what they do before the user has to read the implementation.
 | Name | Meaning | Primary entrypoint |
 | --- | --- | --- |
 | `ghcr-install.sh` | 일반 사용자/운영자가 GHCR 이미지를 pull해서 설치한다. | `./ghcr-install.sh` -> `build/deploy/scripts/install-all.sh` |
+| `ghcr-stage-install.sh` | 메인테이너가 stage GHCR 이미지를 production 설치 흐름으로 검증한다. | `./ghcr-stage-install.sh` -> `./ghcr-install.sh` -> `build/deploy/scripts/install-all.sh` |
 | `build-install.sh` | 개발자가 현재 checkout 이미지를 빌드해서 설치한다. | `./build-install.sh` -> `build/dev/all-in-one.sh` |
 | `uninstall.sh` | 일반 사용자/운영자가 Kite 배포를 제거한다. | `./uninstall.sh` -> `build/deploy/scripts/clean.sh` |
 | `build-clear.sh` | 개발자가 local build/deploy 산출물을 제거한다. | `./build-clear.sh` -> `build/dev/clear.sh` |
@@ -53,6 +54,10 @@ bootstrap compatibility:
 ./ghcr-install.sh
   -> build/deploy/scripts/install-all.sh
   -> when piped from curl, downloads the selected archive first
+
+./ghcr-stage-install.sh
+  -> sets stage ref and stage image tag
+  -> ghcr-install.sh
 
 ./uninstall.sh
   -> build/deploy/scripts/clean.sh

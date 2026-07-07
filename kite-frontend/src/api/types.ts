@@ -41,7 +41,6 @@ export type SSHGatewayStatus = {
   readonly reason: string;
   readonly message: string;
   readonly observedExternalPort?: string;
-  readonly observedHostFallbackAddress?: string;
   readonly observedServiceName?: string;
   readonly lastTransitionTime?: string;
 };
@@ -49,8 +48,7 @@ export type SSHGatewayStatus = {
 export type SSHGatewaySettings = {
   readonly externalEnabled: boolean;
   readonly externalPort: string;
-  readonly hostFallbackEnabled?: boolean;
-  readonly hostSshdPort?: string;
+  readonly publicPort: string;
   readonly phase?: SSHGatewayPhase;
   readonly reason?: string;
   readonly message?: string;
@@ -203,8 +201,7 @@ export type HTTPSPolicyPayload = {
 export type SSHGatewayPayload = {
   readonly externalEnabled: boolean;
   readonly externalPort: string;
-  readonly hostFallbackEnabled: boolean;
-  readonly hostSshdPort: string;
+  readonly publicPort: string;
 };
 
 export type CertPayload = {

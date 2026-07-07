@@ -10,6 +10,9 @@ set -euo pipefail
 #
 # Environment Variables:
 #   KITE_NAMESPACE: default kite
+#   KITE_INSTALL_REGISTRY: default ghcr.io/hy3ons
+#   KITE_INSTALL_IMAGE_TAG: default production
+#   KITE_INSTALL_IMAGE_PULL_POLICY: default IfNotPresent
 #   INSTALL_LONGHORN: default true
 #   KITE_INSTALL_LONGHORN_HOST_PACKAGES: default true
 #   CONFIGURE_LONGHORN: default true
@@ -39,6 +42,9 @@ KITE_LONGHORN_USE_DEDICATED_DISK_WAS_SET="${KITE_LONGHORN_USE_DEDICATED_DISK+x}"
 KITE_GATEWAY_HOST_KEY_REFRESH_WAS_SET="${KITE_GATEWAY_HOST_KEY_REFRESH+x}"
 RUN_VERIFY_WAS_SET="${RUN_VERIFY+x}"
 KITE_NAMESPACE="${KITE_NAMESPACE:-kite}"
+KITE_INSTALL_REGISTRY="${KITE_INSTALL_REGISTRY:-ghcr.io/hy3ons}"
+KITE_INSTALL_IMAGE_TAG="${KITE_INSTALL_IMAGE_TAG:-production}"
+KITE_INSTALL_IMAGE_PULL_POLICY="${KITE_INSTALL_IMAGE_PULL_POLICY:-IfNotPresent}"
 INSTALL_LONGHORN="${INSTALL_LONGHORN:-true}"
 CONFIGURE_LONGHORN="${CONFIGURE_LONGHORN:-true}"
 APPLY_STORAGECLASS="${APPLY_STORAGECLASS:-true}"
@@ -49,6 +55,7 @@ KITE_LONGHORN_USE_DEDICATED_DISK="${KITE_LONGHORN_USE_DEDICATED_DISK:-false}"
 KITE_GATEWAY_HOST_KEY_REFRESH="${KITE_GATEWAY_HOST_KEY_REFRESH:-false}"
 KITE_ROLLOUT_TIMEOUT="${KITE_ROLLOUT_TIMEOUT:-15m}"
 RUN_VERIFY="${RUN_VERIFY:-true}"
+KITE_INSTALL_KUSTOMIZE_DIR=""
 
 # shellcheck source=build/lib/prompt.sh
 source "${ROOT_DIR}/build/lib/prompt.sh"
@@ -127,10 +134,116 @@ export_install_options() {
   export KITE_GATEWAY_HOST_KEY_REFRESH
 }
 
+cleanup_install_overlay() {
+  if [[ -n "${KITE_INSTALL_KUSTOMIZE_DIR:-}" ]]; then
+    rm -rf "${KITE_INSTALL_KUSTOMIZE_DIR}"
+  fi
+}
+
+render_install_manifest() {
+  require_command mktemp
+
+  KITE_INSTALL_KUSTOMIZE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/kite-ghcr-install-kustomize.XXXXXX")"
+  cp -R "${ROOT_DIR}/build/kite" "${KITE_INSTALL_KUSTOMIZE_DIR}/kite"
+  cat > "${KITE_INSTALL_KUSTOMIZE_DIR}/kustomization.yaml" <<EOF
+resources:
+  - kite
+
+images:
+  - name: ghcr.io/hy3ons/kite-api
+    newName: ${KITE_INSTALL_REGISTRY}/kite-api
+    newTag: ${KITE_INSTALL_IMAGE_TAG}
+  - name: ghcr.io/hy3ons/kite-controller
+    newName: ${KITE_INSTALL_REGISTRY}/kite-controller
+    newTag: ${KITE_INSTALL_IMAGE_TAG}
+  - name: ghcr.io/hy3ons/kite-gateway
+    newName: ${KITE_INSTALL_REGISTRY}/kite-gateway
+    newTag: ${KITE_INSTALL_IMAGE_TAG}
+  - name: ghcr.io/hy3ons/kite-frontend
+    newName: ${KITE_INSTALL_REGISTRY}/kite-frontend
+    newTag: ${KITE_INSTALL_IMAGE_TAG}
+
+patches:
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: kite-api
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: kite-api
+      spec:
+        template:
+          spec:
+            containers:
+              - name: kite-api
+                imagePullPolicy: ${KITE_INSTALL_IMAGE_PULL_POLICY}
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: kite-controller
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: kite-controller
+      spec:
+        template:
+          spec:
+            containers:
+              - name: kite-controller
+                imagePullPolicy: ${KITE_INSTALL_IMAGE_PULL_POLICY}
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: kite-gateway
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: kite-gateway
+      spec:
+        template:
+          spec:
+            containers:
+              - name: kite-gateway
+                imagePullPolicy: ${KITE_INSTALL_IMAGE_PULL_POLICY}
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: kite-frontend
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: kite-frontend
+      spec:
+        template:
+          spec:
+            containers:
+              - name: kite-frontend
+                imagePullPolicy: ${KITE_INSTALL_IMAGE_PULL_POLICY}
+EOF
+}
+
+apply_kite_manifests() {
+  log "applying Kite manifests from ${KITE_INSTALL_REGISTRY}/<component>:${KITE_INSTALL_IMAGE_TAG}"
+  "${ROOT_DIR}/build/deploy/scripts/ensure-gateway-host-key-secret.sh"
+  render_install_manifest
+  kubectl apply -k "${KITE_INSTALL_KUSTOMIZE_DIR}"
+}
+
 # pull 기반 설치의 전체 순서다. Longhorn/KubeVirt/CDI 준비,
 # Kite 매니페스트 적용, golden image 적용, 기본 검증까지 한 번에 진행한다.
 main() {
   require_command kubectl
+
+  trap cleanup_install_overlay EXIT
 
   kubectl get nodes >/dev/null
   configure_interactive_install_options
@@ -166,9 +279,7 @@ main() {
   "${ROOT_DIR}/build/deploy/scripts/wait-cdi.sh"
 
   log "applying Kite manifests"
-  "${ROOT_DIR}/build/deploy/scripts/ensure-gateway-host-key-secret.sh"
-  # build/kite kustomization에는 API/controller/gateway/frontend 런타임 리소스가 모여 있다.
-  kubectl apply -k "${ROOT_DIR}/build/kite"
+  apply_kite_manifests
 
   log "waiting for Kite workloads"
   kubectl -n "${KITE_NAMESPACE}" rollout status deployment/kite-api --timeout="${KITE_ROLLOUT_TIMEOUT}"

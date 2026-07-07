@@ -12,5 +12,4 @@ data:
   forceHttps: "false"
   sshGatewayExternalEnabled: "false"
   sshGatewayExternalPort: ""
-  sshGatewayHostFallbackEnabled: "false"
-  sshGatewayHostSshdPort: ""
+  sshGatewayPublicPort: ""

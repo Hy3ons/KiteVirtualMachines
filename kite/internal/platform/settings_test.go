@@ -119,6 +119,110 @@ func TestRotateRuntimeSecretsUpdatesSecret(t *testing.T) {
 	}
 }
 
+func TestNormalizeSSHGatewayDesiredDefaultsPublicPortToExternalPort(t *testing.T) {
+	desired, err := NormalizeSSHGatewayDesired(SSHGatewayDesired{
+		ExternalEnabled: true,
+		ExternalPort:    "12311",
+	})
+	if err != nil {
+		t.Fatalf("failed to normalize SSH gateway desired state: %v", err)
+	}
+
+	if desired.PublicPort != "12311" {
+		t.Fatalf("expected missing public port to default to external port, got %q", desired.PublicPort)
+	}
+}
+
+func TestNormalizeSSHGatewayDesiredKeepsDistinctPublicPort(t *testing.T) {
+	desired, err := NormalizeSSHGatewayDesired(SSHGatewayDesired{
+		ExternalEnabled: true,
+		ExternalPort:    "12311",
+		PublicPort:      "22",
+	})
+	if err != nil {
+		t.Fatalf("failed to normalize SSH gateway desired state: %v", err)
+	}
+
+	if desired.ExternalPort != "12311" {
+		t.Fatalf("expected service port to stay 12311, got %q", desired.ExternalPort)
+	}
+	if desired.PublicPort != "22" {
+		t.Fatalf("expected user-facing port to stay 22, got %q", desired.PublicPort)
+	}
+}
+
+func TestUpdateSSHGatewayStoresServiceAndPublicPortsSeparately(t *testing.T) {
+	dynamicClient := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
+		configMapGVR: "ConfigMapList",
+		secretGVR:    "SecretList",
+	}, newPlatformSettingsRuntimeConfig("apps.example.com", "false"), newPlatformRuntimeSecret("jwt", "salt"))
+
+	settings, err := NewService(dynamicClient).UpdateSSHGateway(context.Background(), SSHGatewayDesired{
+		ExternalEnabled: true,
+		ExternalPort:    "12311",
+		PublicPort:      "22",
+	})
+	if err != nil {
+		t.Fatalf("failed to update SSH gateway settings: %v", err)
+	}
+
+	if settings.SSHGateway.ExternalPort != "12311" {
+		t.Fatalf("expected returned service port to be 12311, got %q", settings.SSHGateway.ExternalPort)
+	}
+	if settings.SSHGateway.PublicPort != "22" {
+		t.Fatalf("expected returned user-facing port to be 22, got %q", settings.SSHGateway.PublicPort)
+	}
+
+	runtimeConfig, err := dynamicClient.Resource(configMapGVR).Namespace(config.KiteNamespace).Get(context.Background(), config.RuntimeConfigName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("failed to read runtime config: %v", err)
+	}
+	data, _, _ := unstructured.NestedStringMap(runtimeConfig.Object, "data")
+	if data[config.SSHGatewayExternalPortKey] != "12311" {
+		t.Fatalf("expected runtime config service port to be 12311, got %q", data[config.SSHGatewayExternalPortKey])
+	}
+	if data[config.SSHGatewayPublicPortKey] != "22" {
+		t.Fatalf("expected runtime config user-facing port to be 22, got %q", data[config.SSHGatewayPublicPortKey])
+	}
+}
+
+func TestSSHGatewayPublicMessageHidesApplyFailureDetails(t *testing.T) {
+	desired := SSHGatewayDesired{
+		ExternalEnabled: true,
+		ExternalPort:    "12311",
+		PublicPort:      "22",
+	}
+
+	public := desired.Public(SSHGatewayStatus{
+		Phase:   SSHGatewayPhaseFailed,
+		Reason:  SSHGatewayReasonApplyFailed,
+		Message: `failed to apply external gateway Service: services "kite-gateway-external" is invalid`,
+	})
+
+	if public.Message != "VM SSH gateway 적용 중 문제가 발생했습니다. 운영자에게 문의하세요." {
+		t.Fatalf("expected public message to hide Kubernetes failure details, got %q", public.Message)
+	}
+}
+
+func TestSSHGatewayAdminMessageKeepsApplyFailureDetails(t *testing.T) {
+	desired := SSHGatewayDesired{
+		ExternalEnabled: true,
+		ExternalPort:    "12311",
+		PublicPort:      "22",
+	}
+	status := SSHGatewayStatus{
+		Phase:   SSHGatewayPhaseFailed,
+		Reason:  SSHGatewayReasonApplyFailed,
+		Message: `failed to apply external gateway Service: services "kite-gateway-external" is invalid`,
+	}
+
+	admin := desired.Admin(status)
+
+	if admin.Status.Message != status.Message {
+		t.Fatalf("expected admin message to keep failure details, got %q", admin.Status.Message)
+	}
+}
+
 func newPlatformRuntimeSecret(jwtSecret string, passwordSalt string) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
 		Object: map[string]any{

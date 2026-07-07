@@ -23,18 +23,18 @@ export const buildSSHCommandState = (sshId: string, host: string, gateway?: SSHG
     return {
       ready: false,
       command: '',
-      configPort: gateway?.externalPort?.trim() || '',
+      configPort: gateway?.publicPort?.trim() || gateway?.externalPort?.trim() || '',
       message: gateway?.status?.message || gateway?.message || '운영자가 외부 VM SSH gateway를 아직 활성화하지 않았습니다.',
     };
   }
 
-  const port = gateway.externalPort.trim();
+  const port = (gateway.publicPort || gateway.externalPort).trim();
   if (!validSSHPort(port)) {
     return {
       ready: false,
       command: '',
       configPort: port,
-      message: '운영자가 설정한 SSH gateway 포트가 올바르지 않습니다.',
+      message: '운영자가 설정한 사용자 안내 SSH 포트가 올바르지 않습니다.',
     };
   }
 

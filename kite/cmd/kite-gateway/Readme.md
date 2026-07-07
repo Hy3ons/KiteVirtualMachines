@@ -1,7 +1,8 @@
 # kite-gateway
 
 `kite-gateway`은 Kubernetes 내부에서 실행되는 Go SSH gateway입니다.
-외부 사용자는 `ssh <sshId>@<node-ip>`로 접속하고, 이 컴포넌트는 `KiteVirtualMachine` CRD와 VM SSH key Secret을 읽어서 VM의 `vps-access-<vmName>` Service로 SSH 세션을 프록시합니다.
+외부 사용자는 Admin Settings에 저장된 user-facing port로 `ssh -p <user-facing-port> <sshId>@<node-ip>` 형태로 접속하고, 이 컴포넌트는 `KiteVirtualMachine` CRD와 VM SSH key Secret을 읽어서 VM의 `vps-access-<vmName>` Service로 SSH 세션을 프록시합니다.
+Kubernetes `kite-gateway-external` Service port와 사용자에게 안내할 port는 다를 수 있습니다.
 
 ## Current Flow
 
@@ -14,8 +15,8 @@ sequenceDiagram
     participant VMService as vps-access Service
     participant VM as KubeVirt VM sshd
 
-    Client->>Service: ssh <sshId>@node
-    Service->>Control: TCP 22 -> targetPort 2222
+    Client->>Service: ssh -p <user-facing-port> <sshId>@node
+    Service->>Control: Service port -> targetPort 2222
     Control->>Control: password auth callback
     Control->>K8s: informer route lookup by spec.sshId
     Control->>K8s: read status.sshKeySecretName Secret
@@ -35,21 +36,9 @@ SSH login username == KiteVirtualMachine.spec.sshId
 
 Duplicate live `sshId` values are rejected by the route table.
 
-If no live Kite VM route exists for the SSH username, the gateway can fall back
-to the host OpenSSH daemon. The default manifest disables this fallback. When a
-Level 3 admin enables it from Admin Settings, the controller patches the gateway
-Deployment with `$(KITE_NODE_IP):<host-sshd-port>`.
-
-```text
-ssh -p <admin-selected-port> <host-linux-user>@<node-ip>
-  -> kite-gateway
-  -> no KiteVM spec.sshId match
-  -> host sshd at <node-ip>:<configured-host-sshd-port>
-```
-
-Kite VM routes have priority. If a VM `spec.sshId` is the same as a host Linux
-username, the VM route wins inside the gateway. Use the host's normal SSH port
-for direct host administration in that case.
+If no live Kite VM route exists for the SSH username, authentication fails.
+The gateway does not proxy host Linux accounts and does not contact host sshd.
+Use the host's normal SSH path for direct host administration.
 
 Before password authentication, the gateway may show an SSH login banner. The
 default manifest uses it to tell users they are connected to Kite Gateway and
@@ -79,9 +68,11 @@ public key and disables password SSH login inside the VM.
 The gateway listens on container port `2222`. The base Kubernetes Service is
 internal so raw manifest apply and public install scripts do not steal host SSH
 port `22`. A Level 3 admin enables external VM SSH access later from Admin
-Settings. The controller then creates `service/kite-gateway-external` and, only
-when host fallback is explicitly enabled, patches the gateway Deployment with a
-configured host sshd address.
+Settings. The controller then creates `service/kite-gateway-external` for VM
+SSH traffic only. Admin Settings stores both the Service port that Kubernetes
+opens and the user-facing port displayed in the UI. Use different values when an
+external router maps a public port such as `22` to a different Service/LB port
+such as `12311`.
 
 ## Environment
 
@@ -90,9 +81,6 @@ configured host sshd address.
 - `KITE_GATEWAY_BACKEND_TIMEOUT_SECONDS`: VM sshd wait timeout. Default `90`.
 - `KITE_GATEWAY_BACKEND_RETRY_SECONDS`: backend retry interval. Default `2`.
 - `KITE_GATEWAY_LOGIN_BANNER`: optional pre-authentication SSH banner shown before the password prompt. Empty disables the banner.
-- `KITE_GATEWAY_HOST_FALLBACK_ENABLED`: whether unknown SSH usernames may fall back to host sshd. Default `false`.
-- `KITE_GATEWAY_HOST_SSHD_ADDRESS`: host sshd fallback address. It must be set when fallback is enabled, and is normally patched by the controller from Admin Settings.
-- `KITE_GATEWAY_HOST_FALLBACK_TIMEOUT_SECONDS`: host fallback password auth timeout. Default `5`.
 
 ## Host Key
 

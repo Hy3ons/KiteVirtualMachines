@@ -19,6 +19,9 @@ set -euo pipefail
 #   KITE_GHCR_INSTALL_REPOSITORY: default Hy3ons/KiteVirtualMachines; curl 실행 시 받을 GitHub repository다. prompt 없음.
 #   KITE_GHCR_INSTALL_REF: default main; curl 실행 시 받을 branch/tag다. prompt 없음.
 #   KITE_GHCR_INSTALL_ARCHIVE_URL: default empty; 직접 archive URL을 지정할 때 쓴다. prompt 없음.
+#   KITE_INSTALL_REGISTRY: default ghcr.io/hy3ons; component image registry다. prompt 없음.
+#   KITE_INSTALL_IMAGE_TAG: default production; 적용할 GHCR image tag다. prompt 없음.
+#   KITE_INSTALL_IMAGE_PULL_POLICY: default IfNotPresent; Kite runtime Deployment imagePullPolicy다. prompt 없음.
 #   KITE_ASSUME_DEFAULTS: default false; true면 모든 interactive 질문을 건너뛰고 env/default 값으로 실행한다.
 #   INSTALL_LONGHORN: default true; Longhorn 기본 manifest를 설치할지 초반에 묻는다.
 #   KITE_INSTALL_LONGHORN_HOST_PACKAGES: default true; apt 기반 host에서 Longhorn 필수 패키지를 자동 설치할지 정한다.

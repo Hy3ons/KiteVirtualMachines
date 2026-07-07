@@ -167,10 +167,12 @@ folder-level map and naming rules are documented in `build/README.md`.
 `build/dev/dev.sh` also builds and deploys `kite-gateway`. `build-install.sh`
 keeps it internal by default and never moves host sshd. External VM SSH access
 is enabled later from Admin Settings, which drives `kite-runtime-config` and the
-controller-owned `kite-gateway-external` Service.
+controller-owned `kite-gateway-external` Service. Admin Settings separates the
+Gateway Service port from the user-facing port shown in the UI, so router/NAT
+layouts such as public `22 -> 12311` can still show users the plain SSH command.
 
 ```sh
-ssh -p <admin-selected-port> <sshId>@<node-ip>
+ssh -p <user-facing-port> <sshId>@<node-ip>
 ```
 
 The current implementation authenticates with `KiteVirtualMachine.spec.sshPasswordHash`
@@ -192,7 +194,5 @@ host key, run:
 KITE_GATEWAY_HOST_KEY_REFRESH=true KITE_GATEWAY_HOST_KEY_SOURCE=host KITE_CLUSTER=k3s build/dev/dev.sh
 ```
 
-When no Kite VM uses the SSH login username, `kite-gateway` can optionally fall
-back to host sshd. This is disabled by default. A Level 3 admin must explicitly
-enable host fallback and enter the host sshd port in Admin Settings. Kite then
-patches the gateway Deployment with `$(KITE_NODE_IP):<host-sshd-port>`.
+When no Kite VM uses the SSH login username, authentication fails. Kite does
+not proxy host Linux accounts and never manages the host sshd port.

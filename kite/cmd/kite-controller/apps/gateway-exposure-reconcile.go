@@ -11,7 +11,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
@@ -27,20 +26,12 @@ const (
 	kiteGatewayApplyManager        = "kite-controller-gateway-exposure"
 	kiteGatewayInternalServiceName = "kite-gateway"
 	kiteGatewayExternalServiceName = "kite-gateway-external"
-	kiteGatewayDeploymentName      = "kite-gateway"
-	kiteGatewayContainerName       = "kite-gateway"
 )
-
-var deploymentGVR = schema.GroupVersionResource{
-	Group:    "apps",
-	Version:  "v1",
-	Resource: "deployments",
-}
 
 // RunKiteGatewayExposureReconciler watches runtime config and reconciles SSH gateway exposure.
 // clientManager provides the dynamic Kubernetes client.
 // stopCh stops the informer during controller shutdown.
-// This reconciler owns only kite-gateway-external and gateway fallback env values.
+// This reconciler owns only kite-gateway-external.
 func RunKiteGatewayExposureReconciler(clientManager *kube.ClientManager, stopCh <-chan struct{}) {
 	if clientManager == nil || clientManager.DynamicClient == nil {
 		log.Printf("Kite gateway exposure reconciler requires a dynamic Kubernetes client")
@@ -104,7 +95,7 @@ func RegisterKiteGatewayExposureServiceReconciler(informer cache.SharedIndexInfo
 
 // ReconcileKiteGatewayExposureFromConfigMap reconciles gateway exposure from kite-runtime-config.
 // ctx controls Kubernetes API requests.
-// dynamicClient reads desired config, writes status, patches gateway fallback env, and applies the external Service.
+// dynamicClient reads desired config, writes status, and applies the external Service.
 func ReconcileKiteGatewayExposureFromConfigMap(ctx context.Context, dynamicClient dynamic.Interface) error {
 	if dynamicClient == nil {
 		return fmt.Errorf("dynamic client is required for Kite gateway exposure reconcile")
@@ -127,9 +118,6 @@ func ReconcileKiteGatewayExposureFromConfigMap(ctx context.Context, dynamicClien
 		if err := deleteExternalGatewayService(ctx, dynamicClient); err != nil {
 			return writeGatewayFailedStatus(ctx, statusWriter, err)
 		}
-		if err := patchGatewayFallback(ctx, dynamicClient, false, ""); err != nil {
-			return writeGatewayFailedStatus(ctx, statusWriter, err)
-		}
 		return statusWriter.WriteSSHGatewayStatus(ctx, withTransitionTime(status))
 	}
 
@@ -137,28 +125,18 @@ func ReconcileKiteGatewayExposureFromConfigMap(ctx context.Context, dynamicClien
 		if err := deleteExternalGatewayService(ctx, dynamicClient); err != nil {
 			return writeGatewayFailedStatus(ctx, statusWriter, err)
 		}
-		if err := patchGatewayFallback(ctx, dynamicClient, false, ""); err != nil {
-			return writeGatewayFailedStatus(ctx, statusWriter, err)
-		}
 		return statusWriter.WriteSSHGatewayStatus(ctx, withTransitionTime(platform.SSHGatewayStatus{
 			Phase:   platform.SSHGatewayPhaseDisabled,
 			Reason:  platform.SSHGatewayReasonExternalDisabled,
-			Message: "External VM SSH gateway is disabled.",
+			Message: "외부 VM SSH gateway가 비활성화되어 있습니다. VM SSH 접속을 열려면 Admin Settings에서 Service 포트와 사용자 안내 포트를 설정하세요.",
 		}))
 	}
 
-	fallbackAddress := ""
-	if desired.HostFallbackEnabled {
-		fallbackAddress = "$(KITE_NODE_IP):" + desired.HostSshdPort
-	}
-	if err := patchGatewayFallback(ctx, dynamicClient, desired.HostFallbackEnabled, fallbackAddress); err != nil {
-		return writeGatewayFailedStatus(ctx, statusWriter, err)
-	}
 	if err := applyExternalGatewayService(ctx, dynamicClient, desired.ExternalPort); err != nil {
 		return writeGatewayFailedStatus(ctx, statusWriter, err)
 	}
 
-	appliedStatus, err := externalGatewayServiceStatus(ctx, dynamicClient, desired.ExternalPort, fallbackAddress)
+	appliedStatus, err := externalGatewayServiceStatus(ctx, dynamicClient, desired.ExternalPort)
 	if err != nil {
 		return writeGatewayFailedStatus(ctx, statusWriter, err)
 	}
@@ -220,21 +198,7 @@ func gatewayBlockedStatus(desired platform.SSHGatewayDesired) (platform.SSHGatew
 		return platform.SSHGatewayStatus{
 			Phase:   platform.SSHGatewayPhaseBlocked,
 			Reason:  platform.SSHGatewayReasonMissingExternalPort,
-			Message: "External gateway is enabled but no user SSH port is configured.",
-		}, true
-	}
-	if desired.HostFallbackEnabled && desired.HostSshdPort == "" {
-		return platform.SSHGatewayStatus{
-			Phase:   platform.SSHGatewayPhaseBlocked,
-			Reason:  platform.SSHGatewayReasonMissingHostFallbackPort,
-			Message: "Host fallback is enabled but no host sshd port is configured.",
-		}, true
-	}
-	if desired.ExternalEnabled && desired.HostFallbackEnabled && desired.ExternalPort == desired.HostSshdPort {
-		return platform.SSHGatewayStatus{
-			Phase:   platform.SSHGatewayPhaseBlocked,
-			Reason:  platform.SSHGatewayReasonPortConflict,
-			Message: "External gateway port and host sshd port must be different.",
+			Message: "외부 VM SSH gateway가 켜져 있지만 Gateway Service 포트가 비어 있습니다. Admin Settings에서 Kubernetes LoadBalancer Service가 열 포트를 입력하세요.",
 		}, true
 	}
 	return platform.SSHGatewayStatus{}, false
@@ -288,7 +252,7 @@ func normalizeInternalGatewayService(ctx context.Context, dynamicClient dynamic.
 
 // applyExternalGatewayService applies kite-gateway-external as a LoadBalancer Service.
 // ctx controls the Kubernetes patch request.
-// externalPort is the user-facing SSH port selected by a Level 3 admin.
+// externalPort is the Service port selected by a Level 3 admin.
 func applyExternalGatewayService(ctx context.Context, dynamicClient dynamic.Interface, externalPort string) error {
 	port, err := strconv.Atoi(externalPort)
 	if err != nil {
@@ -337,31 +301,30 @@ func applyExternalGatewayService(ctx context.Context, dynamicClient dynamic.Inte
 
 // externalGatewayServiceStatus reads the applied external Service and returns the admin-facing status.
 // ctx controls the Kubernetes get request.
-// externalPort and fallbackAddress are the desired values written into observed status fields.
-func externalGatewayServiceStatus(ctx context.Context, dynamicClient dynamic.Interface, externalPort string, fallbackAddress string) (platform.SSHGatewayStatus, error) {
+// externalPort is the desired Service port written into observed status.
+func externalGatewayServiceStatus(ctx context.Context, dynamicClient dynamic.Interface, externalPort string) (platform.SSHGatewayStatus, error) {
 	service, err := dynamicClient.Resource(serviceGVR).Namespace(config.KiteNamespace).Get(ctx, kiteGatewayExternalServiceName, metav1.GetOptions{})
 	if err != nil {
 		return platform.SSHGatewayStatus{}, fmt.Errorf("failed to read external gateway Service status: %w", err)
 	}
-	return externalGatewayServiceStatusFromObject(service, externalPort, fallbackAddress), nil
+	return externalGatewayServiceStatusFromObject(service, externalPort), nil
 }
 
-func externalGatewayServiceStatusFromObject(service *unstructured.Unstructured, externalPort string, fallbackAddress string) platform.SSHGatewayStatus {
+func externalGatewayServiceStatusFromObject(service *unstructured.Unstructured, externalPort string) platform.SSHGatewayStatus {
 	status := platform.SSHGatewayStatus{
-		ObservedExternalPort:        externalPort,
-		ObservedHostFallbackAddress: fallbackAddress,
-		ObservedServiceName:         kiteGatewayExternalServiceName,
+		ObservedExternalPort: externalPort,
+		ObservedServiceName:  kiteGatewayExternalServiceName,
 	}
 	ingress, _, _ := unstructured.NestedSlice(service.Object, "status", "loadBalancer", "ingress")
 	if len(ingress) == 0 {
 		status.Phase = platform.SSHGatewayPhaseReconciling
 		status.Reason = platform.SSHGatewayReasonServicePending
-		status.Message = "External VM SSH gateway Service was applied, but the LoadBalancer is not ready yet. If this remains pending, check whether the requested port is already used by the host or load balancer."
+		status.Message = "Gateway Service는 적용됐지만 LoadBalancer 주소가 아직 준비되지 않았습니다. 오래 지속되면 Service 포트 사용 가능 여부와 클러스터 LoadBalancer 상태를 확인하세요."
 		return status
 	}
 	status.Phase = platform.SSHGatewayPhaseReady
 	status.Reason = platform.SSHGatewayReasonServiceApplied
-	status.Message = "External VM SSH gateway LoadBalancer is ready."
+	status.Message = "외부 VM SSH gateway가 준비되었습니다. 사용자는 Dashboard에 표시된 SSH 명령으로 VM에 접속할 수 있습니다."
 	return status
 }
 
@@ -371,58 +334,6 @@ func deleteExternalGatewayService(ctx context.Context, dynamicClient dynamic.Int
 		return fmt.Errorf("failed to delete external gateway Service: %w", err)
 	}
 	return nil
-}
-
-// patchGatewayFallback updates gateway Deployment environment variables for host fallback.
-// ctx controls the Deployment update.
-// NotFound is ignored because install ordering may create config before the Deployment.
-func patchGatewayFallback(ctx context.Context, dynamicClient dynamic.Interface, enabled bool, address string) error {
-	deployment, err := dynamicClient.Resource(deploymentGVR).Namespace(config.KiteNamespace).Get(ctx, kiteGatewayDeploymentName, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("failed to read gateway Deployment: %w", err)
-	}
-	containers, _, _ := unstructured.NestedSlice(deployment.Object, "spec", "template", "spec", "containers")
-	for index, item := range containers {
-		container, ok := item.(map[string]any)
-		if !ok || container["name"] != kiteGatewayContainerName {
-			continue
-		}
-		env, _, _ := unstructured.NestedSlice(container, "env")
-		env = setGatewayEnv(env, "KITE_GATEWAY_HOST_FALLBACK_ENABLED", strconv.FormatBool(enabled))
-		env = setGatewayEnv(env, "KITE_GATEWAY_HOST_SSHD_ADDRESS", address)
-		container["env"] = env
-		containers[index] = container
-		if err := unstructured.SetNestedSlice(deployment.Object, containers, "spec", "template", "spec", "containers"); err != nil {
-			return err
-		}
-		_, err = dynamicClient.Resource(deploymentGVR).Namespace(config.KiteNamespace).Update(ctx, deployment, metav1.UpdateOptions{})
-		if err != nil {
-			return fmt.Errorf("failed to update gateway Deployment fallback env: %w", err)
-		}
-		return nil
-	}
-	return fmt.Errorf("gateway Deployment container %q was not found", kiteGatewayContainerName)
-}
-
-// setGatewayEnv sets or appends one simple string env var entry.
-// env is the existing container env slice from an unstructured Deployment.
-// The returned slice is safe to put back into the container spec.
-func setGatewayEnv(env []any, name string, value string) []any {
-	entry := map[string]any{
-		"name":  name,
-		"value": value,
-	}
-	for index, item := range env {
-		current, ok := item.(map[string]any)
-		if ok && current["name"] == name {
-			env[index] = entry
-			return env
-		}
-	}
-	return append(env, entry)
 }
 
 // writeGatewayFailedStatus records a failed reconcile attempt before returning the original error.

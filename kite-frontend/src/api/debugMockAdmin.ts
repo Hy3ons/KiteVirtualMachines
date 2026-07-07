@@ -89,39 +89,29 @@ export const debugAdminApi = {
   saveSSHGateway: async (payload: SSHGatewayPayload): Promise<ConfigResponse> => {
     const state = readDebugState();
     const blockedByMissingExternalPort = payload.externalEnabled && payload.externalPort.trim() === '';
-    const blockedByMissingHostPort = payload.hostFallbackEnabled && payload.hostSshdPort.trim() === '';
-    const blockedByConflict =
-      payload.externalEnabled &&
-      payload.hostFallbackEnabled &&
-      payload.externalPort.trim() !== '' &&
-      payload.externalPort.trim() === payload.hostSshdPort.trim();
-    const phase: SSHGatewayPhase = blockedByMissingExternalPort || blockedByMissingHostPort || blockedByConflict
+    const phase: SSHGatewayPhase = blockedByMissingExternalPort
       ? 'Blocked'
       : payload.externalEnabled
         ? 'Ready'
         : 'Disabled';
     const reason = blockedByMissingExternalPort
       ? 'MissingExternalPort'
-      : blockedByMissingHostPort
-        ? 'MissingHostFallbackPort'
-        : blockedByConflict
-          ? 'PortConflict'
-          : payload.externalEnabled
-            ? 'ServiceApplied'
-            : 'ExternalDisabled';
+      : payload.externalEnabled
+        ? 'ServiceApplied'
+        : 'ExternalDisabled';
     const config = {
       ...state.config,
       sshGateway: {
         externalEnabled: payload.externalEnabled,
         externalPort: payload.externalPort.trim(),
-        hostFallbackEnabled: payload.hostFallbackEnabled,
-        hostSshdPort: payload.hostSshdPort.trim(),
+        publicPort: payload.publicPort.trim() || payload.externalPort.trim(),
         status: {
           phase,
           reason,
-          message: payload.externalEnabled ? 'Debug SSH gateway setting was saved.' : 'External VM SSH gateway is disabled.',
+          message: payload.externalEnabled
+            ? '외부 VM SSH gateway가 준비되었습니다. 사용자는 Dashboard에 표시된 SSH 명령으로 VM에 접속할 수 있습니다.'
+            : '외부 VM SSH gateway가 비활성화되어 있습니다. VM SSH 접속을 열려면 Admin Settings에서 Service 포트와 사용자 안내 포트를 설정하세요.',
           observedExternalPort: payload.externalEnabled ? payload.externalPort.trim() : '',
-          observedHostFallbackAddress: payload.hostFallbackEnabled ? `node-ip:${payload.hostSshdPort.trim()}` : '',
           observedServiceName: payload.externalEnabled ? 'kite-gateway-external' : '',
           lastTransitionTime: new Date().toISOString(),
         },

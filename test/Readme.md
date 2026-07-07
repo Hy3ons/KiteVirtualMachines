@@ -168,9 +168,11 @@ The file name stored inside the gateway host key Secret and mounted into the
 gateway container. Default: `ssh_host_rsa_key`, matching the production
 manifest path `/etc/kite-gateway/ssh/ssh_host_rsa_key`.
 
-The old k3s SSH handoff test has been removed. Kite installers no longer move
-host sshd or expose the gateway on an external SSH port by default. Gateway
-external exposure is tested through Admin Settings/runtime ConfigMap reconcile.
+The old k3s host-sshd mutation test has been removed. Kite installers no longer
+move, restore, or otherwise manage the host sshd port. Host SSH is treated as
+operator-owned infrastructure and must remain reachable through the operator's
+own path. Gateway external exposure is tested through Admin Settings/runtime
+ConfigMap reconcile and routes only Kite VM `sshId` users.
 
 The general cluster E2E scripts do not perform this check. They patch
 `kite-gateway` to `ClusterIP` and verify the gateway through `kubectl
@@ -334,7 +336,11 @@ Tests in this repository must be boring, explicit, and hard to fake.
 - Do not require a human to copy/paste intermediate values.
 - Do not depend on frontend mock data for E2E.
 - Do not mutate production `main` images during test runs.
-- Do not push `latest`, `main`, or `production` tags from E2E scripts.
+- Stage QA may pull `stage` images through `./ghcr-stage-install.sh`; E2E
+  scripts must still avoid pushing `latest`, `main`, or `production` tags.
+- GHCR cleanup must protect moving tags and unknown tags. Only `sha-*` images
+  from `main` older than 30 days and `stage-sha-*` images from `stage` older
+  than 10 days are cleanup candidates.
 
 ## Acceptance Criteria For New E2E Checks
 

@@ -30,8 +30,7 @@ const (
 	AdminContactKey              = "adminContact"
 	SSHGatewayExternalEnabledKey = "sshGatewayExternalEnabled"
 	SSHGatewayExternalPortKey    = "sshGatewayExternalPort"
-	SSHGatewayHostFallbackKey    = "sshGatewayHostFallbackEnabled"
-	SSHGatewayHostSshdPortKey    = "sshGatewayHostSshdPort"
+	SSHGatewayPublicPortKey      = "sshGatewayPublicPort"
 	DefaultVMStorageClassName    = "kite-vm-storage"
 	DefaultGoldenImageNamespace  = "kite"
 	DefaultVMImage               = "ubuntu-22.04"
@@ -287,8 +286,7 @@ func defaultRuntimeData() map[string]string {
 		AdminContactKey:              "",
 		SSHGatewayExternalEnabledKey: strconv.FormatBool(false),
 		SSHGatewayExternalPortKey:    "",
-		SSHGatewayHostFallbackKey:    strconv.FormatBool(false),
-		SSHGatewayHostSshdPortKey:    "",
+		SSHGatewayPublicPortKey:      "",
 	}
 }
 
