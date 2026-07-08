@@ -211,6 +211,11 @@ different from the Service port when an external router maps public `22` to a
 custom node/LB port. The gateway routes only VM `sshId` logins and never proxies
 host Linux accounts.
 
+The web console is exposed by default on the cluster HTTP entrypoint. On a
+default k3s/Traefik host, opening `http://<node-ip>/` routes `/api` to
+`kite-api` and all other paths to `kite-frontend`. Domain and HTTPS settings can
+be tightened later from Admin Settings.
+
 The gateway host key is also part of the install contract. On Linux hosts the
 installer tries to reuse the existing OpenSSH host key from `/etc/ssh` so users
 do not see a different SSH fingerprint just because port `22` is now served by

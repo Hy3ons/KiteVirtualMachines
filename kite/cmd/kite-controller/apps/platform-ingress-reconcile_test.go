@@ -48,22 +48,30 @@ func TestReconcileKitePlatformIngressFromConfigMap_appliesHTTPIngressWhenRedirec
 	}
 }
 
-// TestReconcileKitePlatformIngressFromConfigMap_deletesIngressWhenBaseDomainIsEmpty verifies hostless ingress prevention.
+// TestReconcileKitePlatformIngressFromConfigMap_appliesDefaultIngressWhenBaseDomainIsEmpty verifies first install access.
 // Given runtime config has no baseDomain.
 // When the platform ingress reconciler runs.
-// Then Kite-managed external Ingress resources are deleted instead of rendered without host matching.
-func TestReconcileKitePlatformIngressFromConfigMap_deletesIngressWhenBaseDomainIsEmpty(t *testing.T) {
+// Then Kite applies the hostless HTTP Ingress so the web UI is available on port 80.
+func TestReconcileKitePlatformIngressFromConfigMap_appliesDefaultIngressWhenBaseDomainIsEmpty(t *testing.T) {
 	ctx := context.Background()
 	client := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), platformIngressReconcileListKinds(),
 		newPlatformIngressRuntimeConfigWithBaseDomain("", false),
 	)
-	deletedPlatformIngress := false
-	client.Fake.PrependReactor("delete", "ingresses", func(action k8stesting.Action) (bool, runtime.Object, error) {
-		deleteAction, ok := action.(k8stesting.DeleteAction)
-		if ok && deleteAction.GetName() == "kite-platform" {
-			deletedPlatformIngress = true
+	appliedDefaultIngress := false
+	client.Fake.PrependReactor("patch", "ingresses", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		patchAction, ok := action.(k8stesting.PatchAction)
+		if ok && patchAction.GetName() == "kite-platform" {
+			var patched map[string]any
+			if err := json.Unmarshal(patchAction.GetPatch(), &patched); err != nil {
+				t.Fatalf("failed to parse default ingress patch: %v", err)
+			}
+			spec, _ := patched["spec"].(map[string]any)
+			rules, _ := spec["rules"].([]any)
+			rule, _ := rules[0].(map[string]any)
+			_, hasHost := rule["host"]
+			appliedDefaultIngress = !hasHost
 		}
-		return true, nil, nil
+		return true, newPlatformIngressObject("kite-platform"), nil
 	})
 	client.Fake.PrependReactor("delete", "middlewares", func(action k8stesting.Action) (bool, runtime.Object, error) {
 		return true, nil, nil
@@ -72,10 +80,10 @@ func TestReconcileKitePlatformIngressFromConfigMap_deletesIngressWhenBaseDomainI
 	err := ReconcileKitePlatformIngressFromConfigMap(ctx, client)
 
 	if err != nil {
-		t.Fatalf("expected empty baseDomain cleanup to succeed, got %v", err)
+		t.Fatalf("expected empty baseDomain reconcile to succeed, got %v", err)
 	}
-	if !deletedPlatformIngress {
-		t.Fatalf("expected kite-platform ingress to be deleted")
+	if !appliedDefaultIngress {
+		t.Fatalf("expected default hostless kite-platform ingress to be applied")
 	}
 }
 

@@ -13,6 +13,7 @@ set -euo pipefail
 #   KITE_INSTALL_REGISTRY: default ghcr.io/hy3ons
 #   KITE_INSTALL_IMAGE_TAG: default production
 #   KITE_INSTALL_IMAGE_PULL_POLICY: default IfNotPresent
+#   KITE_INSTALL_FORCE_ROLLOUT: default false
 #   INSTALL_LONGHORN: default true
 #   KITE_INSTALL_LONGHORN_HOST_PACKAGES: default true
 #   CONFIGURE_LONGHORN: default true
@@ -45,6 +46,7 @@ KITE_NAMESPACE="${KITE_NAMESPACE:-kite}"
 KITE_INSTALL_REGISTRY="${KITE_INSTALL_REGISTRY:-ghcr.io/hy3ons}"
 KITE_INSTALL_IMAGE_TAG="${KITE_INSTALL_IMAGE_TAG:-production}"
 KITE_INSTALL_IMAGE_PULL_POLICY="${KITE_INSTALL_IMAGE_PULL_POLICY:-IfNotPresent}"
+KITE_INSTALL_FORCE_ROLLOUT="${KITE_INSTALL_FORCE_ROLLOUT:-false}"
 INSTALL_LONGHORN="${INSTALL_LONGHORN:-true}"
 CONFIGURE_LONGHORN="${CONFIGURE_LONGHORN:-true}"
 APPLY_STORAGECLASS="${APPLY_STORAGECLASS:-true}"
@@ -56,6 +58,7 @@ KITE_GATEWAY_HOST_KEY_REFRESH="${KITE_GATEWAY_HOST_KEY_REFRESH:-false}"
 KITE_ROLLOUT_TIMEOUT="${KITE_ROLLOUT_TIMEOUT:-15m}"
 RUN_VERIFY="${RUN_VERIFY:-true}"
 KITE_INSTALL_KUSTOMIZE_DIR=""
+KITE_INSTALL_EXISTING_RUNTIME="false"
 
 # shellcheck source=build/lib/prompt.sh
 source "${ROOT_DIR}/build/lib/prompt.sh"
@@ -231,11 +234,41 @@ patches:
 EOF
 }
 
+record_existing_runtime() {
+  local deployment
+
+  KITE_INSTALL_EXISTING_RUNTIME="false"
+  for deployment in kite-api kite-controller kite-gateway kite-frontend; do
+    if kubectl -n "${KITE_NAMESPACE}" get deployment "${deployment}" >/dev/null 2>&1; then
+      KITE_INSTALL_EXISTING_RUNTIME="true"
+      return 0
+    fi
+  done
+}
+
+restart_existing_runtime_if_requested() {
+  if [[ "${KITE_INSTALL_FORCE_ROLLOUT}" != "true" ]]; then
+    return 0
+  fi
+  if [[ "${KITE_INSTALL_EXISTING_RUNTIME}" != "true" ]]; then
+    return 0
+  fi
+
+  log "restarting existing Kite workloads so mutable image tags are pulled again"
+  kubectl -n "${KITE_NAMESPACE}" rollout restart \
+    deployment/kite-api \
+    deployment/kite-controller \
+    deployment/kite-gateway \
+    deployment/kite-frontend
+}
+
 apply_kite_manifests() {
   log "applying Kite manifests from ${KITE_INSTALL_REGISTRY}/<component>:${KITE_INSTALL_IMAGE_TAG}"
   "${ROOT_DIR}/build/deploy/scripts/ensure-gateway-host-key-secret.sh"
   render_install_manifest
+  record_existing_runtime
   kubectl apply -k "${KITE_INSTALL_KUSTOMIZE_DIR}"
+  restart_existing_runtime_if_requested
 }
 
 # pull 기반 설치의 전체 순서다. Longhorn/KubeVirt/CDI 준비,

@@ -6,5 +6,6 @@ resources:
   - rbac.yaml
   - frontend.yaml
   - api.yaml
+  - platform-ingress.yaml
   - controller.yaml
   - gateway.yaml

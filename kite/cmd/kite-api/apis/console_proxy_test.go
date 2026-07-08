@@ -6,6 +6,7 @@ import (
 	"io"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -56,6 +57,27 @@ func TestBridgeConsolePreservesUpstreamOutputMessageType(t *testing.T) {
 	}
 	if string(writes[0].data) != "boot" {
 		t.Fatalf("unexpected browser payload: %q", string(writes[0].data))
+	}
+}
+
+func TestBridgeConsoleClosesSocketsWhenContextCanceled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	browser := newScriptedConsoleSocket(nil, true)
+	upstream := newScriptedConsoleSocket(nil, true)
+	errs := make(chan error, 1)
+
+	go func() {
+		errs <- bridgeConsole(ctx, browser, upstream)
+	}()
+	cancel()
+
+	select {
+	case err := <-errs:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected bridge to stop on context cancellation, got %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("expected bridge to stop after context cancellation")
 	}
 }
 

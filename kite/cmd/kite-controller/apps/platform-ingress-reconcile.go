@@ -119,10 +119,19 @@ func ReconcileKitePlatformIngressFromConfigMap(ctx context.Context, dynamicClien
 	forceHTTPS, _, _ := unstructured.NestedString(configMap.Object, "data", config.ForceHTTPSConfigKey)
 	shouldForceHTTPS := strings.EqualFold(forceHTTPS, "true")
 	if host == "" {
+		ingressObject, err := (&platformingress.PlatformIngressData{
+			Namespace: kiteGlobalConfigNamespace,
+		}).Render()
+		if err != nil {
+			return fmt.Errorf("failed to render default Kite platform Ingress: %w", err)
+		}
+		if err := applyKitePlatformIngress(ctx, dynamicClient, ingressObject); err != nil {
+			return err
+		}
 		if err := deleteKitePlatformHTTPSRedirect(ctx, dynamicClient); err != nil {
 			return err
 		}
-		return deleteHostRoutedKitePlatformIngress(ctx, dynamicClient)
+		return nil
 	}
 
 	hasTLS, err := platform.NewService(dynamicClient).HasTLSCertificate(ctx)
@@ -231,19 +240,6 @@ func applyKitePlatformIngress(ctx context.Context, dynamicClient dynamic.Interfa
 	})
 	if err != nil {
 		return fmt.Errorf("failed to apply Kite platform Ingress %s/%s: %w", ingressObject.GetNamespace(), ingressObject.GetName(), err)
-	}
-
-	return nil
-}
-
-// Used when no base domain is configured.
-// ctx controls the Kubernetes request lifetime.
-// dynamicClient is scoped to the Kite-managed platform Ingress.
-// Missing resources are ignored for first-time setup.
-func deleteHostRoutedKitePlatformIngress(ctx context.Context, dynamicClient dynamic.Interface) error {
-	err := dynamicClient.Resource(ingressGVR).Namespace(kiteGlobalConfigNamespace).Delete(ctx, "kite-platform", metav1.DeleteOptions{})
-	if err != nil && !apierrors.IsNotFound(err) {
-		return fmt.Errorf("failed to delete Kite platform Ingress: %w", err)
 	}
 
 	return nil
