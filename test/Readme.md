@@ -89,7 +89,7 @@ The E2E gate must prove all of the following:
 - `/api/v1/health` reports healthy CRD read paths.
 - Signup creates a real `KiteUser`.
 - Login issues an authenticated session.
-- The controller reconciles the user namespace, quota, and network policies.
+- The controller reconciles the user namespace and network policies.
 - VM creation writes a real `KiteVirtualMachine`.
 - The controller creates DataVolume, KubeVirt VirtualMachine, Secrets, and
   Services for that VM.

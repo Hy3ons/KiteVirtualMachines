@@ -231,7 +231,7 @@ spec:
   4. `deleteVirtualMachinesInNamespace`가 `store.VirtualMachineStore.List`로 해당 namespace의 `KiteVirtualMachine` CRD를 모두 조회한다.
   5. 각 VM CRD에 대해 `store.VirtualMachineStore.Delete`를 호출한다.
   6. VM CRD 삭제가 끝나면 `store.UserStore.Delete`로 cluster-scoped `KiteUser` CRD를 삭제한다.
-  7. Namespace, quota, network policy 같은 실제 Kubernetes 리소스 정리는 controller reconcile 정책에 맡긴다.
+  7. Namespace, network policy 같은 실제 Kubernetes 리소스 정리는 controller reconcile 정책에 맡긴다.
 
 ## internal 계층 역할
 
@@ -258,7 +258,6 @@ spec:
 
 - `namespace.NamespaceData.Render`: Namespace object 생성
 - `networkpolicy.NetworkPolicyData.RenderAll`: NetworkPolicy object 목록 생성
-- `quotapolicy.QuotaPolicyData.RenderAll`: ResourceQuota/LimitRange object 목록 생성
 - `kubevirtmachine.KubevirtMachineData.Render`: KubeVirt VirtualMachine object 생성
 - `datavolume.DataVolumeData.Render`: CDI DataVolume object 생성
 - `cloudinituserdata.Ubuntu2204CloudInit.Render`: cloud-init Secret object 생성

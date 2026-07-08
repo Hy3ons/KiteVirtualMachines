@@ -21,9 +21,9 @@ const (
 )
 
 // RunKiteUserBaseResourceReconciler runs informers for KiteUser-owned namespace resources.
-// clientManager provides the dynamic Kubernetes client used to watch NetworkPolicy and ResourceQuota resources.
+// clientManager provides the dynamic Kubernetes client used to watch NetworkPolicy resources.
 // stopCh stops the informer factory when the controller process shuts down.
-// This function is used by cmd/kite-controller/main.go so deleted policies or quotas are recreated from KiteUser spec.
+// This function is used by cmd/kite-controller/main.go so deleted policies are recreated from KiteUser spec.
 func RunKiteUserBaseResourceReconciler(clientManager *kube.ClientManager, stopCh <-chan struct{}) {
 	if clientManager == nil || clientManager.DynamicClient == nil {
 		log.Printf("KiteUser base resource reconciler requires a dynamic Kubernetes client")
@@ -32,13 +32,11 @@ func RunKiteUserBaseResourceReconciler(clientManager *kube.ClientManager, stopCh
 
 	factory := dynamicinformer.NewDynamicSharedInformerFactory(clientManager.DynamicClient, userReconcileResyncPeriod)
 	networkPolicyInformer := factory.ForResource(networkPolicyGVR).Informer()
-	resourceQuotaInformer := factory.ForResource(resourceQuotaGVR).Informer()
 
 	RegisterKiteUserBaseResourceReconciler(networkPolicyInformer, clientManager.DynamicClient, networkPolicyGVR)
-	RegisterKiteUserBaseResourceReconciler(resourceQuotaInformer, clientManager.DynamicClient, resourceQuotaGVR)
 
 	factory.Start(stopCh)
-	if !cache.WaitForCacheSync(stopCh, networkPolicyInformer.HasSynced, resourceQuotaInformer.HasSynced) {
+	if !cache.WaitForCacheSync(stopCh, networkPolicyInformer.HasSynced) {
 		log.Printf("failed to sync KiteUser base resource informer cache")
 		return
 	}
@@ -47,7 +45,7 @@ func RunKiteUserBaseResourceReconciler(clientManager *kube.ClientManager, stopCh
 }
 
 // RegisterKiteUserBaseResourceReconciler attaches handlers to one user base resource informer.
-// informer watches NetworkPolicy or ResourceQuota objects across all namespaces.
+// informer watches NetworkPolicy objects across all namespaces.
 // dynamicClient lists KiteUsers and reapplies the matching user's desired namespace resources.
 // resource identifies which watched resource type the handler is receiving.
 func RegisterKiteUserBaseResourceReconciler(informer cache.SharedIndexInformer, dynamicClient dynamic.Interface, resource schema.GroupVersionResource) {
@@ -72,8 +70,8 @@ func RegisterKiteUserBaseResourceReconciler(informer cache.SharedIndexInformer, 
 
 // ReconcileKiteUserBaseResource restores desired KiteUser namespace resources after drift.
 // ctx controls Kubernetes API calls made while listing KiteUsers and applying rendered resources.
-// dynamicClient is used for unstructured KiteUser, NetworkPolicy, and ResourceQuota access.
-// resource identifies whether eventObj is a NetworkPolicy or ResourceQuota event.
+// dynamicClient is used for unstructured KiteUser and NetworkPolicy access.
+// resource identifies the watched NetworkPolicy resource type.
 // eventObj is the informer object or delete tombstone for a namespaced base resource.
 func ReconcileKiteUserBaseResource(ctx context.Context, dynamicClient dynamic.Interface, resource schema.GroupVersionResource, eventObj interface{}) error {
 	if dynamicClient == nil {
@@ -129,8 +127,6 @@ func kiteUserManagedBaseResource(resource schema.GroupVersionResource, obj *unst
 	case networkPolicyGVR:
 		return obj.GetName() == userNetworkPolicyDenyFromOtherNamespaces ||
 			obj.GetName() == userNetworkPolicyTenantIsolationEgress
-	case resourceQuotaGVR:
-		return obj.GetName() == userQuotaPolicyName
 	default:
 		return false
 	}

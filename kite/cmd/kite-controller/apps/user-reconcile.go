@@ -22,10 +22,9 @@ import (
 	"kite/internal/kube"
 	"kite/internal/render/namespace"
 	networkpolicy "kite/internal/render/network-policy"
-	quotapolicy "kite/internal/render/quota-policy"
 )
 
-const userQuotaPolicyName = "kite-user-quota-policy"
+const deprecatedUserQuotaPolicyName = "kite-user-quota-policy"
 
 const userReconcileResyncPeriod = time.Minute * 3
 
@@ -35,7 +34,7 @@ const (
 	kiteUserConditionReady     = "NamespaceReady"
 	kiteUserReasonReconciled   = "Reconciled"
 	kiteUserReasonFailed       = "ReconcileFailed"
-	kiteUserReadyMessage       = "user namespace, network policies, and resource quota are ready"
+	kiteUserReadyMessage       = "user namespace and network policies are ready"
 	kiteUserStatusFieldManager = "kite-controller-user-status"
 	kiteNamespaceManagedByKey  = "hy3ons.github.io/managed-by"
 	kiteNamespaceManagedBy     = "kite-controller"
@@ -65,7 +64,7 @@ var (
 )
 
 // RunKiteUserReconciler creates and runs the KiteUser informer loop.
-// clientManager provides the dynamic Kubernetes client used to watch KiteUser and apply user resources.
+// clientManager provides the dynamic Kubernetes client used to watch KiteUser and apply user namespace resources.
 // stopCh stops the informer when the controller process is shutting down.
 // This function is expected to run in a goroutine from cmd/kite-controller/main.go.
 func RunKiteUserReconciler(clientManager *kube.ClientManager, stopCh <-chan struct{}) {
@@ -89,7 +88,7 @@ func RunKiteUserReconciler(clientManager *kube.ClientManager, stopCh <-chan stru
 
 // RegisterKiteUserReconciler attaches KiteUser event handlers to an informer.
 // informer watches cluster-scoped KiteUser custom resources from the controller startup code.
-// clientManager provides the dynamic Kubernetes client used to apply namespace and policy resources.
+// clientManager provides the dynamic Kubernetes client used to apply namespace and network policy resources.
 // This function is used by cmd/kite-controller/main.go when wiring controller informers.
 func RegisterKiteUserReconciler(informer cache.SharedIndexInformer, clientManager *kube.ClientManager) {
 	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -125,7 +124,7 @@ func RegisterKiteUserReconciler(informer cache.SharedIndexInformer, clientManage
 
 // ReconcileKiteUser creates or updates the base Kubernetes resources for one KiteUser.
 // ctx controls the Kubernetes API calls made during the reconcile operation.
-// dynamicClient applies Namespace, NetworkPolicy, and ResourceQuota objects.
+// dynamicClient applies Namespace and NetworkPolicy objects.
 // eventObj is the informer event object for a KiteUser resource.
 // This function is used by KiteUser add and update event handlers.
 func ReconcileKiteUser(ctx context.Context, dynamicClient dynamic.Interface, eventObj interface{}) error {
@@ -159,6 +158,10 @@ func ReconcileKiteUser(ctx context.Context, dynamicClient dynamic.Interface, eve
 		if err := applyUserResource(ctx, dynamicClient, obj); err != nil {
 			return err
 		}
+	}
+	err = dynamicClient.Resource(resourceQuotaGVR).Namespace(user.Spec.Namespace).Delete(ctx, deprecatedUserQuotaPolicyName, metav1.DeleteOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("failed to delete deprecated ResourceQuota %s/%s: %w", user.Spec.Namespace, deprecatedUserQuotaPolicyName, err)
 	}
 
 	if err := updateKiteUserStatus(ctx, dynamicClient, user, kiteUserPhaseReady, metav1.ConditionTrue, kiteUserReasonReconciled, kiteUserReadyMessage); err != nil {
@@ -410,7 +413,7 @@ func kiteManagedNamespace(namespace *unstructured.Unstructured) bool {
 
 // DeleteKiteUserResources removes the namespace resources owned by one deleted KiteUser.
 // ctx controls the Kubernetes API calls made during cleanup.
-// dynamicClient deletes NetworkPolicy and ResourceQuota objects after checking remaining KiteUser references.
+// dynamicClient deletes NetworkPolicy objects after checking remaining KiteUser references.
 // eventObj is the delete informer event object for the KiteUser resource.
 // This function is used by the KiteUser delete event handler.
 func DeleteKiteUserResources(ctx context.Context, dynamicClient dynamic.Interface, eventObj interface{}) error {
@@ -477,7 +480,7 @@ func kiteUserFromEventObject(eventObj interface{}) (*kitev1.KiteUser, error) {
 	return &user, nil
 }
 
-// userBaseResources renders the namespace, network policies, and resource quota for a KiteUser.
+// userBaseResources renders the namespace and network policies for a KiteUser.
 // user provides spec.namespace and metadata.name values from the KiteUser CRD.
 // The returned objects are applied in order so namespaced policies are created after the namespace.
 // This helper is used by ReconcileKiteUser.
@@ -496,17 +499,9 @@ func userBaseResources(user *kitev1.KiteUser) ([]*unstructured.Unstructured, err
 		return nil, fmt.Errorf("failed to render network policies for KiteUser %s: %w", user.GetName(), err)
 	}
 
-	quotaPolicyObjects, err := (&quotapolicy.QuotaPolicyData{
-		Namespace: user.Spec.Namespace,
-	}).RenderAll()
-	if err != nil {
-		return nil, fmt.Errorf("failed to render quota policies for KiteUser %s: %w", user.GetName(), err)
-	}
-
-	objects := make([]*unstructured.Unstructured, 0, 1+len(networkPolicyObjects)+len(quotaPolicyObjects))
+	objects := make([]*unstructured.Unstructured, 0, 1+len(networkPolicyObjects))
 	objects = append(objects, namespaceObject)
 	objects = append(objects, networkPolicyObjects...)
-	objects = append(objects, quotaPolicyObjects...)
 
 	return objects, nil
 }
@@ -514,7 +509,7 @@ func userBaseResources(user *kitev1.KiteUser) ([]*unstructured.Unstructured, err
 // applyUserResource applies one rendered user-owned base resource with server-side apply.
 // ctx controls the Kubernetes API request lifetime.
 // dynamicClient is used because controller renderers return unstructured Kubernetes objects.
-// obj must be one of Namespace, NetworkPolicy, or ResourceQuota.
+// obj must be one of Namespace or NetworkPolicy.
 // This helper keeps KiteUser reconcile idempotent across repeated informer events.
 func applyUserResource(ctx context.Context, dynamicClient dynamic.Interface, obj *unstructured.Unstructured) error {
 	gvr, namespaced, err := userResourceGVR(obj)
@@ -569,7 +564,7 @@ func applyUserResource(ctx context.Context, dynamicClient dynamic.Interface, obj
 // deleteUserResource deletes one rendered user-owned base resource.
 // ctx controls the Kubernetes API request lifetime.
 // dynamicClient is used because controller renderers return unstructured Kubernetes objects.
-// obj must be one of Namespace, NetworkPolicy, or ResourceQuota.
+// obj must be one of Namespace or NetworkPolicy.
 // This helper ignores NotFound errors so cleanup remains idempotent across repeated delete events.
 func deleteUserResource(ctx context.Context, dynamicClient dynamic.Interface, obj *unstructured.Unstructured) error {
 	gvr, namespaced, err := userResourceGVR(obj)
@@ -603,8 +598,6 @@ func userResourceGVR(obj *unstructured.Unstructured) (schema.GroupVersionResourc
 		return namespaceGVR, false, nil
 	case "NetworkPolicy":
 		return networkPolicyGVR, true, nil
-	case "ResourceQuota":
-		return resourceQuotaGVR, true, nil
 	default:
 		return schema.GroupVersionResource{}, false, fmt.Errorf("unsupported KiteUser base resource kind %q", obj.GetKind())
 	}

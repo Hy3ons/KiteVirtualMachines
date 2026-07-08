@@ -40,6 +40,22 @@ func TestReconcileKiteUserDeletesPreviousNamespaceAfterNamespaceChange(t *testin
 	}
 }
 
+func TestReconcileKiteUserDeletesDeprecatedResourceQuota(t *testing.T) {
+	ctx := context.Background()
+	client := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), userReconcileListKinds(),
+		newUserReconcileKiteUser("ku-a", "tenant-a", "tenant-a"),
+		newUserReconcileResourceQuota("tenant-a", deprecatedUserQuotaPolicyName),
+	)
+
+	if err := ReconcileKiteUser(ctx, client, newUserReconcileKiteUser("ku-a", "tenant-a", "tenant-a")); err != nil {
+		t.Fatalf("ReconcileKiteUser returned error: %v", err)
+	}
+
+	if _, err := client.Resource(resourceQuotaGVR).Namespace("tenant-a").Get(ctx, deprecatedUserQuotaPolicyName, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("expected deprecated ResourceQuota to be deleted, got %v", err)
+	}
+}
+
 func TestReconcileKiteUserBaseResourceRestoresDeletedNetworkPolicy(t *testing.T) {
 	ctx := context.Background()
 	client := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), userReconcileListKinds(),
@@ -53,9 +69,6 @@ func TestReconcileKiteUserBaseResourceRestoresDeletedNetworkPolicy(t *testing.T)
 
 	if _, err := client.Resource(networkPolicyGVR).Namespace("tenant-a").Get(ctx, userNetworkPolicyTenantIsolationEgress, metav1.GetOptions{}); err != nil {
 		t.Fatalf("expected deleted NetworkPolicy to be restored, got %v", err)
-	}
-	if _, err := client.Resource(resourceQuotaGVR).Namespace("tenant-a").Get(ctx, userQuotaPolicyName, metav1.GetOptions{}); err != nil {
-		t.Fatalf("expected ResourceQuota to be reconciled with base resources, got %v", err)
 	}
 }
 
@@ -141,6 +154,19 @@ func newUserReconcileNetworkPolicy(namespace string, name string) *unstructured.
 		Object: map[string]any{
 			"apiVersion": "networking.k8s.io/v1",
 			"kind":       "NetworkPolicy",
+			"metadata": map[string]any{
+				"name":      name,
+				"namespace": namespace,
+			},
+		},
+	}
+}
+
+func newUserReconcileResourceQuota(namespace string, name string) *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]any{
+			"apiVersion": "v1",
+			"kind":       "ResourceQuota",
 			"metadata": map[string]any{
 				"name":      name,
 				"namespace": namespace,

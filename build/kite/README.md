@@ -41,7 +41,7 @@ legacy ConfigMap secret values into that Secret on startup.
 
 - `kite-api`: creates and updates Kite CRDs, runtime config/secret, guest login
   Secrets, and KubeVirt console subresources.
-- `kite-controller`: reconciles namespaces, quotas, network policies,
+- `kite-controller`: reconciles namespaces, network policies,
   DataVolumes, KubeVirt VMs, Services, Ingresses, and VM-owned Secrets.
 - `kite-gateway`: reads runtime config, KiteVirtualMachine routes, VM SSH key
   Secrets, and VM access Services. It does not create or delete cluster

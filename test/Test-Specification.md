@@ -148,9 +148,9 @@
 | 소분류 | 테스트해야 하는 것 |
 | --- | --- |
 | Informer startup | KiteUser, KiteVirtualMachine, offer, KubeVirt/CDI 리소스 watch가 시작되고 이벤트를 reconcile로 전달하는지 확인한다. |
-| User reconcile | `KiteUser` 생성 시 사용자 namespace, ResourceQuota, NetworkPolicy, 기본 Secret/label이 생성되는지 확인한다. |
+| User reconcile | `KiteUser` 생성 시 사용자 namespace, NetworkPolicy, 기본 label이 생성되는지 확인한다. |
 | User status | 사용자 준비 성공/실패가 `KiteUser.status.phase`와 reason에 기록되는지 확인한다. |
-| Namespace idempotency | 동일 user reconcile을 여러 번 실행해도 quota/policy/namespace가 중복되거나 손상되지 않는지 확인한다. |
+| Namespace idempotency | 동일 user reconcile을 여러 번 실행해도 policy/namespace가 중복되거나 손상되지 않는지 확인한다. |
 | VM reconcile | VM spec을 기준으로 DataVolume, Secret, VirtualMachine, Service가 생성/갱신되는지 확인한다. |
 | VM status reconcile | KubeVirt/CDI 상태 변화가 Kite VM status phase, power state, IP/node 정보로 반영되는지 확인한다. |
 | Optional resource | optional ingress/service 설정이 꺼져 있거나 값이 비어 있을 때 불필요한 리소스를 만들지 않는지 확인한다. |
@@ -236,7 +236,6 @@
 | 소분류 | 테스트해야 하는 것 |
 | --- | --- |
 | Namespace renderer | 사용자 namespace 이름, label, annotation이 정책과 일치하는지 확인한다. |
-| QuotaPolicy renderer | 사용자 access level/offer 기준 ResourceQuota가 기대 limit을 갖는지 확인한다. |
 | NetworkPolicy renderer | 사용자 namespace 기본 isolation과 필요한 ingress/egress 허용이 적용되는지 확인한다. |
 | DataVolume renderer | golden image clone source, PVC size, storageClass, namespace가 VM spec과 맞는지 확인한다. |
 | KubeVirt VM renderer | CPU/memory/disk/cloud-init/network/interface 설정이 offer와 VM spec을 반영하는지 확인한다. |
@@ -301,7 +300,7 @@
 | Dependency setup | `TEST_INSTALL_DEPS=true`일 때 Longhorn/KubeVirt/CDI/golden image 준비가 누락 환경에서 동작하는지 확인한다. |
 | API health | `/api/v1/health`가 ok이고 CRD read check가 성공하는지 확인한다. |
 | Signup/login | 테스트 사용자를 만들고 access level 설정 후 cookie jar login이 되는지 확인한다. |
-| User reconcile | `KiteUser.status.phase=Ready`, namespace, quota, network policy가 생성되는지 확인한다. |
+| User reconcile | `KiteUser.status.phase=Ready`, namespace, network policy가 생성되는지 확인한다. |
 | VM create | `/api/v1/vms` 요청 후 VM CRD spec과 controller 생성 리소스가 모두 생기는지 확인한다. |
 | VM Running | `KiteVirtualMachine.status.phase=Running`, `currentPowerState=On`, KubeVirt printableStatus `Running`을 확인한다. |
 | Frontend response | `svc/kite-frontend` port-forward 후 index HTML이 응답하는지 확인한다. |
