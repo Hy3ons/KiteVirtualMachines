@@ -374,8 +374,7 @@ delete_kite_namespace_allocations() {
   delete_by_selector "${namespace}" ingresses.networking.k8s.io "${selector}"
   delete_by_selector "${namespace}" secrets "${selector}"
   delete_by_selector "${namespace}" networkpolicies.networking.k8s.io ""
-  delete_by_selector "${namespace}" resourcequotas ""
-  delete_by_selector "${namespace}" limitranges ""
+  kubectl -n "${namespace}" delete resourcequota kite-user-quota-policy --ignore-not-found >/dev/null 2>&1 || true
 }
 
 # KiteUser가 만든 모든 user namespace를 순회하며 VM 관련 리소스를 먼저 삭제한다.

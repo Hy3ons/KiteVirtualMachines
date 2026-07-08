@@ -216,6 +216,22 @@ default k3s/Traefik host, opening `http://<node-ip>/` routes `/api` to
 `kite-api` and all other paths to `kite-frontend`. Domain and HTTPS settings can
 be tightened later from Admin Settings.
 
+VM web traffic is exposed through the cluster Ingress controller. A VM web app
+will normally see the Ingress controller Pod as the TCP peer address; apps that
+need the visitor IP should read `X-Forwarded-For` or `X-Real-IP` instead of the
+socket remote address. On k3s/Traefik, preserve the client IP before Traefik by
+setting the Traefik Service to local external traffic policy:
+
+```sh
+kubectl -n kube-system patch svc traefik --type merge \
+  -p '{"spec":{"externalTrafficPolicy":"Local"}}'
+```
+
+Kite does not patch this automatically because `kube-system/traefik` is shared
+cluster infrastructure. Operators should choose this setting for their own load
+balancer topology. With the default `Cluster` policy, VM apps may receive a CNI
+or node address in forwarded IP headers.
+
 The gateway host key is also part of the install contract. On Linux hosts the
 installer tries to reuse the existing OpenSSH host key from `/etc/ssh` so users
 do not see a different SSH fingerprint just because port `22` is now served by

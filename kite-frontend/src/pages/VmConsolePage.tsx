@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { App as AntdApp, Avatar, Button, Card, Descriptions, Layout, Space, Spin, Tag, Typography } from 'antd';
+import { App as AntdApp, Button, Card, Descriptions, Layout, Space, Spin, Tag, Typography } from 'antd';
 import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { vmApi } from '../api';
@@ -24,7 +24,7 @@ export const VmConsolePage: React.FC = () => {
   const { message } = AntdApp.useApp();
   const { vmName } = useParams<{ vmName: string }>();
   const navigate = useNavigate();
-  const { username, namespace, accessLevel, profileImage } = useAuthStore();
+  const { username, namespace, accessLevel } = useAuthStore();
   const logout = useLogout();
   const safeAccessLevel = accessLevel ?? 1;
   const [vm, setVm] = useState<UserVm | null>(null);
@@ -72,7 +72,6 @@ export const VmConsolePage: React.FC = () => {
             {safeAccessLevel >= 2 && (
               <Button type="primary" ghost onClick={() => navigate('/admin/dashboard')}>Admin Console</Button>
             )}
-            <Avatar src={profileImage || '/default_profile.png'} />
             <Text strong>{username}</Text>
             <Text type="secondary">({namespace})</Text>
             <Button type="text" onClick={logout}>Logout</Button>

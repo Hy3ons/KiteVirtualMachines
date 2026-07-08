@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { SEO } from '../components/SEO';
 import { authApi } from '../api';
-import { App as AntdApp, Row, Col, Form, Input, Button, Typography, Upload, Layout } from 'antd';
-import { UserOutlined, LockOutlined, MailOutlined, PlusOutlined } from '@ant-design/icons';
+import { App as AntdApp, Row, Col, Form, Input, Button, Typography, Layout } from 'antd';
+import { UserOutlined, LockOutlined, MailOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { GlobalHeader } from '../components/GlobalHeader';
 import type { SignupPayload } from '../api/types';
@@ -14,25 +14,6 @@ export const SignupPage: React.FC = () => {
   const { message } = AntdApp.useApp();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  
-  // 미지정 시 백엔드에 빈 문자열("")로 전송합니다.
-  const [profileImage, setProfileImage] = useState<string>('');
-
-  const beforeUpload = (file: File) => {
-    const isImage = file.type.startsWith('image/');
-    if (!isImage) {
-      message.error('이미지 파일만 업로드할 수 있습니다!');
-      return false;
-    }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      if (e.target?.result) {
-        setProfileImage(e.target.result as string);
-      }
-    };
-    reader.readAsDataURL(file);
-    return false; // Prevent default upload action
-  };
 
   const onFinish = async (values: Omit<SignupPayload, 'profile_image'> & { readonly confirm: string }) => {
     try {
@@ -41,7 +22,7 @@ export const SignupPage: React.FC = () => {
         username: values.username,
         email: values.email,
         password: values.password,
-        profile_image: profileImage,
+        profile_image: '',
       };
       await authApi.signup(payload);
       
@@ -111,25 +92,6 @@ export const SignupPage: React.FC = () => {
               extra={<span style={{ color: '#d9363e', fontSize: '12px' }}>* 이메일은 로그인 아이디로 사용되며, 가입 후 절대 변경할 수 없습니다.</span>}
             >
               <Input prefix={<MailOutlined style={{ color: '#bfbfbf' }} />} placeholder="kite@example.com" />
-            </Form.Item>
-
-            <Form.Item label={<Text strong>프로필 사진 (선택)</Text>} style={{ textAlign: 'center' }}>
-              <Upload
-                name="avatar"
-                listType="picture-circle"
-                showUploadList={false}
-                beforeUpload={beforeUpload}
-                accept="image/*"
-              >
-                {profileImage ? (
-                  <img src={profileImage} alt="avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-                ) : (
-                  <div>
-                    <PlusOutlined />
-                    <div style={{ marginTop: 8 }}>Upload</div>
-                  </div>
-                )}
-              </Upload>
             </Form.Item>
 
             <Form.Item

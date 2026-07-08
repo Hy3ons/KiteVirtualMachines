@@ -55,7 +55,7 @@ Response `200`:
     "username": "admin",
     "email": "admin@example.com",
     "namespace": "kite-user-ku-...",
-    "profile_image": "base64encodedimage",
+    "profile_image": "",
     "access_level": 3
   }
 }
@@ -93,7 +93,7 @@ Response `201`:
     "username": "test",
     "email": "test@gmail.com",
     "namespace": "kite-user-ku-...",
-    "profile_image": "base64encodedimage",
+    "profile_image": "",
     "access_level": 0
   }
 }
@@ -114,7 +114,7 @@ Response `200`:
     "username": "test",
     "email": "test@gmail.com",
     "namespace": "kite-user-ku-...",
-    "profile_image": "base64encodedimage",
+    "profile_image": "",
     "access_level": 0
   }
 }
@@ -355,7 +355,7 @@ Response `200`:
       "username": "hyeonseok",
       "email": "hyeonseok@kite.com",
       "namespace": "kite-user-ku-...",
-      "profile_image": "base64encodedimage",
+      "profile_image": "",
       "access_level": 1
     }
   ]
@@ -387,7 +387,7 @@ Response `200`:
     "username": "hyeonseok",
     "email": "hyeonseok@kite.com",
     "namespace": "kite-user-ku-...",
-    "profile_image": "base64encodedimage",
+    "profile_image": "",
     "access_level": 2
   }
 }

@@ -20,7 +20,9 @@ const (
 	ErrorKindConflict ErrorKind = "conflict"
 )
 
-const defaultProfileImage = "base64encodedimage"
+// defaultProfileImage is the only profile image value Kite writes or returns.
+// The CRD field remains for compatibility, but user-provided image payloads are ignored.
+const defaultProfileImage = ""
 
 // RequestError describes a user request error returned by account service methods.
 // Kind separates validation errors from duplicate user errors.
@@ -37,6 +39,7 @@ func (e RequestError) Error() string {
 
 // PublicUser is the frontend-safe user representation returned by kite-api.
 // Password hashes are intentionally excluded.
+// ProfileImage is kept for API compatibility and is always returned empty.
 // AccessLevel is copied from KiteUser spec.access_level.
 // This type is used by account service methods and HTTP responses.
 type PublicUser struct {
@@ -63,6 +66,7 @@ type SignUpRequest struct {
 // UpdateRequest contains admin-editable KiteUser spec fields.
 // Nil fields are left unchanged.
 // Password is hashed when provided.
+// ProfileImage is accepted for older callers but ignored by the service.
 // AccessLevel is validated against the known auth access level range.
 type UpdateRequest struct {
 	Email        *string
@@ -475,9 +479,7 @@ func (s *Service) applyUpdate(record *store.KiteUserRecord, req UpdateRequest) e
 			return invalid("namespace cannot be empty")
 		}
 	}
-	if req.ProfileImage != nil {
-		record.Spec.ProfileImage = *req.ProfileImage
-	}
+	record.Spec.ProfileImage = defaultProfileImage
 	if req.AccessLevel != nil {
 		if *req.AccessLevel < auth.AccessLevelReadOnly || *req.AccessLevel > auth.AccessLevelAdmin {
 			return invalid("access_level must be between 0 and 3")
@@ -505,7 +507,7 @@ func recordFromObject(obj *unstructured.Unstructured) (store.KiteUserRecord, err
 			Email:        stringValue(spec, "email"),
 			Password:     stringValue(spec, "password"),
 			Namespace:    stringValue(spec, "namespace"),
-			ProfileImage: stringValue(spec, "profile_image"),
+			ProfileImage: defaultProfileImage,
 			AccessLevel:  int(intValue(spec, "access_level")),
 		},
 	}, nil
@@ -534,7 +536,7 @@ func publicUserFromSpec(name string, spec map[string]any) PublicUser {
 		Username:     stringValue(spec, "username"),
 		Email:        stringValue(spec, "email"),
 		Namespace:    stringValue(spec, "namespace"),
-		ProfileImage: stringValue(spec, "profile_image"),
+		ProfileImage: defaultProfileImage,
 		AccessLevel:  intValue(spec, "access_level"),
 	}
 }

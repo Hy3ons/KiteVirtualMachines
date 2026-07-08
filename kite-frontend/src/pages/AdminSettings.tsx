@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SEO } from '../components/SEO';
 import { adminApi } from '../api';
-import { App as AntdApp, Layout, Typography, Form, Input, Button, Card, Space, Avatar, Switch, Alert, Descriptions, Tag } from 'antd';
+import { App as AntdApp, Layout, Typography, Form, Input, Button, Card, Space, Switch, Alert, Descriptions, Tag } from 'antd';
 import { GlobalOutlined, SafetyCertificateOutlined, LogoutOutlined, ReloadOutlined, CloudServerOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../store/useAuthStore';
 import { useLogout } from '../hooks/useLogout';
@@ -55,7 +55,7 @@ const validPort = (value: string): boolean => {
 
 export const AdminSettings: React.FC = () => {
   const { message } = AntdApp.useApp();
-  const { username, profileImage } = useAuthStore();
+  const { username } = useAuthStore();
   const logout = useLogout();
   const navigate = useNavigate();
   
@@ -204,7 +204,6 @@ export const AdminSettings: React.FC = () => {
         rightContent={
           <Space>
             <Button type="text" onClick={() => navigate('/admin/dashboard')}>통계/VM 관리</Button>
-            <Avatar src={profileImage || '/default_profile.png'} />
             <Text strong style={{ marginLeft: 8 }}>{username} (Admin)</Text>
             <Button type="text" icon={<LogoutOutlined />} onClick={logout}>Logout</Button>
           </Space>

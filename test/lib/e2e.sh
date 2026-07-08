@@ -822,7 +822,6 @@ verify_health() {
 verify_user_reconcile() {
   wait_for_jsonpath "kiteusers.hy3ons.github.io/${TEST_USER_NAME}" "{.status.phase}" "Ready" "180s"
   kubectl get namespace "${TEST_USER_NAMESPACE}" >/dev/null
-  kubectl -n "${TEST_USER_NAMESPACE}" get resourcequota kite-user-quota-policy >/dev/null
   kubectl -n "${TEST_USER_NAMESPACE}" get networkpolicy deny-from-other-namespaces >/dev/null
   kubectl -n "${TEST_USER_NAMESPACE}" get networkpolicy tenant-isolation-egress >/dev/null
 }
