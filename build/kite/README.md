@@ -1,7 +1,8 @@
 # Kite Manifests
 
 `kustomization.yaml` applies Kite CRDs, namespace-scoped runtime resources,
-RBAC, API/controller/frontend workloads, and the `kite-gateway` SSH entrypoint.
+RBAC, API/controller/frontend workloads, the default HTTP platform Ingress, and
+the `kite-gateway` SSH entrypoint.
 
 ```sh
 kubectl apply -k build/kite
@@ -16,6 +17,19 @@ defaultVmImage=ubuntu-22.04
 ```
 
 The controller uses `vmStorageClassName` when rendering VM-owned DataVolumes.
+
+`platform-ingress.yaml` opens the default HTTP web entrypoint after install:
+
+```text
+http://<node-or-load-balancer>/
+  /api -> service/kite-api:8080
+  /    -> service/kite-frontend:80
+```
+
+This Ingress is hostless by default so a fresh k3s/Traefik install is reachable
+on port 80 without first setting a domain. When an admin later sets a base
+domain or TLS policy, `kite-controller` reconciles the same `kite-platform`
+Ingress to the configured host/TLS shape.
 
 Runtime secrets are not stored in this ConfigMap. `kite-api` bootstraps
 `kite/kite-runtime-secret` for `jwtSecret` and `passwordSalt`, and migrates

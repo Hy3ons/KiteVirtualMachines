@@ -2,29 +2,16 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: kite-platform
-  namespace: {{ .Namespace }}
+  namespace: kite
   labels:
-    hy3ons.github.io/managed-by: kite-controller
+    hy3ons.github.io/managed-by: kite-install
     hy3ons.github.io/platform-ingress: "true"
   annotations:
     kubernetes.io/ingress.class: traefik
-    {{ if .ForceHTTPS }}
-    traefik.ingress.kubernetes.io/router.entrypoints: websecure
-    traefik.ingress.kubernetes.io/router.tls: "true"
-    {{ else }}
     traefik.ingress.kubernetes.io/router.entrypoints: web
-    {{ end }}
-
 spec:
-  {{ if .TLSSecretName }}
-  tls:
-    - hosts:
-        - {{ .Host }}
-      secretName: {{ .TLSSecretName }}
-  {{ end }}
   rules:
-    - {{ if .Host }}host: {{ .Host }}{{ end }}
-      http:
+    - http:
         paths:
           - path: /api
             pathType: Prefix

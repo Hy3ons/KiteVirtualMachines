@@ -81,9 +81,10 @@ ConfigMap에서는 제거한다.
 
 AdminSettings에서 base domain, runtime secret, TLS 인증서를 관리할 수 있다.
 base domain은 `kite-platform` Ingress host와 VM별 Ingress host 계산에 사용된다.
-base domain이 비어 있으면 controller는 hostless/catch-all Ingress를 만들지
-않는다. TLS 인증서는 `kite/global-tls-secret`에 저장되고, platform Ingress와
-VM namespace-local TLS Secret 복사본에서 참조된다. secret 원문은 API 응답이나
+base domain이 비어 있으면 controller는 기본 hostless HTTP `kite-platform`
+Ingress를 유지해 설치 직후 `http://<node-ip>/` 접속을 가능하게 한다. TLS
+인증서는 `kite/global-tls-secret`에 저장되고, platform Ingress와 VM
+namespace-local TLS Secret 복사본에서 참조된다. secret 원문은 API 응답이나
 화면에 노출하지 않고, rotate 요청으로 새 값을 생성해 `kite-runtime-secret`에
 저장한다. `kite-api`와 `kite-gateway` process는 시작 시 runtime Secret을 읽어
 `config.Config` 객체로 보관하므로, secret rotate는 다음 process 재시작부터

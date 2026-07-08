@@ -2,10 +2,27 @@ package platformingress
 
 import "testing"
 
-func TestPlatformIngressRenderRejectsEmptyHost(t *testing.T) {
+func TestPlatformIngressRenderCreatesHostlessHTTPRoute(t *testing.T) {
 	obj, err := (&PlatformIngressData{Namespace: "kite"}).Render()
-	if err == nil {
-		t.Fatalf("expected empty host to fail, got %#v", obj)
+	if err != nil {
+		t.Fatalf("failed to render hostless platform ingress: %v", err)
+	}
+
+	rules, ok := obj.Object["spec"].(map[string]any)["rules"].([]any)
+	if !ok || len(rules) != 1 {
+		t.Fatalf("expected one ingress rule, got %#v", obj.Object["spec"])
+	}
+	rule, ok := rules[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected rule object, got %#v", rules[0])
+	}
+	if _, exists := rule["host"]; exists {
+		t.Fatalf("expected hostless default ingress, got host %#v", rule["host"])
+	}
+
+	annotations := obj.GetAnnotations()
+	if annotations["traefik.ingress.kubernetes.io/router.entrypoints"] != "web" {
+		t.Fatalf("expected web entrypoint, got %#v", annotations)
 	}
 }
 
