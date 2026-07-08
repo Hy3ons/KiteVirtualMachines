@@ -63,7 +63,6 @@ export const VmConsoleTerminal: React.FC<VmConsoleTerminalProps> = ({ vmName, en
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
     terminal.open(container);
-    fitAddon.fit();
 
     const writeToTerminal = (data: string | Uint8Array) => {
       terminal.write(data);
@@ -74,14 +73,22 @@ export const VmConsoleTerminal: React.FC<VmConsoleTerminalProps> = ({ vmName, en
     };
 
     let fitFrame: number | null = null;
+    const fitTerminal = () => {
+      if (!active) return;
+      fitAddon.fit();
+    };
     const scheduleFit = () => {
       if (fitFrame !== null) return;
       fitFrame = window.requestAnimationFrame(() => {
         fitFrame = null;
-        fitAddon.fit();
+        fitTerminal();
       });
     };
+    const resizeObserver = new ResizeObserver(scheduleFit);
 
+    fitTerminal();
+    scheduleFit();
+    resizeObserver.observe(container);
     window.addEventListener('resize', scheduleFit);
 
     if (mock) {
@@ -102,6 +109,7 @@ export const VmConsoleTerminal: React.FC<VmConsoleTerminalProps> = ({ vmName, en
         if (fitFrame !== null) {
           window.cancelAnimationFrame(fitFrame);
         }
+        resizeObserver.disconnect();
         window.removeEventListener('resize', scheduleFit);
         terminal.dispose();
       };
@@ -162,6 +170,7 @@ export const VmConsoleTerminal: React.FC<VmConsoleTerminalProps> = ({ vmName, en
       if (fitFrame !== null) {
         window.cancelAnimationFrame(fitFrame);
       }
+      resizeObserver.disconnect();
       window.removeEventListener('resize', scheduleFit);
       if (socket) {
         socket.onopen = null;
@@ -186,7 +195,9 @@ export const VmConsoleTerminal: React.FC<VmConsoleTerminalProps> = ({ vmName, en
         </Button>
       </div>
       <Alert title={message} type={status === 'failed' ? 'error' : 'info'} showIcon className="console-status" />
-      <div ref={containerRef} className="console-terminal" />
+      <div className="console-terminal-frame">
+        <div ref={containerRef} className="console-terminal" />
+      </div>
     </div>
   );
 };
