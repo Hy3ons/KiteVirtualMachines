@@ -4,8 +4,7 @@ import { ReloadOutlined } from '@ant-design/icons';
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
-import { buildConsoleWebSocketUrl } from '../api/console';
-import { vmApi } from '../api';
+import { buildConsoleWebSocketUrl, createConsoleTicket } from '../api/console';
 
 const { Text } = Typography;
 
@@ -109,20 +108,24 @@ export const VmConsoleTerminal: React.FC<VmConsoleTerminalProps> = ({ vmName, en
     }
 
     let socket: WebSocket | null = null;
+    const ticketAbortController = new AbortController();
     const decoder = new TextDecoder();
     queueMicrotask(() => updateConsoleState('connecting', 'Requesting console ticket...'));
     writeLineToTerminal('Connecting to Kite VM serial console...');
 
-    void vmApi.createConsoleTicket(vmName)
+    void createConsoleTicket(vmName, { signal: ticketAbortController.signal })
       .then((ticket) => {
+        if (!active || ticketAbortController.signal.aborted) return;
         updateConsoleState('connecting', 'Opening console WebSocket...');
         socket = new WebSocket(buildConsoleWebSocketUrl(vmName, ticket.ticket), ['plain.kubevirt.io']);
         socket.binaryType = 'arraybuffer';
         socket.onopen = () => {
+          if (!active) return;
           updateConsoleState('connected', 'Console is connected.');
           writeLineToTerminal('Connected. Serial console output will appear below.');
         };
         socket.onmessage = (event) => {
+          if (!active) return;
           if (event.data instanceof ArrayBuffer) {
             writeToTerminal(decoder.decode(event.data));
             return;
@@ -132,6 +135,7 @@ export const VmConsoleTerminal: React.FC<VmConsoleTerminalProps> = ({ vmName, en
           }
         };
         socket.onerror = () => {
+          if (!active) return;
           updateConsoleState('failed', 'Console connection failed.');
         };
         socket.onclose = () => {
@@ -141,6 +145,7 @@ export const VmConsoleTerminal: React.FC<VmConsoleTerminalProps> = ({ vmName, en
         };
       })
       .catch((error: unknown) => {
+        if (!active || ticketAbortController.signal.aborted) return;
         updateConsoleState('failed', error instanceof Error ? error.message : 'Could not create console ticket.');
       });
 
@@ -152,12 +157,19 @@ export const VmConsoleTerminal: React.FC<VmConsoleTerminalProps> = ({ vmName, en
 
     return () => {
       active = false;
+      ticketAbortController.abort();
       input.dispose();
       if (fitFrame !== null) {
         window.cancelAnimationFrame(fitFrame);
       }
       window.removeEventListener('resize', scheduleFit);
-      socket?.close();
+      if (socket) {
+        socket.onopen = null;
+        socket.onmessage = null;
+        socket.onerror = null;
+        socket.onclose = null;
+        socket.close();
+      }
       terminal.dispose();
     };
   }, [enabled, mock, reconnectKey, vmName]);

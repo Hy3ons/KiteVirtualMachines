@@ -154,6 +154,18 @@ func consoleOriginAllowed(r *http.Request) bool {
 
 func bridgeConsole(ctx context.Context, browser ConsoleSocket, upstream ConsoleSocket) error {
 	errs := make(chan error, 2)
+	done := make(chan struct{})
+	defer close(done)
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = browser.Close()
+			_ = upstream.Close()
+		case <-done:
+		}
+	}()
+
 	go copyConsoleMessages(ctx, consoleCopyDirection{
 		source:            upstream,
 		target:            browser,
@@ -186,6 +198,10 @@ func copyConsoleMessages(ctx context.Context, direction consoleCopyDirection, er
 
 		messageType, data, err := direction.source.ReadMessage()
 		if err != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				errs <- ctxErr
+				return
+			}
 			errs <- err
 			return
 		}
