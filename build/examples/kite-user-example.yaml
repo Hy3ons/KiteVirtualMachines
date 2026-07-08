@@ -7,5 +7,5 @@ spec:
   email: test@gmail.com
   password: password
   namespace: test1
-  profile_image: base64encodedimage
+  profile_image: ""
   access_level: 3

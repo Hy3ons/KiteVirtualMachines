@@ -95,6 +95,66 @@ func TestUpdateRejectsDuplicateEmail(t *testing.T) {
 	}
 }
 
+func TestListOmitsStoredProfileImage(t *testing.T) {
+	ctx := context.Background()
+	passwordSalt := "account-test-salt"
+	user := newAccountTestUser("alice", "alice@example.com", auth.LegacyHashPassword("secret-password", passwordSalt))
+	if err := unstructured.SetNestedField(user.Object, "malicious-profile-payload", "spec", "profile_image"); err != nil {
+		t.Fatalf("failed to set profile_image fixture: %v", err)
+	}
+	dynamicClient := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
+		accountTestUserGVR: "KiteUserList",
+	}, user)
+
+	service := NewService(dynamicClient, passwordSalt)
+	users, err := service.List(ctx)
+
+	if err != nil {
+		t.Fatalf("List returned error: %v", err)
+	}
+	if len(users) != 1 {
+		t.Fatalf("expected 1 user, got %d", len(users))
+	}
+	if users[0].ProfileImage != "" {
+		t.Fatalf("expected stored profile image to be omitted, got %q", users[0].ProfileImage)
+	}
+}
+
+func TestUpdateIgnoresProfileImageInput(t *testing.T) {
+	ctx := context.Background()
+	passwordSalt := "account-test-salt"
+	user := newAccountTestUser("alice", "alice@example.com", auth.LegacyHashPassword("secret-password", passwordSalt))
+	if err := unstructured.SetNestedField(user.Object, "legacy-profile-payload", "spec", "profile_image"); err != nil {
+		t.Fatalf("failed to set profile_image fixture: %v", err)
+	}
+	dynamicClient := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
+		accountTestUserGVR: "KiteUserList",
+	}, user)
+
+	service := NewService(dynamicClient, passwordSalt)
+	maliciousProfileImage := "data:image/svg+xml,<svg onload=alert(1)>"
+	updatedUser, err := service.Update(ctx, "alice", UpdateRequest{ProfileImage: &maliciousProfileImage})
+
+	if err != nil {
+		t.Fatalf("Update returned error: %v", err)
+	}
+	if updatedUser.ProfileImage != "" {
+		t.Fatalf("expected profile image response to be empty, got %q", updatedUser.ProfileImage)
+	}
+
+	updatedObject, err := dynamicClient.Resource(accountTestUserGVR).Get(ctx, "alice", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("failed to read updated user: %v", err)
+	}
+	profileImage, found, err := unstructured.NestedString(updatedObject.Object, "spec", "profile_image")
+	if err != nil {
+		t.Fatalf("failed to read stored profile_image: %v", err)
+	}
+	if !found || profileImage != "" {
+		t.Fatalf("expected stored profile_image to be empty, got %q found=%v", profileImage, found)
+	}
+}
+
 func newAccountTestUser(name string, email string, passwordHash string) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
 		Object: map[string]any{

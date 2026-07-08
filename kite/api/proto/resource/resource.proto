@@ -27,7 +27,7 @@ message CreateKiteUserRequest {
   // namespace is spec.namespace in the KiteUser CRD and stores the user's namespace name.
   string namespace = 5;
 
-  // profile_image is spec.profile_image in the KiteUser CRD and stores base64 image data.
+  // profile_image is spec.profile_image in the KiteUser CRD and remains empty in current APIs.
   string profile_image = 6;
 
   // access_level is spec.access_level in the KiteUser CRD.

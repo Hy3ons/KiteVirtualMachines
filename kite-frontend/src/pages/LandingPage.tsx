@@ -14,7 +14,7 @@ const { Content } = Layout;
 
 export const LandingPage: React.FC = () => {
   const { message, notification } = AntdApp.useApp();
-  const { login, authenticated, username, accessLevel, profileImage } = useAuthStore();
+  const { login, authenticated, username, accessLevel } = useAuthStore();
   const logout = useLogout();
   const navigate = useNavigate();
   const location = useLocation();
@@ -44,7 +44,7 @@ export const LandingPage: React.FC = () => {
       const data = await authApi.login({ email: values.username, password: values.password });
       
       const { user } = data;
-      login(user.access_level, user.username, user.namespace, user.profile_image || '');
+      login(user.access_level, user.username, user.namespace);
       
       message.success('로그인 되었습니다.');
       navigate('/dashboard');
@@ -129,13 +129,6 @@ export const LandingPage: React.FC = () => {
               <section className="landing-login-panel">
                 {authenticated ? (
                   <div className="landing-session-card">
-                    <div className="landing-profile-mark">
-                      {profileImage ? (
-                        <img src={profileImage} alt="Profile" className="landing-profile-image" />
-                      ) : (
-                        <UserOutlined className="landing-profile-icon" />
-                      )}
-                    </div>
                     <Title level={3} className="landing-login-title">{username}님 환영합니다!</Title>
                     <Text type="secondary" className="landing-login-caption">현재 로그인된 상태입니다.</Text>
 

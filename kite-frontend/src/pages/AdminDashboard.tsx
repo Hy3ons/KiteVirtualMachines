@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { SEO } from '../components/SEO';
 import { adminApi } from '../api';
-import { App as AntdApp, Layout, Typography, Table, Space, Tag, Button, Popconfirm, Tabs, Statistic, Row, Col, Card, Slider, Avatar } from 'antd';
+import { App as AntdApp, Layout, Typography, Table, Space, Tag, Button, Popconfirm, Tabs, Statistic, Row, Col, Card, Slider } from 'antd';
 import type { TableColumnsType } from 'antd';
 import { PoweroffOutlined, DeleteOutlined, LogoutOutlined, TeamOutlined, CloudServerOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../store/useAuthStore';
@@ -16,7 +16,7 @@ const { Text } = Typography;
 
 export const AdminDashboard: React.FC = () => {
   const { message } = AntdApp.useApp();
-  const { username, profileImage, accessLevel } = useAuthStore();
+  const { username, accessLevel } = useAuthStore();
   const logout = useLogout();
   const navigate = useNavigate();
   const safeAccessLevel = accessLevel ?? 0;
@@ -187,7 +187,6 @@ export const AdminDashboard: React.FC = () => {
           <Space>
             <Button type="primary" ghost onClick={() => navigate('/dashboard')}>My VMs</Button>
             {canManageAll && <Button type="text" onClick={() => navigate('/admin/settings')}>시스템 전역 설정</Button>}
-            <Avatar src={profileImage || '/default_profile.png'} />
             <Text strong style={{ marginLeft: 8 }}>{username} (Level {safeAccessLevel})</Text>
             <Button type="text" icon={<LogoutOutlined />} onClick={logout}>Logout</Button>
           </Space>

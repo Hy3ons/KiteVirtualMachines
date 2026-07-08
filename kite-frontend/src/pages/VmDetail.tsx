@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { SEO } from '../components/SEO';
 import { configApi, vmApi } from '../api';
-import { App as AntdApp, Layout, Typography, Space, Tag, Breadcrumb, Card, Tabs, Button, Descriptions, Popconfirm, Spin, Avatar, Alert } from 'antd';
+import { App as AntdApp, Layout, Typography, Space, Tag, Breadcrumb, Card, Tabs, Button, Descriptions, Popconfirm, Spin, Alert } from 'antd';
 import { useParams, useNavigate } from 'react-router-dom';
 import { PoweroffOutlined, DeleteOutlined, CodeOutlined, DesktopOutlined, SafetyCertificateOutlined, ArrowLeftOutlined, CaretRightOutlined, CopyOutlined, LogoutOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../store/useAuthStore';
@@ -28,7 +28,7 @@ export const VmDetail: React.FC = () => {
   const { message } = AntdApp.useApp();
   const { vmName } = useParams<{ vmName: string }>();
   const navigate = useNavigate();
-  const { username, namespace, accessLevel, profileImage } = useAuthStore();
+  const { username, namespace, accessLevel } = useAuthStore();
   const logout = useLogout();
   const safeAccessLevel = accessLevel ?? 1;
   const [vm, setVm] = useState<VM | null>(null);
@@ -131,7 +131,6 @@ export const VmDetail: React.FC = () => {
             {safeAccessLevel >= 2 && (
               <Button type="primary" ghost onClick={() => navigate('/admin/dashboard')}>Admin Console</Button>
             )}
-            <Avatar src={profileImage || '/default_profile.png'} />
             <Text strong>{username}</Text>
             <Text type="secondary">({namespace})</Text>
             <Button type="text" icon={<LogoutOutlined />} onClick={logout}>Logout</Button>

@@ -78,6 +78,9 @@ func TestUserListReturnsKiteUsers(t *testing.T) {
 	if user.Username != "manager" || user.Email != "manager@gmail.com" || user.AccessLevel != auth.AccessLevelManager {
 		t.Fatalf("unexpected user response: %+v", user)
 	}
+	if user.ProfileImage != "" {
+		t.Fatalf("expected stored profile image to be omitted, got %q", user.ProfileImage)
+	}
 }
 
 func TestSignUpCreatesFirstUserAsAdmin(t *testing.T) {
@@ -88,7 +91,7 @@ func TestSignUpCreatesFirstUserAsAdmin(t *testing.T) {
 	req := httptest.NewRequest(
 		http.MethodPost,
 		"/api/signup",
-		strings.NewReader(`{"username":"first","email":"first@example.com","password":"secret"}`),
+		strings.NewReader(`{"username":"first","email":"first@example.com","password":"secret","profile_image":"malicious-profile-payload"}`),
 	)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -115,8 +118,8 @@ func TestSignUpCreatesFirstUserAsAdmin(t *testing.T) {
 	if res.User.Namespace != "kite-user-"+res.User.Name {
 		t.Fatalf("expected namespace derived from generated name, got %+v", res.User)
 	}
-	if res.User.ProfileImage != "base64encodedimage" {
-		t.Fatalf("expected default profile image, got %+v", res.User)
+	if res.User.ProfileImage != "" {
+		t.Fatalf("expected empty profile image, got %+v", res.User)
 	}
 
 	created, err := dynamicClient.Resource(userTestGVR).Get(req.Context(), res.User.Name, metav1.GetOptions{})
@@ -130,6 +133,7 @@ func TestSignUpCreatesFirstUserAsAdmin(t *testing.T) {
 	if password == "secret" || password == "" {
 		t.Fatalf("expected password to be stored as a non-empty one-way hash, got %q", password)
 	}
+	assertNestedString(t, created, "", "spec", "profile_image")
 }
 
 func TestSignUpCreatesLaterUserAsReadOnly(t *testing.T) {
@@ -181,6 +185,48 @@ func TestSignUpRejectsDuplicateEmail(t *testing.T) {
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("expected status %d, got %d: %s", http.StatusConflict, rec.Code, rec.Body.String())
 	}
+}
+
+func TestUserUpdateIgnoresProfileImage(t *testing.T) {
+	tokenService := newTestTokenService(t)
+	adminToken, _, err := tokenService.IssueAccessToken("admin", auth.AccessLevelAdmin)
+	if err != nil {
+		t.Fatalf("failed to issue token: %v", err)
+	}
+
+	dynamicClient := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
+		userTestGVR: "KiteUserList",
+	},
+		newUserTestObject("admin", "admin", "admin-ns", auth.AccessLevelAdmin),
+		newUserTestObject("target", "target", "target-ns", auth.AccessLevelUser),
+	)
+	r := newUserTestRouterWithClient(t, tokenService, dynamicClient)
+	req := httptest.NewRequest(http.MethodPatch, "/api/users/target", strings.NewReader(`{"profile_image":"malicious-profile-payload"}`))
+	req.Header.Set("Content-Type", "application/json")
+	addAccessTokenCookie(req, adminToken)
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	var res struct {
+		User kiteUserResponse `json:"user"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if res.User.ProfileImage != "" {
+		t.Fatalf("expected profile image response to be empty, got %q", res.User.ProfileImage)
+	}
+
+	updated, err := dynamicClient.Resource(userTestGVR).Get(req.Context(), "target", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("failed to read updated user: %v", err)
+	}
+	assertNestedString(t, updated, "", "spec", "profile_image")
 }
 
 func newUserTestRouter(t *testing.T, tokenService *auth.TokenService) http.Handler {
@@ -246,7 +292,7 @@ func newUserTestObject(name string, username string, namespace string, accessLev
 				"email":         username + "@gmail.com",
 				"password":      "hashed-password",
 				"namespace":     namespace,
-				"profile_image": "base64encodedimage",
+				"profile_image": "stored-profile-payload",
 				"access_level":  int64(accessLevel),
 			},
 		},

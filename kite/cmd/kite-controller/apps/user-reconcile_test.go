@@ -118,7 +118,7 @@ func newUserReconcileKiteUser(name string, namespace string, observedNamespace s
 				"email":         "user-a@example.com",
 				"password":      "hashed",
 				"namespace":     namespace,
-				"profile_image": "base64encodedimage",
+				"profile_image": "",
 				"access_level":  int64(0),
 			},
 			"status": map[string]any{

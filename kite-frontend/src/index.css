@@ -368,29 +368,6 @@ html, body {
   font-weight: 600;
 }
 
-.landing-profile-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 88px;
-  height: 88px;
-  margin-bottom: 26px;
-  border-radius: 50%;
-  background: #F2F0ED;
-}
-
-.landing-profile-image {
-  width: 88px;
-  height: 88px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-.landing-profile-icon {
-  color: #A8A19A;
-  font-size: 40px;
-}
-
 .global-header {
   display: flex;
   justify-content: space-between;
