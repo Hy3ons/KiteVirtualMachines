@@ -328,8 +328,20 @@ kite_namespace_has_external_pvcs() {
   return 1
 }
 
+golden_image_pvc_exists() {
+  kubectl -n "${KITE_NAMESPACE}" get pvc ubuntu-22.04 >/dev/null 2>&1
+}
+
+kite_namespace_has_preserved_pvcs() {
+  if kite_namespace_has_external_pvcs; then
+    return 0
+  fi
+
+  [[ "${DELETE_GOLDEN_IMAGE}" != "true" ]] && golden_image_pvc_exists
+}
+
 delete_kite_manifests_preserving_namespace() {
-  log "deleting Kite manifests without deleting namespace/${KITE_NAMESPACE} because external PVCs exist"
+  log "deleting Kite manifests without deleting namespace/${KITE_NAMESPACE} because PVCs are being preserved"
   kubectl delete -f "${ROOT_DIR}/build/kite/gateway.yaml" --ignore-not-found=true --wait=false || true
   kubectl delete -f "${ROOT_DIR}/build/kite/controller.yaml" --ignore-not-found=true --wait=false || true
   kubectl delete -f "${ROOT_DIR}/build/kite/api.yaml" --ignore-not-found=true --wait=false || true
@@ -341,7 +353,7 @@ delete_kite_manifests_preserving_namespace() {
 }
 
 delete_kite_manifests() {
-  if kite_namespace_has_external_pvcs; then
+  if kite_namespace_has_preserved_pvcs; then
     delete_kite_manifests_preserving_namespace
     return
   fi
@@ -475,8 +487,8 @@ main() {
   delete_kite_longhorn_host_data
 
   log "deleting remaining Kite namespace and cluster-scoped resources"
-  if kite_namespace_has_external_pvcs; then
-    log "skipping namespace/${KITE_NAMESPACE} deletion because it contains non-Kite PVCs"
+  if kite_namespace_has_preserved_pvcs; then
+    log "skipping namespace/${KITE_NAMESPACE} deletion because preserved PVCs still exist"
   else
     kubectl delete namespace "${KITE_NAMESPACE}" --ignore-not-found=true
   fi

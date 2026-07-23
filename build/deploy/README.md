@@ -99,6 +99,8 @@ curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/uni
 
 Set `DELETE_GOLDEN_IMAGE=true` to explicitly delete the imported golden image
 DataVolume and PVC before removing the namespace.
+When `DELETE_GOLDEN_IMAGE=false`, the uninstaller preserves `namespace/kite`
+if the golden image PVC still exists, and removes only Kite runtime resources.
 
 Longhorn removal is opt-in because it deletes VM disk infrastructure:
 
