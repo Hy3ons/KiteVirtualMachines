@@ -57,6 +57,22 @@ kite_prompt_configure_bool() {
   export "${variable_name}"
 }
 
+kite_validate_bool() {
+  local variable_name="$1"
+  local current_value
+
+  eval "current_value=\"\${${variable_name}:-}\""
+  case "${current_value}" in
+    true|false)
+      return 0
+      ;;
+    *)
+      printf '[kite] ERROR: %s must be true or false, got %s\n' "${variable_name}" "${current_value:-<empty>}" >&2
+      return 1
+      ;;
+  esac
+}
+
 kite_prompt_value() {
   local variable_name="$1"
   local was_set="$2"
@@ -78,6 +94,31 @@ kite_prompt_value() {
   read -r -p "입력 [기본: ${current_value:-없음}] " answer
   answer="${answer:-${current_value}}"
   printf -v "${variable_name}" '%s' "${answer}"
+  export "${variable_name}"
+}
+
+kite_prompt_confirm_literal() {
+  local variable_name="$1"
+  local was_set="$2"
+  local expected="$3"
+  local prompt="$4"
+  local description="${5:-}"
+  local answer
+
+  if [[ -n "${was_set}" ]] || ! kite_prompt_interactive; then
+    return 0
+  fi
+
+  printf '%s\n' "${prompt}" >&2
+  if [[ -n "${description}" ]]; then
+    printf '  %s\n' "${description}" >&2
+  fi
+  read -r -p "확인 문구 입력 [${expected}] " answer
+  if [[ "${answer}" == "${expected}" ]]; then
+    printf -v "${variable_name}" '%s' "true"
+  else
+    printf -v "${variable_name}" '%s' "false"
+  fi
   export "${variable_name}"
 }
 

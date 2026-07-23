@@ -80,7 +80,9 @@ entrypoint and `build/deploy/scripts/uninstall-kite.sh` is the implementation.
 `KITE_UNINSTALL_PRESET=safe` keeps dangerous deletion off by default.
 `KITE_UNINSTALL_PRESET=full` enables golden image, Kite Longhorn host data, and
 Longhorn uninstall choices, while shared infrastructure protection still applies.
-`DELETE_LONGHORN_FORCE` never overrides non-Kite Longhorn PVC/PV protection.
+Host data deletion still requires `DELETE_LONGHORN_DATA_CONFIRM=true` or the
+interactive confirmation phrase. `DELETE_LONGHORN_FORCE` never overrides
+non-Kite Longhorn PVC/PV protection.
 
 Run the same cleanup without git or a repository clone:
 

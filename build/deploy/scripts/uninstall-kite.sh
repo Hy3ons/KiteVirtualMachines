@@ -9,12 +9,11 @@ set -euo pipefail
 #   build/deploy/scripts/uninstall-kite.sh
 #
 # Environment Variables:
-#   KITE_NAMESPACE: default kite
+#   KITE_NAMESPACE: default kite; 삭제할 Kite runtime namespace다. interactive에서 초반에 묻는다.
 #   DELETE_GOLDEN_IMAGE: default false
 #   DELETE_LONGHORN: default false
 #   DELETE_LONGHORN_FORCE: default false
 #   DELETE_LONGHORN_DATA: default false
-#   DELETE_LONGHORN_DATA_CONFIRM: default false
 #   KITE_UNINSTALL_PRESET: default safe
 #   KITE_LONGHORN_DISK_NAME: default kite-longhorn
 #   KITE_LONGHORN_DISK_TAG: default kite
@@ -29,8 +28,8 @@ set -euo pipefail
 #   Kubernetes 리소스와 선택적 Longhorn 상태를 변경하거나 삭제할 수 있다.
 # ==============================================================================
 
-KITE_NAMESPACE="${KITE_NAMESPACE:-kite}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+KITE_NAMESPACE_WAS_SET="${KITE_NAMESPACE+x}"
 DELETE_GOLDEN_IMAGE_WAS_SET="${DELETE_GOLDEN_IMAGE+x}"
 DELETE_LONGHORN_WAS_SET="${DELETE_LONGHORN+x}"
 DELETE_LONGHORN_FORCE_WAS_SET="${DELETE_LONGHORN_FORCE+x}"
@@ -48,7 +47,7 @@ case "${KITE_UNINSTALL_PRESET}" in
     DELETE_GOLDEN_IMAGE="${DELETE_GOLDEN_IMAGE:-true}"
     DELETE_LONGHORN="${DELETE_LONGHORN:-true}"
     DELETE_LONGHORN_DATA="${DELETE_LONGHORN_DATA:-true}"
-    DELETE_LONGHORN_DATA_CONFIRM="${DELETE_LONGHORN_DATA_CONFIRM:-true}"
+    DELETE_LONGHORN_DATA_CONFIRM="${DELETE_LONGHORN_DATA_CONFIRM:-false}"
     ;;
   *)
     echo "[kite-deploy] KITE_UNINSTALL_PRESET must be safe or full" >&2
@@ -56,6 +55,7 @@ case "${KITE_UNINSTALL_PRESET}" in
     ;;
 esac
 DELETE_LONGHORN_FORCE="${DELETE_LONGHORN_FORCE:-false}"
+KITE_NAMESPACE="${KITE_NAMESPACE:-kite}"
 KITE_LONGHORN_DISK_NAME="${KITE_LONGHORN_DISK_NAME:-kite-longhorn}"
 KITE_LONGHORN_DISK_TAG="${KITE_LONGHORN_DISK_TAG:-kite}"
 KITE_LONGHORN_OWNER_LABEL_KEY="${KITE_LONGHORN_OWNER_LABEL_KEY:-hy3ons.github.io/kite-installed-longhorn}"
@@ -95,10 +95,33 @@ warn() {
   fi
 }
 
+validate_namespace() {
+  if [[ -z "${KITE_NAMESPACE}" || ! "${KITE_NAMESPACE}" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ || "${#KITE_NAMESPACE}" -gt 63 ]]; then
+    echo "[kite-deploy] KITE_NAMESPACE must be a Kubernetes namespace name: lowercase letters, numbers, hyphen, max 63 chars" >&2
+    exit 1
+  fi
+}
+
+validate_uninstall_options() {
+  validate_namespace
+  kite_validate_bool DELETE_GOLDEN_IMAGE
+  kite_validate_bool DELETE_LONGHORN
+  kite_validate_bool DELETE_LONGHORN_FORCE
+  kite_validate_bool DELETE_LONGHORN_DATA
+  kite_validate_bool DELETE_LONGHORN_DATA_CONFIRM
+
+  if [[ "${DELETE_LONGHORN_DATA}" == "true" && "${DELETE_LONGHORN_DATA_CONFIRM}" != "true" ]]; then
+    echo "[kite-deploy] refusing uninstall before making changes: DELETE_LONGHORN_DATA=true requires DELETE_LONGHORN_DATA_CONFIRM=true" >&2
+    echo "[kite-deploy] interactive users must type DELETE_LONGHORN_DATA when prompted; automation must set both env values explicitly" >&2
+    exit 1
+  fi
+}
+
 configure_interactive_uninstall_options() {
   kite_prompt_interactive || return 0
 
   log "interactive uninstall options (preset=${KITE_UNINSTALL_PRESET})"
+  kite_prompt_value KITE_NAMESPACE "${KITE_NAMESPACE_WAS_SET}" "어떤 Kite namespace를 삭제할까요?" "기본값은 kite입니다. 다른 namespace에 설치한 경우 반드시 그 값을 입력해야 합니다."
   kite_prompt_configure_bool DELETE_GOLDEN_IMAGE "${DELETE_GOLDEN_IMAGE_WAS_SET}" "Ubuntu golden image DataVolume/PVC까지 삭제할까요?"
   kite_prompt_configure_bool DELETE_LONGHORN "${DELETE_LONGHORN_WAS_SET}" "Longhorn 설치 자체와 Kite Longhorn disk entry까지 제거할까요?"
   if [[ "${DELETE_LONGHORN}" == "true" ]]; then
@@ -106,15 +129,14 @@ configure_interactive_uninstall_options() {
   fi
   kite_prompt_configure_bool DELETE_LONGHORN_DATA "${DELETE_LONGHORN_DATA_WAS_SET}" "노드의 Kite Longhorn host data까지 삭제할까요? VM 디스크 데이터가 사라질 수 있습니다."
   if [[ "${DELETE_LONGHORN_DATA}" == "true" ]]; then
-    if [[ -z "${DELETE_LONGHORN_DATA_CONFIRM_WAS_SET}" ]]; then
-      DELETE_LONGHORN_DATA_CONFIRM=true
-    fi
+    kite_prompt_confirm_literal DELETE_LONGHORN_DATA_CONFIRM "${DELETE_LONGHORN_DATA_CONFIRM_WAS_SET}" "DELETE_LONGHORN_DATA" "정말 Longhorn host data 삭제를 허용하려면 DELETE_LONGHORN_DATA를 그대로 입력하세요." "이 확인이 없으면 uninstall은 어떤 리소스도 삭제하기 전에 중단됩니다."
     kite_prompt_configure_bool DELETE_LONGHORN_FORCE "${DELETE_LONGHORN_FORCE_WAS_SET}" "Longhorn PV가 남아 있어도 host data 삭제를 강제로 진행할까요?"
   fi
-  log "uninstall choices: namespace=${KITE_NAMESPACE}, preset=${KITE_UNINSTALL_PRESET}, DELETE_GOLDEN_IMAGE=${DELETE_GOLDEN_IMAGE}($(kite_option_source "${DELETE_GOLDEN_IMAGE_WAS_SET}")), DELETE_LONGHORN_DATA=${DELETE_LONGHORN_DATA}($(kite_option_source "${DELETE_LONGHORN_DATA_WAS_SET}")), DELETE_LONGHORN=${DELETE_LONGHORN}($(kite_option_source "${DELETE_LONGHORN_WAS_SET}")), DELETE_LONGHORN_FORCE=${DELETE_LONGHORN_FORCE}($(kite_option_source "${DELETE_LONGHORN_FORCE_WAS_SET}"))"
+  log "uninstall choices: namespace=${KITE_NAMESPACE}($(kite_option_source "${KITE_NAMESPACE_WAS_SET}")), preset=${KITE_UNINSTALL_PRESET}, DELETE_GOLDEN_IMAGE=${DELETE_GOLDEN_IMAGE}($(kite_option_source "${DELETE_GOLDEN_IMAGE_WAS_SET}")), DELETE_LONGHORN_DATA=${DELETE_LONGHORN_DATA}($(kite_option_source "${DELETE_LONGHORN_DATA_WAS_SET}")), DELETE_LONGHORN_DATA_CONFIRM=${DELETE_LONGHORN_DATA_CONFIRM}($(kite_option_source "${DELETE_LONGHORN_DATA_CONFIRM_WAS_SET}")), DELETE_LONGHORN=${DELETE_LONGHORN}($(kite_option_source "${DELETE_LONGHORN_WAS_SET}")), DELETE_LONGHORN_FORCE=${DELETE_LONGHORN_FORCE}($(kite_option_source "${DELETE_LONGHORN_FORCE_WAS_SET}"))"
 }
 
 normalize_uninstall_options() {
+  export KITE_NAMESPACE
   export DELETE_GOLDEN_IMAGE
   export DELETE_LONGHORN
   export DELETE_LONGHORN_FORCE
@@ -437,6 +459,7 @@ delete_longhorn_resources() {
 # 배포 제거의 전체 순서다. Kite 리소스, 선택적 storage 데이터, Longhorn을 처리한다.
 main() {
   configure_interactive_uninstall_options
+  validate_uninstall_options
   normalize_uninstall_options
 
   if [[ "${DELETE_GOLDEN_IMAGE}" == "true" ]]; then

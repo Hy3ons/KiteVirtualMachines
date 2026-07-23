@@ -23,6 +23,7 @@ set -euo pipefail
 #   KITE_INSTALL_IMAGE_TAG: default production; 적용할 GHCR image tag다. prompt 없음.
 #   KITE_INSTALL_IMAGE_PULL_POLICY: default IfNotPresent; Kite runtime Deployment imagePullPolicy다. prompt 없음.
 #   KITE_ASSUME_DEFAULTS: default false; true면 모든 interactive 질문을 건너뛰고 env/default 값으로 실행한다.
+#   KITE_NAMESPACE: default kite; Kite runtime을 설치할 namespace다. 초반에 묻는다.
 #   INSTALL_LONGHORN: default true; Longhorn 기본 manifest를 설치할지 초반에 묻는다.
 #   KITE_INSTALL_LONGHORN_HOST_PACKAGES: default true; apt 기반 host에서 Longhorn 필수 패키지를 자동 설치할지 정한다.
 #   CONFIGURE_LONGHORN: default true; Longhorn disk/tag 설정을 적용할지 초반에 묻는다.

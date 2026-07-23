@@ -36,6 +36,7 @@ set -euo pipefail
 # ==============================================================================
 
 MINIKUBE_PURGE_WAS_SET="${MINIKUBE_PURGE+x}"
+KITE_NAMESPACE_WAS_SET="${KITE_NAMESPACE+x}"
 CLEAR_IMAGES_WAS_SET="${CLEAR_IMAGES+x}"
 CLEAR_LONGHORN_WAS_SET="${CLEAR_LONGHORN+x}"
 CLEAR_LONGHORN_FORCE_WAS_SET="${CLEAR_LONGHORN_FORCE+x}"
@@ -122,8 +123,67 @@ ask_numbered_bool() {
   done
 }
 
+ask_value() {
+  local prompt="$1"
+  local default_value="$2"
+  local answer
+
+  printf '%s\n' "${prompt}" >&2
+  read -r -p "입력 [기본: ${default_value:-없음}] " answer
+  printf '%s\n' "${answer:-${default_value}}"
+}
+
+ask_confirm_literal() {
+  local expected="$1"
+  local prompt="$2"
+  local answer
+
+  printf '%s\n' "${prompt}" >&2
+  read -r -p "확인 문구 입력 [${expected}] " answer
+  [[ "${answer}" == "${expected}" ]]
+}
+
 interactive_clear_enabled() {
   [[ -t 0 && "${KITE_ASSUME_DEFAULTS:-false}" != "true" ]]
+}
+
+validate_bool() {
+  local name="$1"
+  local value
+
+  eval "value=\"\${${name}:-}\""
+  case "${value}" in
+    true|false)
+      return 0
+      ;;
+    *)
+      echo "[kite] ${name} must be true or false, got ${value:-<empty>}" >&2
+      exit 1
+      ;;
+  esac
+}
+
+validate_namespace() {
+  if [[ -z "${KITE_NAMESPACE}" || ! "${KITE_NAMESPACE}" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ || "${#KITE_NAMESPACE}" -gt 63 ]]; then
+    echo "[kite] KITE_NAMESPACE must be a Kubernetes namespace name: lowercase letters, numbers, hyphen, max 63 chars" >&2
+    exit 1
+  fi
+}
+
+validate_clear_options() {
+  validate_namespace
+  validate_bool MINIKUBE_PURGE
+  validate_bool CLEAR_IMAGES
+  validate_bool CLEAR_LONGHORN
+  validate_bool CLEAR_LONGHORN_FORCE
+  validate_bool CLEAR_LONGHORN_DATA
+  validate_bool CLEAR_LONGHORN_DATA_CONFIRM
+
+  if [[ "${CLEAR_LONGHORN_DATA}" == "true" && "${CLEAR_LONGHORN_DATA_CONFIRM}" != "true" ]]; then
+    echo "[kite] refusing clear before making changes: CLEAR_LONGHORN_DATA=true requires CLEAR_LONGHORN_DATA_CONFIRM=true" >&2
+    echo "[kite] interactive users must type CLEAR_LONGHORN_DATA when prompted; automation must set both env values explicitly" >&2
+    exit 1
+  fi
 }
 
 configure_interactive_clear_options() {
@@ -132,6 +192,9 @@ configure_interactive_clear_options() {
   interactive_clear_enabled || return 0
 
   log "interactive cleanup options"
+  if [[ -z "${KITE_NAMESPACE_WAS_SET}" ]]; then
+    KITE_NAMESPACE="$(ask_value "어떤 Kite namespace를 정리할까요? 기본값은 kite입니다." "${KITE_NAMESPACE}")"
+  fi
   if [[ -z "${CLEAR_IMAGES_WAS_SET}" ]]; then
     if ask_numbered_bool "로컬/k3s에 남은 Kite 개발 이미지도 삭제할까요?" "${CLEAR_IMAGES}"; then
       CLEAR_IMAGES=true
@@ -170,11 +233,15 @@ configure_interactive_clear_options() {
   if [[ -z "${CLEAR_LONGHORN_DATA_WAS_SET}" ]]; then
     if ask_numbered_bool "노드의 Kite Longhorn host data까지 삭제할까요? VM 디스크 데이터가 사라질 수 있습니다." "${CLEAR_LONGHORN_DATA}"; then
       CLEAR_LONGHORN_DATA=true
-      if [[ -z "${CLEAR_LONGHORN_DATA_CONFIRM_WAS_SET}" ]]; then
-        CLEAR_LONGHORN_DATA_CONFIRM=true
-      fi
     else
       CLEAR_LONGHORN_DATA=false
+    fi
+  fi
+  if [[ "${CLEAR_LONGHORN_DATA}" == "true" && -z "${CLEAR_LONGHORN_DATA_CONFIRM_WAS_SET}" ]]; then
+    if ask_confirm_literal "CLEAR_LONGHORN_DATA" "정말 Longhorn host data 삭제를 허용하려면 CLEAR_LONGHORN_DATA를 그대로 입력하세요."; then
+      CLEAR_LONGHORN_DATA_CONFIRM=true
+    else
+      CLEAR_LONGHORN_DATA_CONFIRM=false
     fi
   fi
   if [[ "${CLEAR_LONGHORN_DATA}" == "true" && -z "${CLEAR_LONGHORN_FORCE_WAS_SET}" ]]; then
@@ -187,6 +254,7 @@ configure_interactive_clear_options() {
 }
 
 normalize_clear_options() {
+  export KITE_NAMESPACE
   export CLEAR_IMAGES
   export CLEAR_LONGHORN
   export CLEAR_LONGHORN_FORCE
@@ -762,6 +830,7 @@ main() {
   cluster="$(detect_cluster)"
   log "target cluster=${cluster}"
   configure_interactive_clear_options "${cluster}"
+  validate_clear_options
   normalize_clear_options
 
   case "${cluster}" in

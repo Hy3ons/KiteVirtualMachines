@@ -22,9 +22,10 @@ set -euo pipefail
 #   KITE_UNINSTALL_ARCHIVE_URL: default empty; 직접 archive URL을 지정할 때 쓴다. prompt 없음.
 #   KITE_UNINSTALL_PRESET: default safe; safe 또는 full. full은 위험 삭제 선택값을 켠다.
 #   KITE_ASSUME_DEFAULTS: default false; true면 모든 interactive 질문을 건너뛰고 env/default 값으로 실행한다.
+#   KITE_NAMESPACE: default kite; 삭제할 Kite runtime namespace다. 초반에 묻는다.
 #   DELETE_GOLDEN_IMAGE: default false; Ubuntu golden image DataVolume/PVC 삭제 여부를 초반에 묻는다.
 #   DELETE_LONGHORN_DATA: default false; Kite Longhorn host data 삭제 여부를 초반에 묻는다.
-#   DELETE_LONGHORN_DATA_CONFIRM: default false; host data 삭제 명시 확인값이다.
+#   DELETE_LONGHORN_DATA_CONFIRM: default false; host data 삭제 시 DELETE_LONGHORN_DATA 확인 문구 또는 env true가 필요하다.
 #   DELETE_LONGHORN: default false; Longhorn 설치 자체 제거 여부를 초반에 묻는다.
 #   DELETE_LONGHORN_FORCE: default false; Longhorn PV가 남아도 강제 삭제할지 초반에 묻는다.
 #   KITE_LOG_COLOR: default auto; 컬러 로그 여부다.
@@ -36,8 +37,8 @@ set -euo pipefail
 #
 # Noninteractive Behavior:
 #   env가 있으면 그 값을 그대로 쓰고 질문하지 않는다. env가 없으면 safe 기본값으로
-#   진행한다. KITE_UNINSTALL_PRESET=full은 위험 삭제 선택값을 켜지만
-#   DELETE_LONGHORN_FORCE=false는 유지한다.
+#   진행한다. KITE_UNINSTALL_PRESET=full은 위험 삭제 선택값을 켜지만 host data
+#   삭제는 DELETE_LONGHORN_DATA_CONFIRM=true가 없으면 시작 전에 중단한다.
 #
 # Dangerous Options:
 #   DELETE_LONGHORN_DATA, DELETE_LONGHORN, DELETE_LONGHORN_FORCE는 VM disk

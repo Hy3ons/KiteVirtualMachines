@@ -9,7 +9,7 @@ set -euo pipefail
 #   build/deploy/scripts/install-all.sh
 #
 # Environment Variables:
-#   KITE_NAMESPACE: default kite
+#   KITE_NAMESPACE: default kite; Kite runtime을 설치할 namespace다. interactive에서 초반에 묻는다.
 #   KITE_INSTALL_REGISTRY: default ghcr.io/hy3ons
 #   KITE_INSTALL_IMAGE_TAG: default production
 #   KITE_INSTALL_IMAGE_PULL_POLICY: default IfNotPresent
@@ -33,6 +33,7 @@ set -euo pipefail
 # ==============================================================================
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+KITE_NAMESPACE_WAS_SET="${KITE_NAMESPACE+x}"
 INSTALL_LONGHORN_WAS_SET="${INSTALL_LONGHORN+x}"
 CONFIGURE_LONGHORN_WAS_SET="${CONFIGURE_LONGHORN+x}"
 APPLY_STORAGECLASS_WAS_SET="${APPLY_STORAGECLASS+x}"
@@ -103,6 +104,27 @@ require_command() {
   fi
 }
 
+validate_namespace() {
+  if [[ -z "${KITE_NAMESPACE}" || ! "${KITE_NAMESPACE}" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ || "${#KITE_NAMESPACE}" -gt 63 ]]; then
+    echo "[kite-deploy] KITE_NAMESPACE must be a Kubernetes namespace name: lowercase letters, numbers, hyphen, max 63 chars" >&2
+    exit 1
+  fi
+}
+
+validate_install_options() {
+  validate_namespace
+  kite_validate_bool KITE_INSTALL_FORCE_ROLLOUT
+  kite_validate_bool INSTALL_LONGHORN
+  kite_validate_bool CONFIGURE_LONGHORN
+  kite_validate_bool APPLY_STORAGECLASS
+  kite_validate_bool INSTALL_KUBEVIRT
+  kite_validate_bool INSTALL_CDI
+  kite_validate_bool APPLY_GOLDEN_IMAGE
+  kite_validate_bool KITE_LONGHORN_USE_DEDICATED_DISK
+  kite_validate_bool KITE_GATEWAY_HOST_KEY_REFRESH
+  kite_validate_bool RUN_VERIFY
+}
+
 ensure_longhorn_available_for_configuration() {
   if kubectl get namespace longhorn-system >/dev/null 2>&1; then
     return 0
@@ -117,6 +139,7 @@ configure_interactive_install_options() {
   kite_prompt_interactive || return 0
 
   log "interactive install options"
+  kite_prompt_value KITE_NAMESPACE "${KITE_NAMESPACE_WAS_SET}" "Kite를 어떤 Kubernetes namespace에 설치할까요?" "기본값은 kite입니다. 기존 설치를 업데이트하려면 이전 설치와 같은 namespace를 입력해야 합니다."
   kite_prompt_configure_bool INSTALL_LONGHORN "${INSTALL_LONGHORN_WAS_SET}" "Longhorn 기본 manifest를 설치할까요?"
   kite_prompt_configure_bool CONFIGURE_LONGHORN "${CONFIGURE_LONGHORN_WAS_SET}" "Longhorn에 Kite 전용 disk/tag 설정을 적용할까요?"
   if [[ "${CONFIGURE_LONGHORN}" == "true" ]]; then
@@ -129,10 +152,11 @@ configure_interactive_install_options() {
   kite_prompt_configure_bool KITE_GATEWAY_HOST_KEY_REFRESH "${KITE_GATEWAY_HOST_KEY_REFRESH_WAS_SET}" "기존 kite-gateway host key Secret이 있으면 새 key로 갱신할까요?"
   kite_prompt_configure_bool RUN_VERIFY "${RUN_VERIFY_WAS_SET}" "설치 후 verify 스크립트를 실행할까요?"
 
-  log "install choices: INSTALL_LONGHORN=${INSTALL_LONGHORN}, CONFIGURE_LONGHORN=${CONFIGURE_LONGHORN}, KITE_LONGHORN_USE_DEDICATED_DISK=${KITE_LONGHORN_USE_DEDICATED_DISK}, APPLY_STORAGECLASS=${APPLY_STORAGECLASS}, INSTALL_KUBEVIRT=${INSTALL_KUBEVIRT}, INSTALL_CDI=${INSTALL_CDI}, APPLY_GOLDEN_IMAGE=${APPLY_GOLDEN_IMAGE}, KITE_GATEWAY_HOST_KEY_REFRESH=${KITE_GATEWAY_HOST_KEY_REFRESH}, RUN_VERIFY=${RUN_VERIFY}"
+  log "install choices: namespace=${KITE_NAMESPACE}($(kite_option_source "${KITE_NAMESPACE_WAS_SET}")), INSTALL_LONGHORN=${INSTALL_LONGHORN}, CONFIGURE_LONGHORN=${CONFIGURE_LONGHORN}, KITE_LONGHORN_USE_DEDICATED_DISK=${KITE_LONGHORN_USE_DEDICATED_DISK}, APPLY_STORAGECLASS=${APPLY_STORAGECLASS}, INSTALL_KUBEVIRT=${INSTALL_KUBEVIRT}, INSTALL_CDI=${INSTALL_CDI}, APPLY_GOLDEN_IMAGE=${APPLY_GOLDEN_IMAGE}, KITE_GATEWAY_HOST_KEY_REFRESH=${KITE_GATEWAY_HOST_KEY_REFRESH}, RUN_VERIFY=${RUN_VERIFY}"
 }
 
 export_install_options() {
+  export KITE_NAMESPACE
   export KITE_LONGHORN_USE_DEDICATED_DISK
   export KITE_GATEWAY_HOST_KEY_REFRESH
 }
@@ -280,6 +304,7 @@ main() {
 
   kubectl get nodes >/dev/null
   configure_interactive_install_options
+  validate_install_options
   export_install_options
 
   if [[ "${INSTALL_LONGHORN}" == "true" ]]; then
