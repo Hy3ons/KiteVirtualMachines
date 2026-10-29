@@ -4,3 +4,12 @@ coverage
 .vite
 *.log
 .DS_Store
+
+.next
+out
+.git
+tests
+playwright-report
+test-results
+
+.env*

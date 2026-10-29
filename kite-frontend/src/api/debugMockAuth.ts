@@ -9,6 +9,7 @@ export const debugAuthApi = {
     user: {
       access_level: DEBUG_ADMIN_SESSION.accessLevel,
       username: credentials.email === 'admin' ? 'admin' : credentials.email,
+      email: credentials.email === 'admin' ? DEBUG_ADMIN_SESSION.email : credentials.email,
       namespace: DEBUG_ADMIN_SESSION.namespace,
       profile_image: '',
     },
@@ -49,6 +50,7 @@ export const debugAuthApi = {
     user: {
       access_level: DEBUG_ADMIN_SESSION.accessLevel,
       username: DEBUG_ADMIN_SESSION.username,
+      email: DEBUG_ADMIN_SESSION.email,
       namespace: DEBUG_ADMIN_SESSION.namespace,
       profile_image: '',
     },

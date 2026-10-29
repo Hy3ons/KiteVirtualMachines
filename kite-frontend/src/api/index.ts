@@ -1,6 +1,8 @@
-import { apiClient } from './axios';
+import { usersSchema } from './pageData';
+import { authResponseSchema } from './session';
+import { apiClient } from './http';
 import type {
-  AdminUsersResponse,
+  AuthResponse, SignupResponse, ConfigResponse, VmsResponse, VmResponse, VmOffersResponse, VmOfferResponse, GlobalVmsResponse, ConsoleTicketResponse,
   AdminCreateVmOfferPayload,
   CertPayload,
   ClaimVmOfferPayload,
@@ -16,16 +18,16 @@ import type {
 
 class MockApiModeError extends Error {
   constructor(mode: string) {
-    super(`VITE_USE_MOCK=true is only allowed in debug mode, current mode is ${mode}`);
+    super(`NEXT_PUBLIC_USE_MOCK=true is only allowed in debug mode, current mode is ${mode}`);
     this.name = 'MockApiModeError';
   }
 }
 
-const isDebugMode = import.meta.env.MODE === 'debug';
-const mockApiRequested = import.meta.env.VITE_USE_MOCK === 'true';
+const isDebugMode = process.env.NEXT_PUBLIC_KITE_MODE === 'debug';
+const mockApiRequested = process.env.NEXT_PUBLIC_USE_MOCK === 'true';
 
 if (mockApiRequested && !isDebugMode) {
-  throw new MockApiModeError(import.meta.env.MODE);
+  throw new MockApiModeError(process.env.NEXT_PUBLIC_KITE_MODE || 'production');
 }
 
 const useMockApi = mockApiRequested && isDebugMode;
@@ -39,9 +41,6 @@ const loadDebugMockApi = async (): Promise<DebugMockApi> => {
   return debugMockApiPromise;
 };
 
-type BackendAdminUser = AdminUsersResponse['users'][number] & {
-  readonly access_level?: number;
-};
 
 // ========================
 // Auth
@@ -51,14 +50,14 @@ export const authApi = {
     if (useMockApi) {
       return (await loadDebugMockApi()).login(credentials);
     }
-    const { data } = await apiClient.post('/auth/login', credentials);
-    return data;
+    const { data } = await apiClient.post<unknown>('/auth/login', credentials);
+    return authResponseSchema.parse(data);
   },
   signup: async (payload: SignupPayload) => {
     if (useMockApi) {
       return (await loadDebugMockApi()).signup(payload);
     }
-    const { data } = await apiClient.post('/auth/signup', payload);
+    const { data } = await apiClient.post<SignupResponse>('/auth/signup', payload);
     return data;
   },
   logout: async (): Promise<LogoutResponse> => {
@@ -72,7 +71,7 @@ export const authApi = {
     if (useMockApi) {
       return (await loadDebugMockApi()).getMe();
     }
-    const { data } = await apiClient.get('/me');
+    const { data } = await apiClient.get<{ readonly user: AuthResponse['user'] }>('/me');
     return data;
   },
 };
@@ -85,7 +84,7 @@ export const configApi = {
     if (useMockApi) {
       return (await loadDebugMockApi()).getConfig();
     }
-    const { data } = await apiClient.get('/config');
+    const { data } = await apiClient.get<ConfigResponse>('/config');
     return data;
   },
 };
@@ -98,70 +97,70 @@ export const vmApi = {
     if (useMockApi) {
       return (await loadDebugMockApi()).getVms();
     }
-    const { data } = await apiClient.get('/vms');
+    const { data } = await apiClient.get<VmsResponse>('/vms');
     return data;
   },
   getVm: async (name: string) => {
     if (useMockApi) {
       return (await loadDebugMockApi()).getVm(name);
     }
-    const { data } = await apiClient.get(`/vms/${name}`);
+    const { data } = await apiClient.get<VmResponse>(`/vms/${encodeURIComponent(name)}`);
     return data;
   },
   createVm: async (payload: CreateVmPayload) => {
     if (useMockApi) {
       return (await loadDebugMockApi()).createVm(payload);
     }
-    const { data } = await apiClient.post('/vms', payload);
+    const { data } = await apiClient.post<VmResponse>('/vms', payload);
     return data;
   },
   updateVm: async (name: string, payload: UpdateVmPayload) => {
     if (useMockApi) {
       return (await loadDebugMockApi()).updateVm(name, payload);
     }
-    const { data } = await apiClient.patch(`/vms/${name}`, payload);
+    const { data } = await apiClient.patch<VmResponse>(`/vms/${encodeURIComponent(name)}`, payload);
     return data;
   },
   startVm: async (name: string) => {
     if (useMockApi) {
       return (await loadDebugMockApi()).startVm(name);
     }
-    const { data } = await apiClient.post(`/vms/${name}/start`);
+    const { data } = await apiClient.post<{ readonly message: string }>(`/vms/${encodeURIComponent(name)}/start`);
     return data;
   },
   stopVm: async (name: string) => {
     if (useMockApi) {
       return (await loadDebugMockApi()).stopVm(name);
     }
-    const { data } = await apiClient.post(`/vms/${name}/stop`);
+    const { data } = await apiClient.post<{ readonly message: string }>(`/vms/${encodeURIComponent(name)}/stop`);
     return data;
   },
   deleteVm: async (name: string) => {
     if (useMockApi) {
       return (await loadDebugMockApi()).deleteVm(name);
     }
-    const { data } = await apiClient.delete(`/vms/${name}`);
+    const { data } = await apiClient.delete<{ readonly message: string }>(`/vms/${encodeURIComponent(name)}`);
     return data;
   },
   createConsoleTicket: async (name: string) => {
     if (useMockApi) {
       return (await loadDebugMockApi()).createConsoleTicket(name);
     }
-    const { data } = await apiClient.post(`/vms/${name}/console-ticket`);
+    const { data } = await apiClient.post<ConsoleTicketResponse>(`/vms/${encodeURIComponent(name)}/console-ticket`);
     return data;
   },
   getOffers: async () => {
     if (useMockApi) {
       return (await loadDebugMockApi()).getOffers();
     }
-    const { data } = await apiClient.get('/vm-offers');
+    const { data } = await apiClient.get<VmOffersResponse>('/vm-offers');
     return data;
   },
   claimOffer: async (name: string, payload: ClaimVmOfferPayload) => {
     if (useMockApi) {
       return (await loadDebugMockApi()).claimOffer(name, payload);
     }
-    const { data } = await apiClient.post(`/vm-offers/${name}/claim`, payload);
+    const { data } = await apiClient.post<VmResponse>(`/vm-offers/${encodeURIComponent(name)}/claim`, payload);
     return data;
   },
 };
@@ -174,111 +173,105 @@ export const adminApi = {
     if (useMockApi) {
       return (await loadDebugMockApi()).getUsers();
     }
-    const { data } = await apiClient.get('/admin/users');
-    if (data && data.users) {
-      data.users = data.users.map((u: BackendAdminUser) => ({
-        ...u,
-        accessLevel: u.access_level
-      }));
-    }
-    return data;
+    const { data } = await apiClient.get<unknown>('/admin/users');
+    return usersSchema.parse(data);
   },
   updateUserAccess: async (nameOrUsername: string, accessLevel: number) => {
     if (useMockApi) {
       return (await loadDebugMockApi()).updateUserAccess(nameOrUsername, accessLevel);
     }
-    const { data } = await apiClient.patch(`/admin/users/${nameOrUsername}/access-level`, { access_level: accessLevel });
+    const { data } = await apiClient.patch<{ readonly message: string }>(`/admin/users/${encodeURIComponent(nameOrUsername)}/access-level`, { access_level: accessLevel });
     return data;
   },
   deleteUser: async (nameOrUsername: string) => {
     if (useMockApi) {
       return (await loadDebugMockApi()).deleteUser(nameOrUsername);
     }
-    const { data } = await apiClient.delete(`/admin/users/${nameOrUsername}`);
+    const { data } = await apiClient.delete<{ readonly message: string }>(`/admin/users/${encodeURIComponent(nameOrUsername)}`);
     return data;
   },
   getVms: async () => {
     if (useMockApi) {
       return (await loadDebugMockApi()).getAdminVms();
     }
-    const { data } = await apiClient.get('/admin/vms');
+    const { data } = await apiClient.get<GlobalVmsResponse>('/admin/vms');
     return data;
   },
   forceStopVm: async (namespace: string, name: string) => {
     if (useMockApi) {
       return (await loadDebugMockApi()).forceStopVm(namespace, name);
     }
-    const { data } = await apiClient.patch(`/admin/vms/${namespace}/${name}/power`, { powerState: 'Off' });
+    const { data } = await apiClient.patch<{ readonly message: string }>(`/admin/vms/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/power`, { powerState: 'Off' });
     return data;
   },
   deleteVm: async (namespace: string, name: string) => {
     if (useMockApi) {
       return (await loadDebugMockApi()).deleteAdminVm(namespace, name);
     }
-    const { data } = await apiClient.delete(`/admin/vms/${namespace}/${name}`);
+    const { data } = await apiClient.delete<{ readonly message: string }>(`/admin/vms/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`);
     return data;
   },
   getSettings: async () => {
     if (useMockApi) {
       return (await loadDebugMockApi()).getSettings();
     }
-    const { data } = await apiClient.get('/admin/settings');
+    const { data } = await apiClient.get<ConfigResponse>('/admin/settings');
     return data;
   },
   saveDomain: async (baseDomain: string) => {
     if (useMockApi) {
       return (await loadDebugMockApi()).saveDomain(baseDomain);
     }
-    const { data } = await apiClient.post('/admin/domain', { baseDomain });
+    const { data } = await apiClient.post<ConfigResponse>('/admin/domain', { baseDomain });
     return data;
   },
   saveHTTPSPolicy: async (payload: HTTPSPolicyPayload) => {
     if (useMockApi) {
       return (await loadDebugMockApi()).saveHTTPSPolicy(payload);
     }
-    const { data } = await apiClient.post('/admin/https', payload);
+    const { data } = await apiClient.post<ConfigResponse>('/admin/https', payload);
     return data;
   },
   saveSSHGateway: async (payload: SSHGatewayPayload) => {
     if (useMockApi) {
       return (await loadDebugMockApi()).saveSSHGateway(payload);
     }
-    const { data } = await apiClient.post('/admin/ssh-gateway', payload);
+    const { data } = await apiClient.post<ConfigResponse>('/admin/ssh-gateway', payload);
     return data;
   },
   saveAdminContact: async (adminContact: string) => {
     if (useMockApi) {
       return (await loadDebugMockApi()).saveAdminContact(adminContact);
     }
-    const { data } = await apiClient.post('/admin/admin-contact', { adminContact });
+    const { data } = await apiClient.post<ConfigResponse>('/admin/admin-contact', { adminContact });
     return data;
   },
   createVmOffer: async (payload: AdminCreateVmOfferPayload) => {
     if (useMockApi) {
       return (await loadDebugMockApi()).createVmOffer(payload);
     }
-    const { data } = await apiClient.post('/admin/vm-offers', payload);
+    const { data } = await apiClient.post<VmOfferResponse>('/admin/vm-offers', payload);
     return data;
   },
   deleteVmOffer: async (namespace: string, name: string) => {
     if (useMockApi) {
       return (await loadDebugMockApi()).deleteVmOffer(namespace, name);
     }
-    const { data } = await apiClient.delete(`/admin/vm-offers/${namespace}/${name}`);
+    const { data } = await apiClient.delete<{ readonly message: string }>(`/admin/vm-offers/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`);
     return data;
   },
   rotateRuntimeSecrets: async (payload: RuntimeSecretRotation) => {
     if (useMockApi) {
       return (await loadDebugMockApi()).rotateRuntimeSecrets(payload);
     }
-    const { data } = await apiClient.post('/admin/runtime-secrets/rotate', payload);
+    const { data } = await apiClient.post<ConfigResponse>('/admin/runtime-secrets/rotate', payload);
     return data;
   },
   saveCert: async (payload: CertPayload) => {
     if (useMockApi) {
       return (await loadDebugMockApi()).saveCert(payload);
     }
-    const { data } = await apiClient.post('/admin/cert', payload);
+    const { data } = await apiClient.post<ConfigResponse>('/admin/cert', payload);
     return data;
   },
 };

@@ -39,9 +39,9 @@ environment:
   IMAGE_TAG                   image tag, default dev-<timestamp>
   KITE_DEV_SHOW_PLAN          print plan table, default true
   KITE_DEV_DRY_RUN            print steps without running commands, default false
-  FRONTEND_VITE_BUILD_MODE    frontend-only build mode, default production
-  FRONTEND_VITE_API_BASE_URL  frontend-only API base URL, default /api/v1
-  FRONTEND_VITE_USE_MOCK      frontend-only mock mode, default false
+  FRONTEND_NEXT_BUILD_MODE    frontend-only build mode, default production
+  FRONTEND_NEXT_API_BASE_URL  frontend-only API base URL, default /api/v1
+  FRONTEND_NEXT_USE_MOCK      frontend-only mock mode, default false
 EOF
 }
 
@@ -128,11 +128,11 @@ build_component_for_cluster() {
   context="$(component_context "${component}")"
 
   if [[ "${component}" == "frontend" ]]; then
-    # frontend는 Vite build arg가 이미지 안의 API 경로와 mock 여부를 결정한다.
+    # frontend는 Next.js public build args가 이미지 안의 API 경로와 mock 여부를 결정한다.
     build_args=(
-      --build-arg "VITE_BUILD_MODE=${FRONTEND_VITE_BUILD_MODE}"
-      --build-arg "VITE_API_BASE_URL=${FRONTEND_VITE_API_BASE_URL}"
-      --build-arg "VITE_USE_MOCK=${FRONTEND_VITE_USE_MOCK}"
+      --build-arg "NEXT_PUBLIC_KITE_MODE=${FRONTEND_NEXT_BUILD_MODE}"
+      --build-arg "NEXT_PUBLIC_API_BASE_URL=${FRONTEND_NEXT_API_BASE_URL}"
+      --build-arg "NEXT_PUBLIC_USE_MOCK=${FRONTEND_NEXT_USE_MOCK}"
     )
   fi
 
@@ -208,9 +208,9 @@ print_component_plan() {
   print_plan_row "dry run" "${KITE_DEV_DRY_RUN:-false}"
 
   if [[ "${component}" == "frontend" ]]; then
-    print_plan_row "vite mode" "${FRONTEND_VITE_BUILD_MODE}"
-    print_plan_row "vite api" "${FRONTEND_VITE_API_BASE_URL}"
-    print_plan_row "vite mock" "${FRONTEND_VITE_USE_MOCK}"
+    print_plan_row "next mode" "${FRONTEND_NEXT_BUILD_MODE}"
+    print_plan_row "next api" "${FRONTEND_NEXT_API_BASE_URL}"
+    print_plan_row "next mock" "${FRONTEND_NEXT_USE_MOCK}"
   fi
   echo
 }

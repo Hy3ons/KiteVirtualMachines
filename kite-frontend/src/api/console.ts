@@ -1,7 +1,7 @@
-import { apiClient } from './axios';
+import { apiClient } from './http';
 import type { ConsoleTicketResponse } from './types';
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1';
 
 type ConsoleTicketRequestOptions = {
   readonly signal?: AbortSignal;

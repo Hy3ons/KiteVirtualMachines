@@ -13,6 +13,7 @@ export type SignupPayload = {
 export type KiteUser = {
   readonly access_level: number;
   readonly username: string;
+  readonly email: string;
   readonly namespace: string;
   readonly profile_image: string;
 };
@@ -67,7 +68,7 @@ export type ConfigResponse = {
   };
 };
 
-export type VmPhase = 'Running' | 'Stopped' | 'Creating' | 'Terminating';
+export type VmPhase = 'Running' | 'Stopped' | 'Creating' | 'Terminating' | 'Provisioning' | 'Ready' | 'Deleting' | 'Failed';
 
 export type UserVm = {
   readonly id: string;

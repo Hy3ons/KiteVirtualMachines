@@ -1,38 +1,27 @@
-import React from 'react';
-import { Button, Space, Typography } from 'antd';
-import { GithubOutlined } from '@ant-design/icons';
+'use client';
 
-const { Text } = Typography;
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { GithubOutlined, ArrowUpOutlined } from '@ant-design/icons';
+import { Brand } from './Brand';
 
-export const GlobalFooter: React.FC = () => (
-  <footer className="global-footer">
-    <div className="global-footer-inner">
-      <div className="global-footer-brand">
-        <img src="/favicon.png" alt="Kite Logo" className="global-footer-logo" />
-        <div>
-          <Text strong className="global-footer-title">Kite</Text>
-          <Text className="global-footer-subtitle">Opensource Private Cloud</Text>
-        </div>
+// GlobalFooter appears on public pages; the operational workspace has its own rail.
+// Path selection avoids mounting account-dependent components outside AuthProvider.
+export function GlobalFooter() {
+  const pathname = usePathname();
+  if (pathname.startsWith('/dashboard') || pathname.startsWith('/admin')) return null;
+  return (
+    <footer className="public-footer">
+      <div className="public-footer-top">
+        <Brand />
+        <p>Kite는 Kubernetes 기반으로 가상머신을 할당하는 작은 클라우드 서비스입니다. 소규모 팀이 한 대의 온프레미스 컴퓨터에서, 단일 노드 환경의 격리된 VM 작업 공간을 운영하도록 설계했습니다.</p>
+        <a href="https://github.com/Hy3ons/KiteVirtualMachines" target="_blank" rel="noreferrer"><GithubOutlined /> GitHub에서 함께 만들기 <ArrowUpOutlined className="diagonal-arrow" /></a>
       </div>
-
-      <p className="global-footer-purpose">
-        Kite는 Kubernetes와 KubeVirt 위에서 개인과 팀이 필요한 VM을 더 쉽게 빌리고 관리할 수 있도록 만든 오픈소스 도구입니다.
-        작은 인프라도 공정하게 나누고, 학습과 실험의 진입 장벽을 낮추는 마음으로 만들고 있습니다.
-      </p>
-
-      <Space size={16} wrap className="global-footer-meta">
-        <Button
-          type="link"
-          icon={<GithubOutlined />}
-          href="https://github.com/Hy3ons/KiteVirtualMachines"
-          target="_blank"
-          className="global-footer-link"
-        >
-          GitHub Repository
-        </Button>
-        <Text className="global-footer-credit">Created by Hy3ons</Text>
-        <Text className="global-footer-license">MIT License</Text>
-      </Space>
-    </div>
-  </footer>
-);
+      <div className="public-footer-bottom">
+        <span>© {new Date().getUTCFullYear()} Kite. Created by Hy3ons.</span>
+        <nav aria-label="이용 안내 및 정책"><Link href="/kite-docs">이용 가이드</Link><Link href="/privacy">개인정보처리방침</Link><Link href="/terms">서비스 이용약관</Link></nav>
+        <span>Open source. On your terms.</span>
+      </div>
+    </footer>
+  );
+}

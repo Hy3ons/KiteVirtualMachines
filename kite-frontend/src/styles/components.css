@@ -1,0 +1,65 @@
+/* Ant Design remains the interaction layer; these rules unify its surface language. */
+.ant-app { min-width: 0; }
+.ant-typography { overflow-wrap: anywhere; }
+.ant-btn { transition: background var(--motion-fast) var(--ease), color var(--motion-fast) var(--ease), opacity var(--motion-fast) var(--ease), transform var(--motion-fast) var(--ease); }
+.ant-btn:active:not(:disabled) { transform: scale(.98); }
+.ant-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.ant-btn-primary { box-shadow: none; }
+.ant-input-affix-wrapper, .ant-input, .ant-input-number { font-family: var(--font-sans); }
+.ant-input-affix-wrapper .ant-input { border-radius: 0; }
+.ant-input-prefix { color: var(--ink-muted); }
+.ant-select:not(.ant-select-sm) { --ant-select-padding-horizontal: var(--inset-control); }
+.ant-select-dropdown { padding: var(--space-2); border-radius: var(--radius-md); }
+.ant-select-dropdown .ant-select-item-option { align-items: center; min-height: 40px; }
+.ant-form-item-label > label { font-size: 13px; font-weight: 500; }
+.ant-form-item-explain, .ant-form-item-extra { font-size: 12px; }
+.ant-tooltip .ant-tooltip-container,
+.ant-tooltip-unique-container:not(.ant-tooltip-unique-container-hidden) { display: grid; align-content: center; min-height: 40px; padding: var(--space-2) var(--space-3); font-size: 12px; line-height: 20px; overflow-wrap: anywhere; }
+.ant-card { border-color: var(--line); box-shadow: none; }
+.ant-card:not(.ant-card-hoverable):hover { box-shadow: none; }
+.ant-tag { display: inline-flex; align-items: center; min-height: 24px; font-size: 11px; line-height: 18px; padding: 2px var(--space-2); border-color: transparent; border-radius: var(--radius-sm); }
+.ant-popover .ant-popover-container { padding: var(--inset-popover); border-radius: var(--radius-md); }
+.ant-dropdown .ant-dropdown-menu { padding: var(--space-2); border-radius: var(--radius-md); }
+.ant-dropdown .ant-dropdown-menu-item { display: flex; align-items: center; min-height: 40px; padding: var(--space-2) var(--space-3); line-height: 20px; border-radius: var(--radius-sm); }
+.ant-table-wrapper { min-width: 0; }
+.ant-table-wrapper .ant-table-content { overflow-x: auto; }
+.ant-table-wrapper .ant-table { min-width: 0; border-end-start-radius: var(--radius-md); border-end-end-radius: var(--radius-md); }
+.ant-table-wrapper .ant-table > .ant-table-container { border: 1px solid var(--line); border-radius: var(--radius-md); }
+.ant-table-wrapper .ant-table-container > .ant-table-content { border-radius: calc(var(--radius-md) - 1px); }
+.ant-table-wrapper .ant-table-container > .ant-table-content > table { border-radius: inherit; }
+.ant-table-wrapper .ant-table-container::before,
+.ant-table-wrapper .ant-table-container::after { bottom: 0; border-radius: inherit; }
+.ant-table-wrapper .ant-table-cell { word-break: keep-all; }
+.ant-table-wrapper .ant-table-thead > tr > th { font-size: 12px; font-weight: 500; }
+.ant-table-wrapper .ant-table-tbody > tr:last-child > td { border-bottom: 0; }
+.ant-table-wrapper .ant-spin-container::after { border-radius: var(--radius-md); }
+.ant-table-cell .ant-btn { white-space: nowrap; }
+@supports (corner-shape: squircle) {
+  .ant-table-wrapper .ant-table,
+  .ant-table-wrapper .ant-table-container,
+  .ant-table-wrapper .ant-table-content,
+  .ant-table-wrapper .ant-spin-container::after,
+  .ant-descriptions-view { corner-shape: squircle; }
+}
+.ant-tabs { min-width: 0; }
+.ant-tabs-nav { min-width: 0; }
+.ant-tabs-tab { font-size: 14px; }
+.ant-tabs-nav::before { border-bottom-color: var(--line) !important; }
+.ant-descriptions-view { overflow: hidden; border-radius: var(--radius-md); }
+.ant-descriptions-item-content { overflow-wrap: anywhere; }
+.ant-modal-title { font-weight: 600; line-height: 28px; padding-inline-end: var(--space-8); }
+.ant-modal .ant-modal-container { padding: var(--inset-panel); }
+.ant-modal .ant-modal-header { margin-bottom: var(--space-5); }
+.ant-modal .ant-modal-close { top: calc(var(--inset-panel) + (28px - 40px) / 2); inset-inline-end: calc(var(--inset-panel) + (28px - 40px) / 2); }
+.modal-title.ant-typography { margin: 0; font-size: 18px; line-height: 28px; }
+.ant-modal-container, .ant-drawer-container { border-radius: var(--radius-lg); }
+.ant-drawer .ant-drawer-header, .ant-drawer .ant-drawer-body, .ant-drawer .ant-drawer-footer { padding: var(--inset-panel); }
+.ant-drawer-right .ant-drawer-container { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.ant-alert { font-size: 13px; }
+.ant-spin-container { min-width: 0; }
+.form-alert { margin-bottom: var(--space-4); }
+.form-note { padding: var(--space-4); margin-block-end: var(--space-6); border-radius: var(--radius-md); background: var(--surface); color: var(--ink-secondary); font-size: 12px; }
+.form-actions { margin-bottom: 0; text-align: right; }
+.form-actions .ant-form-item-control-input-content { display: flex; justify-content: flex-end; gap: var(--space-2); }
+.drawer-stack { display: flex; flex-direction: column; gap: var(--space-6); }
+.code-block { padding: var(--space-4); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); font-family: var(--font-mono); overflow-wrap: anywhere; white-space: pre-wrap; }
