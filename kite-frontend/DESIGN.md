@@ -229,8 +229,9 @@ width. It is an in-memory UI preference; account data stays in page-local stores
   fixed 44px flex tile aligned with the section title.
 - AuthPanel: labelled email/password, inline validation, submit busy state,
   current session actions. Login/signup continue to use authApi.
-  Login field labels use the shared 16px control inset on both sides; form items
-  have a 16px bottom gap. Signup keeps its existing 24px field spacing.
+  Login and signup field labels use the shared 16px control inset on both sides.
+  Label wrappers have no vertical padding, placing labels directly above their
+  inputs. Login form items have a 16px bottom gap; signup keeps its 24px field spacing.
 - Ant Design overlays: consistent modal/drawer/input/button tokens; existing
   validation, popconfirm, error notification and pending indicators preserved.
 
