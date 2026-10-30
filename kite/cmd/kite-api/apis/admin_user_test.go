@@ -8,6 +8,7 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic/fake"
@@ -40,6 +41,35 @@ func TestManagerCanChangeOnlyReadOnlyAndUserLevels(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	for _, body := range []string{`{}`, `{"access_level":null}`} {
+		req = httptest.NewRequest(http.MethodPatch, "/api/v1/admin/users/target/access-level", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		addAccessTokenCookie(req, managerToken)
+		rec = httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected missing access level to be rejected, got %d", rec.Code)
+		}
+	}
+
+	// An explicit zero is a valid downgrade, distinct from a missing JSON field.
+	req = httptest.NewRequest(http.MethodPatch, "/api/v1/admin/users/target/access-level", strings.NewReader(`{"access_level":0}`))
+	req.Header.Set("Content-Type", "application/json")
+	addAccessTokenCookie(req, managerToken)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected Level 0 downgrade to succeed, got %d: %s", rec.Code, rec.Body.String())
+	}
+	target, err := dynamicClient.Resource(userTestGVR).Get(req.Context(), "target", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("failed to read downgraded user: %v", err)
+	}
+	level, found, err := unstructured.NestedInt64(target.Object, "spec", "access_level")
+	if err != nil || !found || level != int64(auth.AccessLevelReadOnly) {
+		t.Fatalf("expected persisted Level 0, got %d (found=%t, err=%v)", level, found, err)
 	}
 
 	req = httptest.NewRequest(http.MethodPatch, "/api/v1/admin/users/target/access-level", strings.NewReader(`{"access_level":2}`))
