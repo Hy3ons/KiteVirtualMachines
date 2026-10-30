@@ -9,8 +9,8 @@ export function generateMetadata(): Promise<Metadata> {
   return createPageMetadata('Kite', { home: true, path: '/' });
 }
 
-// Page renders public content with a request-scoped verified account for the header.
+// Page uses the request's verified cookie session for the header and primary action.
 export default async function Page() {
   const user = await getSession();
-  return <AuthProvider key={user ? user.username + ':' + user.access_level : 'anonymous'} user={user}><LandingPage /></AuthProvider>;
+  return <AuthProvider key={user ? user.username + ':' + user.access_level : 'anonymous'} user={user}><LandingPage startHref={user ? '/dashboard' : '/login'} /></AuthProvider>;
 }

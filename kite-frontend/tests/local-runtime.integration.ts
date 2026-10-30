@@ -94,6 +94,21 @@ describe('real Next -> Go -> isolated Minikube', () => {
     await expect(member.vmApi.createVm({ name: 'forbidden', domainPrefix: 'forbidden', sshId: 'qa', sshPassword: randomBytes(24).toString('hex'), disk: 10 })).rejects.toMatchObject({ status: 403 });
   });
 
+  test('landing CTA is rendered from the verified request cookie', async () => {
+    for (const [cookie, target] of [
+      ['', '/login'],
+      [adminCookie, '/dashboard'],
+      [memberCookie, '/dashboard'],
+      ['accessToken=invalid-session', '/login'],
+      ['', '/login'],
+    ] as const) {
+      const response = await page('/', cookie);
+      const html = await response.text();
+      expect(response.status).toBe(200);
+      expect(html.match(/<a\b[^>]*href="([^"]+)"[^>]*>Kite 시작하기/)?.[1]).toBe(target);
+    }
+  });
+
   test('real proxy cookies, authenticated SSR, route guards and logout', async () => {
     const cookie = await login(adminCredentials, `${frontend}/api/v1`);
     expect((await page('/dashboard')).status).toBe(307);

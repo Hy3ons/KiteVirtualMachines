@@ -7,16 +7,16 @@ import { GlobalHeader } from '../components/GlobalHeader';
 import { ConsolePreview } from '../components/marketing/ConsolePreview';
 import { LandingHeroCopy } from '../components/marketing/LandingHeroCopy';
 
-// LandingPage introduces Kite and links account access to the dedicated login route.
+// LandingPage introduces Kite; startHref is selected by the server's verified session.
 // Its bounded product animation demonstrates the existing UI without using live account data.
-export function LandingPage() {
+export function LandingPage({ startHref }: { readonly startHref: '/login' | '/dashboard' }) {
   return (
     <div className="public-page">
       <GlobalHeader />
       <main id="main-content" className="marketing-main">
         <section className="marketing-hero" aria-labelledby="marketing-title">
           <div className="marketing-content">
-            <LandingHeroCopy />
+            <LandingHeroCopy startHref={startHref} />
             <ConsolePreview />
           </div>
         </section>

@@ -227,6 +227,9 @@ width. It is an in-memory UI preference; account data stays in page-local stores
   Assigned VM offers use four Korean-labelled columns: name/image, specs, expiry
   and claim action, with a 680px table minimum. The gift glyph is centered in a
   fixed 44px flex tile aligned with the section title.
+- Landing primary action: "Kite 시작하기" links to /dashboard for an authenticated
+  request and /login otherwise. The server verifies the request cookie through
+  Go /me and includes the destination in initial HTML, without a client-side switch.
 - AuthPanel: labelled email/password, inline validation and submit busy state.
   Login/signup continue to use authApi. A successful login navigates directly
   to /dashboard with the new session cookie; no welcome panel appears in between.
