@@ -40,7 +40,10 @@ p { text-wrap: pretty; word-break: keep-all; overflow-wrap: anywhere; }
 .public-footer { width: min(calc(100% - 80px), var(--public-content-width)); margin: auto; border-top: 1px solid var(--line); padding: var(--space-8) 0 var(--space-7); }
 .public-footer-top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--space-7); align-items: start; padding-block-end: var(--space-9); }
 .public-footer-top p { max-width: 560px; margin: 0; color: var(--ink-secondary); font-size: 14px; line-height: 1.8; }
-.public-footer-top > a:last-child { min-height: 36px; font-size: 14px; display: flex; align-items: center; gap: var(--space-2); }
+.public-footer-repository { justify-self: start; white-space: nowrap; }
+.public-footer .public-footer-repository, .public-footer .public-footer-repository:hover { color: var(--canvas); }
+.public-footer-repository > .anticon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 20px; inline-size: 20px; block-size: 20px; font-size: 18px; line-height: 1; overflow: visible; }
+.public-footer-repository > .anticon > svg { display: block; inline-size: 18px; block-size: 18px; overflow: visible; }
 .public-footer-bottom { display: flex; align-items: center; justify-content: space-between; gap: var(--space-5); flex-wrap: wrap; border-top: 1px solid var(--line); padding-block-start: var(--space-6); font-size: 12px; color: var(--ink-muted); }
 .public-footer-bottom > nav { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); }
 .public-footer-bottom > nav > a { display: inline-flex; align-items: center; min-height: 44px; }
@@ -61,7 +64,6 @@ p { text-wrap: pretty; word-break: keep-all; overflow-wrap: anywhere; }
   .public-header-actions .button--compact { padding-inline: var(--space-3); }
   .public-footer { width: calc(100% - 40px); padding: var(--space-9) 0 var(--space-6); }
   .public-footer-top { grid-template-columns: minmax(0, 1fr); gap: var(--space-5); padding-block-end: var(--space-7); }
-  .public-footer-top > a:last-child { width: fit-content; min-height: 44px; }
   .public-footer-top p { font-size: 13px; }
   .public-footer-bottom { align-items: start; flex-direction: column; gap: var(--space-3); }
 }

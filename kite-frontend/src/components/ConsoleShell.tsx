@@ -73,7 +73,7 @@ export function ConsoleShell({ children, title, eyebrow, actions, section = 'wor
       <header className="console-topbar">
         <Button type="text" icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} aria-label={collapsed ? '사이드바 펼치기' : '사이드바 접기'} aria-expanded={!collapsed} aria-controls={navigationId} onClick={toggleSidebar} className="console-sidebar-toggle appbar-action" />
         <Button type="text" icon={menuOpen ? <CloseOutlined /> : <MenuOutlined />} aria-label={menuOpen ? '탐색 메뉴 닫기' : '탐색 메뉴 열기'} aria-expanded={menuOpen} aria-controls={navigationId} onClick={() => setMenuOpen(!menuOpen)} className="console-menu-toggle appbar-action" />
-        <Brand href={preview ? '/' : '/dashboard'} className="console-brand" prefetch={preview ? false : undefined} />
+        <Brand href="/" className="console-brand" prefetch={preview ? false : undefined} />
         <span className="console-product-name">Cloud console</span>
         <div className="console-topbar-end">
           {USE_MOCK_API && <span className="environment-label"><span />Mock</span>}

@@ -4,7 +4,15 @@
 .appbar-action:is(a, button):hover { color: var(--ink); }
 .appbar-action.ant-btn:not(:disabled):is(:hover, :active) { background: transparent; color: var(--ink); }
 .public-nav { gap: var(--space-2); }
-.account-menu-trigger { width: 40px; min-height: 40px; padding: 0; font-size: 18px; flex: none; }
+.public-repository > .anticon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 20px; inline-size: 20px; block-size: 20px; font-size: 18px; line-height: 1; overflow: visible; }
+.public-repository > .anticon > svg { display: block; flex: none; inline-size: 18px; block-size: 18px; overflow: visible; }
+.account-menu-trigger { min-width: 0; max-width: 240px; min-height: 48px; padding: var(--space-1) var(--space-3); font-size: 18px; flex: 0 1 auto; }
+.account-menu-trigger > .anticon { display: grid; place-items: center; flex: none; width: 20px; height: 20px; }
+.account-menu-summary { display: grid; min-width: 0; text-align: start; line-height: 1.4; }
+.account-menu-summary > strong, .account-menu-summary > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-menu-summary > strong { font-size: 14px; font-weight: 600; }
+.account-menu-summary > span { font-size: 12px; color: var(--ink-secondary); }
+.public-header-actions:has(.account-menu-trigger) { max-width: 100%; }
 .console-topbar .appbar-action.ant-btn { min-height: 40px; width: 40px; padding: 0; }
 .console-topbar .icon-link.appbar-action { padding: 0; min-height: 40px; }
 .console-topbar .icon-link.appbar-action:hover { background: transparent; }
