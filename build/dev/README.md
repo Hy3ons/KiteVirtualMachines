@@ -66,7 +66,43 @@ node build/dev/local-smoke.mjs
 FRONTEND_ORIGIN=http://127.0.0.1:5173 node build/dev/local-smoke.mjs
 ```
 
-The QA account is `local-admin@kite.local`; its generated password is saved in
+### Isolated signup and frontend integration checks
+
+To verify the **first** signup without deleting accounts in `kite-dev`, use a
+separate Docker profile. These commands require OrbStack's Docker engine and
+keep the existing profile intact:
+
+```sh
+minikube start -p kite-local-qa --driver=docker --container-runtime=containerd --cpus=4 --memory=4096
+/opt/homebrew/bin/kubectl --context kite-local-qa apply -f build/kite/crds.yaml
+/opt/homebrew/bin/kubectl --context kite-local-qa wait --for=condition=Established --timeout=60s \
+  crd/kiteusers.hy3ons.github.io crd/kitevirtualmachines.hy3ons.github.io crd/kitevirtualmachineoffers.hy3ons.github.io
+# Select this local context BEFORE starting Go; it reads ~/.kube/config.
+/opt/homebrew/bin/kubectl config use-context kite-local-qa
+# Terminal 1, from kite/:
+GIN_MODE=release go run ./cmd/kite-api
+# Terminal 2, from kite-frontend/, with mock data and debug sessions disabled:
+NEXT_PUBLIC_USE_MOCK=false NEXT_PUBLIC_DEBUG_DIRECT_ROUTES=false npm run dev
+# Terminal 3, from kite-frontend/:
+npm run test:local
+```
+
+`test:local` is opt-in and excluded from `npm test`. It checks the current context
+is `kite-local-qa`, then calls the real loopback Go/Next servers using the same
+Zod endpoint adapters as the application. The first run needs a fresh QA profile:
+it creates `qa-admin@kite.local` (Level 3), followed by `qa-member@kite.local`
+(Level 0). Generated passwords are stored in `.local-dev/kite-local-qa/admin.json`
+and `member.json` with owner-only permissions. Reruns reuse those accounts.
+
+Checks cover cookie sessions, incorrect passwords, permission changes including
+Level 0, forbidden operations, authenticated SSR and redirects, VM CRD creation,
+power intent, deletion intent, and assigned-offer creation/claim/deletion.
+The suite prepares only these QA users' namespaces and removes its temporary
+VM/offer CRDs. Accounts remain for manual UI QA. It does not boot VMs, connect
+a console, or use a browser. Full runtime components are still required for
+those checks. Stop the QA profile with `minikube stop -p kite-local-qa` when done.
+
+The original `local-smoke.mjs` account is `local-admin@kite.local`; its generated password is saved in
 `.local-dev/login.json` with owner-only permissions, ignored by Git. Repeated
 checks reuse it. If you delete and recreate the cluster, remove that local
 credentials file before re-running the smoke check. Other signups start with
