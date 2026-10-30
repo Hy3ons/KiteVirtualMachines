@@ -97,20 +97,32 @@ Social previews use generated 1200×630 JPEG cards at
 `/images/social/kite-social.jpg` and `/images/social/kite-guide-social.jpg`.
 Image URLs, canonical URLs and crawler discovery use the current public origin.
 For a fixed deployment, set `KITE_PUBLIC_URL=https://your-public-host` (origin
-only, no path/query/credentials). Set it in the build environment to prerender
-public metadata, and keep it consistent in the running environment. Without it,
+only, no path/query/credentials), consistently in build and runtime environments.
+Public pages render a request-scoped verified account header, so they remain
+dynamic even with a fixed metadata origin and must not be shared-cached with
+personalized account data. Anonymous requests skip Go's /me lookup. Without a fixed origin,
 metadata resolves per request so a single self-hosted image works across domains.
 Ingress must overwrite `X-Forwarded-Host` and `X-Forwarded-Proto` with trusted
 values. Forwarded headers are used only to format public metadata, never as an
 authentication source or a server-side fetch destination.
 
-Login/signup, console screens and draft policy pages are `noindex, nofollow`;
+Login/signup, console screens and policy pages are `noindex, nofollow`;
 private and missing pages do not inherit the home canonical URL. `sitemap.xml`
 lists the homepage and guide, while `robots.txt` excludes API/console crawling.
-When the legal drafts become effective, update their indexing and sitemap policy.
+Policy wording and its repository data-flow audit are maintained in
+`docs/privacy-data-audit.md`. Actual operator contacts, retention and Google OAuth
+settings still require installation-specific verification; removing draft wording
+does not supply those facts. Public accessibility does not depend on search indexing.
 
 With the dev server running, `npm run audit:metadata` checks actual HTTP metadata,
 social image responses, crawler head rendering, canonical URLs and indexing.
+An authenticated `/login` correctly passes by redirecting to the landing page.
+After `npm run build:prod`, run `npm run audit:session` to start an isolated
+production standalone server with synthetic Go-shaped HTTP fixtures. It checks
+anonymous/authenticated pages, login redirects, role guards, concurrent identity
+isolation, private cache headers and the absence of hidden-panel VM reads. It uses
+ephemeral local ports, stops its own servers, performs GET requests only and does
+not connect to a live Go backend, Kubernetes cluster or browser.
 Pass a different request origin and optional expected public origin as arguments:
 `npm run audit:metadata -- http://127.0.0.1:5174 https://your-public-host`.
 Private routes are checked in mock mode or validated as login redirects when

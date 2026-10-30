@@ -74,7 +74,13 @@ The public footer starts with a neutral hairline and presents the brand, a short
 single-node VM platform description and repository link. Its policy navigation
 wraps on small screens. Privacy and terms pages share the public header, 1000px
 outer content limit and a centered 760px reading column, with numbered sections,
-44px document links and visible draft status until operating details are fixed.
+44px document links and a last-revised date. Policy prose describes account/VM
+storage, authentication hashes, request/gateway logs, console transport, the
+external font CDN and Google authentication's permitted data scope. Service
+terms distinguish software functionality, installation operations and VM-user
+responsibilities, with announced idle-VM management and emergency intervention.
+Deployment identity, retention and actual OAuth configuration require operational
+verification; never replace unknown facts with invented providers or periods.
 Documentation uses a compact page introduction, sticky chapter navigation and
 task-oriented prose. The VM offer chapter pairs an original generated conceptual
 illustration with live numbered captions, role prerequisites, actual menu paths,
@@ -114,16 +120,33 @@ width. It is an in-memory UI preference; account data stays in page-local stores
 
 - Brand: original black folded-kite mark, wordmark, compact icon-only variant.
 - GlobalHeader: public wordmark, docs/repository links, login/console action.
+  Authenticated public and console headers use a single person-icon button.
+  Its click popover has 24px inset, 24px outer radius and a 304px reading width,
+  showing the verified name/email and freshly requested personal VM totals.
+  Count all non-deleting VMs and show Running separately; loading/errors never
+  imply zero. The existing /vms adapter runs only while this popover is open.
+  Include dashboard and logout actions, Escape dismissal and keyboard focus.
+  Public headers receive a request-scoped Go-verified session; no shared cache
+  or browser storage supplies identity. Inert demo headers never fetch account data.
+  Header text/icon actions share a gray squircle hover surface, using an isolated
+  pseudo-element that rises 3px and scales .94 to 1 while fading in over 200ms.
+  Text stays stationary. Keyboard focus/open state retain the surface; reduced
+  motion switches immediately. Filled primary buttons retain their own style.
   Equal flexible side columns flank an auto-width navigation column, centering
   navigation on the page independently of the logo and account-action widths.
 - ConsoleShell: sticky header, role-aware nav, account identity, logout,
   breadcrumbs, main landmark; a keyboard-accessible mobile disclosure menu.
-  Account identity uses a neutral person icon, username and registration email
-  from Go's verified session profile, with truncation for long addresses.
+  Account identity uses a neutral person icon; the popup shows username and
+  registration email from Go's verified profile, wrapping long addresses.
 - PageHeading: eyebrow, title, description, wrapping action cluster.
 - MetricCard: truthful current resource totals, unit, descriptive footer; no
   historical trend or utilization without API data. Loading uses em dashes.
 - StatusBadge: neutral/green/amber/red wash, dot and readable state text.
+  Serial-console pages use the VM name as their page heading and keep VM power
+  status in the heading's action cluster. The console panel has one connection
+  badge such as "Serial console connected"; no blue connection-alert strip.
+  Non-connected states retain their diagnostic text in the panel header, with
+  error ink for failure. Live and marketing console frames share this behavior.
   Gateway alert headings place the label and badge as direct flex children with
   centered alignment and a 32px minimum row height to avoid inline baseline drift.
   SSH Gateway activation/settings opens a modal from the status heading. Only its
@@ -168,6 +191,68 @@ offer the permitted next action; errors describe failures without granting acces
 Navigation uses real links and aria-current. Icon-only controls have names.
 
 ## 6. Motion
+
+The landing product demo reuses the live ConsoleShell, account summary, VM table,
+toolbar, creation form and console framing. The desktop canvas is 1920 × 920,
+with a 224px rail and the actual 900px console content centered in the remaining
+area. The whole canvas scales into a maximum 900px browser frame, giving a
+431px-high viewport at full width and a deliberately distant product view.
+Chrome follows the user's Safari compact-tabs screenshot: one 48px light bar,
+with 8px red/yellow/green window controls (#ff5f57/#febc2e/#28c840), a floating
+sidebar capsule and circular back control. A #ececed pill groups two quiet Kite
+tabs and a white active address capsule, followed by share/new-tab/tab-overview
+tools in another floating capsule. Native-style icons stay 14px, surfaces have
+white hairlines and restrained neutral shadows, and the address shows the host
+while its full route/title follows the scene. At narrow widths, background tabs
+and sharing hide while the active address and main controls remain. No
+visible product-demo label is shown. The pastel hero has zero bottom padding
+and clips the browser's final 64px (32px on phones) at its rounded lower edge,
+as in the user's reference. Playback controls precede the window so the crop
+does not hide them. The hero's outer shadow carries its lower edge into white.
+This changes the landing demo only.
+The embedded application is inert and isolated from real APIs,
+authentication, prefetch, WebSocket connections and persistent navigation state.
+Modal/dropdown layers remain inside the scaled canvas rather than document.body.
+
+GSAP is the user-selected motion engine and is loaded only as the demo approaches
+the viewport. A 54s story clock at 1.4× speed (about 39s elapsed) loops through
+login, VM creation, serial-console commands, dashboard return, VM deletion with
+confirmation, and the landing page. The landing scene uses shared hero copy and
+an inert public header without recursively embedding this demo. Its start button
+leads into the next cycle. Console text demonstrates whoami, ls, mkdir, cd,
+git init, touch, git status, uname and echo with matching prompts/output.
+Deleting changes Running to Terminating, then removes the local row and resets
+the resource counters. No live command, account or API delete is performed.
+DOM-relative pointer targets use
+the canvas scale, with power3.inOut moves (0.45–0.6s), a brief six-degree travel
+tilt that settles before clicking, 0.10s click presses and readable typing.
+The original ink arrow has a white edge and neutral shadow; its tip is the
+coordinate origin. A counter-scaled appearance layer keeps the cursor 28 × 35px
+on screen even as the product UI shrinks. Click feedback is one quiet neutral
+halo, not a trail. Modal field gaps stay 16px; its body has a bounded scroll area
+under a stationary title/close row. Console content and terminal output also own
+their scroll areas. Timed native scrollTop transitions use a cubic ease, clamp to
+each element's actual scroll range and position the next target before pointer
+movement. Scroll state is derived from timeline time and measured DOM geometry,
+including replay and chapter jumps; the landing document is never scrolled.
+The console terminal is 400px high and follows new output inside its own frame.
+Other animations use transform/opacity; story values change discretely.
+The page camera is separate from browser chrome and the pointer. It smoothly
+zooms/pans to the login form (1.75×), workspace creation (1.65×), each VM form
+field (2×), the VM actions/menu (1.75–1.85×) and terminal (1.75×). Each task
+returns to the full page before a scene change, including the final console.
+Framing uses actual DOM geometry and the visible hero crop, with clamped pans
+and cubic 0.23–0.55s story-time transitions. Scroll calculations account for
+camera scale; pointer moves start after scroll/framing settles. Reduced motion
+uses the full-page camera immediately, with no zoom or pan animation.
+The timeline repeats indefinitely, pauses offscreen or in a hidden tab, supports explicit
+pause/replay, and is reverted on unmount. Chapter controls are available only in
+the explicit debug app mode; staging and production render no chapter navigation.
+There is no default sample-data disclaimer below the demo. Reduced motion starts
+paused with no animated cursor and disables playback; debug retains chapter
+selection, while staging/production show the static console. No literal beui.dev cursor
+demo matches this choreography; its loader reduced-motion/state-feedback pattern
+was inspected, while GSAP's context/timeline docs supply the actual mechanism.
 
 --motion-fast:150ms; --motion-normal:200ms; --ease:cubic-bezier(.2,.7,.2,1).
 Only modest control color and opacity transitions; press transform scale(.98).
@@ -233,7 +318,7 @@ direction, at 1200×630 JPEG: the general brand card and the guide's VM lifecycl
 variant. These are share assets, not screenshots or private resource previews.
 Every page has a Korean title/description, matching OG/Twitter text, absolute
 image URLs, dimensions, MIME type and image alt text. Public canonical URLs drop
-tracking queries; auth utilities, private pages, missing pages and draft policies
+tracking queries; auth utilities, private pages, missing pages and policy pages
 have no canonical and are not indexed. A fixed public origin can be configured;
 otherwise request-scoped trusted proxy/Host information supplies the origin.
 
