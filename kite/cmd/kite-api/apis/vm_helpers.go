@@ -53,9 +53,9 @@ func vmServiceFromDependencies(deps Dependencies) *vmservice.Service {
 	return vmservice.NewService(deps.DynamicClient, deps.Config.PasswordSalt)
 }
 
-// canMutateOwnVM reports whether an access level may change VMs in its own namespace.
+// canMutateOwnVM reports whether an access level may create or edit VM configuration.
 // accessLevel is read from the current KiteUser object rather than trusting only token claims.
-// The result is used by VM create, update, delete, and power handlers.
+// The result is used by create and update handlers; lifecycle actions rely on namespace ownership.
 func canMutateOwnVM(accessLevel int64) bool {
 	return accessLevel >= int64(auth.AccessLevelUser)
 }

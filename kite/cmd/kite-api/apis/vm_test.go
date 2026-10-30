@@ -194,7 +194,9 @@ func TestVMCreateRejectsMissingDomainPrefix(t *testing.T) {
 	}
 }
 
-func TestVMMutationsRejectLevelZeroUser(t *testing.T) {
+// TestLevelZeroCanOperateAssignedVM checks lifecycle access without granting creation or configuration rights.
+// It uses an authenticated Level 0 owner and verifies namespace isolation at the HTTP boundary.
+func TestLevelZeroCanOperateAssignedVM(t *testing.T) {
 	tokenService := newTestTokenService(t)
 	token, _, err := tokenService.IssueAccessToken("alice", auth.AccessLevelReadOnly)
 	if err != nil {
@@ -204,7 +206,7 @@ func TestVMMutationsRejectLevelZeroUser(t *testing.T) {
 	dynamicClient := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
 		userTestGVR:               "KiteUserList",
 		userTestVirtualMachineGVR: "KiteVirtualMachineList",
-	}, newUserTestObject("alice", "alice", "alice-ns", auth.AccessLevelReadOnly), newVirtualMachineTestObject("vm-a", "alice-ns"))
+	}, newUserTestObject("alice", "alice", "alice-ns", auth.AccessLevelReadOnly), newVirtualMachineTestObject("vm-a", "alice-ns"), newVirtualMachineTestObject("other-vm", "other-ns"))
 
 	gin.SetMode(gin.TestMode)
 	router := gin.Default()
@@ -223,11 +225,16 @@ func TestVMMutationsRejectLevelZeroUser(t *testing.T) {
 		method string
 		path   string
 		body   string
+		status int
 	}{
-		{name: "create", method: http.MethodPost, path: "/api/v1/vms", body: `{"name":"vm-b","domainPrefix":"vm-b","disk":"25Gi","sshId":"vmb","sshPassword":"secret-password"}`},
-		{name: "update", method: http.MethodPatch, path: "/api/v1/vms/vm-a", body: `{"domainPrefix":"vm-a"}`},
-		{name: "start", method: http.MethodPost, path: "/api/v1/vms/vm-a/start"},
-		{name: "delete", method: http.MethodDelete, path: "/api/v1/vms/vm-a"},
+		{name: "create", method: http.MethodPost, path: "/api/v1/vms", body: `{"name":"vm-b","domainPrefix":"vm-b","disk":"25Gi","sshId":"vmb","sshPassword":"secret-password"}`, status: http.StatusForbidden},
+		{name: "update", method: http.MethodPatch, path: "/api/v1/vms/vm-a", body: `{"cpu":64}`, status: http.StatusForbidden},
+		{name: "start", method: http.MethodPost, path: "/api/v1/vms/vm-a/start", status: http.StatusOK},
+		{name: "stop", method: http.MethodPost, path: "/api/v1/vms/vm-a/stop", status: http.StatusOK},
+		{name: "delete", method: http.MethodDelete, path: "/api/v1/vms/vm-a", status: http.StatusOK},
+		{name: "other start", method: http.MethodPost, path: "/api/v1/vms/other-vm/start", status: http.StatusNotFound},
+		{name: "other stop", method: http.MethodPost, path: "/api/v1/vms/other-vm/stop", status: http.StatusNotFound},
+		{name: "other delete", method: http.MethodDelete, path: "/api/v1/vms/other-vm", status: http.StatusNotFound},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -238,8 +245,8 @@ func TestVMMutationsRejectLevelZeroUser(t *testing.T) {
 
 			router.ServeHTTP(rec, req)
 
-			if rec.Code != http.StatusForbidden {
-				t.Fatalf("expected status %d, got %d: %s", http.StatusForbidden, rec.Code, rec.Body.String())
+			if rec.Code != tt.status {
+				t.Fatalf("expected status %d, got %d: %s", tt.status, rec.Code, rec.Body.String())
 			}
 		})
 	}

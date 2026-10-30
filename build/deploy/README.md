@@ -33,6 +33,12 @@ calling `ghcr-install.sh`. This keeps the installation process identical to
 production while avoiding maintainer mistakes from memorized environment
 variables.
 
+Stage images include `linux/amd64` and `linux/arm64`. The golden-image helper
+detects the cluster architecture and imports the corresponding Ubuntu image.
+For mixed-architecture clusters, set `KITE_VM_ARCH=amd64` or `arm64` explicitly
+and ensure the VM scheduling policy uses matching nodes. Production images keep
+their existing AMD64 publishing policy.
+
 By default the installer applies Longhorn, KubeVirt, CDI, Kite storage, golden
 image, and Kite runtime manifests. On apt-based Linux hosts it also installs
 missing Longhorn host packages such as `open-iscsi` and `nfs-common`.

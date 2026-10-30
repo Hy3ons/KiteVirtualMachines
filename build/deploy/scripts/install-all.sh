@@ -347,7 +347,7 @@ main() {
 
   if [[ "${APPLY_GOLDEN_IMAGE}" == "true" ]]; then
     log "applying golden image"
-    kubectl apply -f "${ROOT_DIR}/build/kite-storage/golden-images"
+    "${ROOT_DIR}/build/deploy/scripts/apply-golden-image.sh"
     "${ROOT_DIR}/build/deploy/scripts/wait-golden-image.sh" ubuntu-22.04
   fi
 

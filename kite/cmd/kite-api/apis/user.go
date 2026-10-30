@@ -2,6 +2,7 @@ package apis
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -134,7 +135,7 @@ func userGetHandler(deps Dependencies) gin.HandlerFunc {
 
 // currentUserHandler returns the KiteUser that matches the current token subject.
 // deps provides the dynamic Kubernetes client used by internal/account.
-// The response omits the stored password hash.
+// The response omits the stored password hash and includes the verified JWT expiry.
 // This handler is used by frontend startup code to load the signed-in user profile.
 func currentUserHandler(deps Dependencies) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -172,7 +173,8 @@ func currentUserHandler(deps Dependencies) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"user": user,
+			"user":      user,
+			"expiresAt": time.Unix(claims.ExpiresAt, 0).UTC().Format(time.RFC3339),
 		})
 	}
 }

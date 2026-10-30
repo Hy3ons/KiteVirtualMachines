@@ -14,9 +14,9 @@ set -euo pipefail
 #   IMAGE_REGISTRY: default kite-dev
 #   IMAGE_TAG: default dev-$(date +%Y%m%d%H%M%S)
 #   PUSH_IMAGES: default false
-#   FRONTEND_VITE_BUILD_MODE: default production
-#   FRONTEND_VITE_API_BASE_URL: default /api/v1
-#   FRONTEND_VITE_USE_MOCK: default false
+#   FRONTEND_NEXT_BUILD_MODE: default production
+#   FRONTEND_NEXT_API_BASE_URL: default /api/v1
+#   FRONTEND_NEXT_USE_MOCK: default false
 #   MINIKUBE_PROFILE: default minikube
 #   MINIKUBE_DRIVER: default (empty)
 #   MINIKUBE_CPUS: default 4
@@ -38,8 +38,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PUSH_IMAGES_WAS_SET="${PUSH_IMAGES+x}"
-FRONTEND_VITE_BUILD_MODE_WAS_SET="${FRONTEND_VITE_BUILD_MODE+x}"
-FRONTEND_VITE_USE_MOCK_WAS_SET="${FRONTEND_VITE_USE_MOCK+x}"
+FRONTEND_NEXT_BUILD_MODE_WAS_SET="${FRONTEND_NEXT_BUILD_MODE+x}"
+FRONTEND_NEXT_USE_MOCK_WAS_SET="${FRONTEND_NEXT_USE_MOCK+x}"
 MINIKUBE_START_WAS_SET="${MINIKUBE_START+x}"
 K3S_IMPORT_IMAGES_WAS_SET="${K3S_IMPORT_IMAGES+x}"
 K3D_LOAD_IMAGES_WAS_SET="${K3D_LOAD_IMAGES+x}"
@@ -54,9 +54,9 @@ TMP_ROOT="${TMP_ROOT%/}"
 KUSTOMIZE_OVERLAY_DIR="$(mktemp -d "${ROOT_DIR}/build/dev/.kustomize.XXXXXX")"
 RENDERED_MANIFEST="$(mktemp "${TMP_ROOT}/kite-install.XXXXXX")"
 PUSH_IMAGES="${PUSH_IMAGES:-false}"
-FRONTEND_VITE_BUILD_MODE="${FRONTEND_VITE_BUILD_MODE:-production}"
-FRONTEND_VITE_API_BASE_URL="${FRONTEND_VITE_API_BASE_URL:-/api/v1}"
-FRONTEND_VITE_USE_MOCK="${FRONTEND_VITE_USE_MOCK:-false}"
+FRONTEND_NEXT_BUILD_MODE="${FRONTEND_NEXT_BUILD_MODE:-production}"
+FRONTEND_NEXT_API_BASE_URL="${FRONTEND_NEXT_API_BASE_URL:-/api/v1}"
+FRONTEND_NEXT_USE_MOCK="${FRONTEND_NEXT_USE_MOCK:-false}"
 
 # Minikube 옵션은 KITE_CLUSTER=minikube이거나 auto가 minikube context를 감지할 때만 사용된다.
 MINIKUBE_PROFILE="${MINIKUBE_PROFILE:-minikube}"
@@ -173,7 +173,7 @@ configure_interactive_dev_options() {
 
   log "interactive dev deploy options"
   if [[ "${component}" == "all" || "${component}" == "frontend" ]]; then
-    kite_prompt_configure_bool FRONTEND_VITE_USE_MOCK "${FRONTEND_VITE_USE_MOCK_WAS_SET}" "frontend 이미지를 mock API 모드로 빌드할까요?"
+    kite_prompt_configure_bool FRONTEND_NEXT_USE_MOCK "${FRONTEND_NEXT_USE_MOCK_WAS_SET}" "frontend 이미지를 mock API 모드로 빌드할까요?"
   fi
 
   case "${cluster}" in
@@ -194,21 +194,21 @@ configure_interactive_dev_options() {
       ;;
   esac
 
-  log "dev deploy choices: FRONTEND_VITE_USE_MOCK=${FRONTEND_VITE_USE_MOCK}, PUSH_IMAGES=${PUSH_IMAGES}, MINIKUBE_START=${MINIKUBE_START}, K3S_IMPORT_IMAGES=${K3S_IMPORT_IMAGES}, K3D_LOAD_IMAGES=${K3D_LOAD_IMAGES}, KIND_LOAD_IMAGES=${KIND_LOAD_IMAGES}"
+  log "dev deploy choices: FRONTEND_NEXT_USE_MOCK=${FRONTEND_NEXT_USE_MOCK}, PUSH_IMAGES=${PUSH_IMAGES}, MINIKUBE_START=${MINIKUBE_START}, K3S_IMPORT_IMAGES=${K3S_IMPORT_IMAGES}, K3D_LOAD_IMAGES=${K3D_LOAD_IMAGES}, KIND_LOAD_IMAGES=${KIND_LOAD_IMAGES}"
 }
 
 normalize_frontend_mock_build_mode() {
-  if [[ "${FRONTEND_VITE_USE_MOCK}" != "true" ]]; then
+  if [[ "${FRONTEND_NEXT_USE_MOCK}" != "true" ]]; then
     return 0
   fi
-  if [[ "${FRONTEND_VITE_BUILD_MODE}" == "debug" ]]; then
+  if [[ "${FRONTEND_NEXT_BUILD_MODE}" == "debug" ]]; then
     return 0
   fi
-  if [[ -n "${FRONTEND_VITE_BUILD_MODE_WAS_SET}" ]]; then
-    echo "[kite-dev] FRONTEND_VITE_USE_MOCK=true requires FRONTEND_VITE_BUILD_MODE=debug, got ${FRONTEND_VITE_BUILD_MODE}" >&2
+  if [[ -n "${FRONTEND_NEXT_BUILD_MODE_WAS_SET}" ]]; then
+    echo "[kite-dev] FRONTEND_NEXT_USE_MOCK=true requires FRONTEND_NEXT_BUILD_MODE=debug, got ${FRONTEND_NEXT_BUILD_MODE}" >&2
     exit 1
   fi
-  FRONTEND_VITE_BUILD_MODE="debug"
+  FRONTEND_NEXT_BUILD_MODE="debug"
 }
 
 # minikube image build 전략을 고를 때 현재 profile의 driver를 확인한다.
@@ -571,11 +571,11 @@ build_images_for_cluster() {
   controller_image="$(image_name kite-controller)"
   gateway_image="$(image_name kite-gateway)"
   frontend_image="$(image_name kite-frontend)"
-  # frontend 이미지는 빌드 시점에 Vite 환경값이 정적으로 들어간다.
+  # frontend 이미지는 빌드 시점에 Next.js 공개 환경값이 정적으로 들어간다.
   frontend_build_args=(
-    --build-arg "VITE_BUILD_MODE=${FRONTEND_VITE_BUILD_MODE}"
-    --build-arg "VITE_API_BASE_URL=${FRONTEND_VITE_API_BASE_URL}"
-    --build-arg "VITE_USE_MOCK=${FRONTEND_VITE_USE_MOCK}"
+    --build-arg "NEXT_PUBLIC_KITE_MODE=${FRONTEND_NEXT_BUILD_MODE}"
+    --build-arg "NEXT_PUBLIC_API_BASE_URL=${FRONTEND_NEXT_API_BASE_URL}"
+    --build-arg "NEXT_PUBLIC_USE_MOCK=${FRONTEND_NEXT_USE_MOCK}"
   )
 
   case "${cluster}" in

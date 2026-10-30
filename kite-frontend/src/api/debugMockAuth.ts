@@ -9,6 +9,7 @@ export const debugAuthApi = {
     user: {
       access_level: DEBUG_ADMIN_SESSION.accessLevel,
       username: credentials.email === 'admin' ? 'admin' : credentials.email,
+      email: credentials.email === 'admin' ? DEBUG_ADMIN_SESSION.email : credentials.email,
       namespace: DEBUG_ADMIN_SESSION.namespace,
       profile_image: '',
     },
@@ -45,10 +46,12 @@ export const debugAuthApi = {
     message: 'debug session cleared',
   }),
 
-  getMe: async (): Promise<{ readonly user: AuthResponse['user'] }> => ({
+  getMe: async (): Promise<{ readonly user: AuthResponse['user']; readonly expiresAt: string }> => ({
+    expiresAt: new Date(Date.now() + 3600_000).toISOString(),
     user: {
       access_level: DEBUG_ADMIN_SESSION.accessLevel,
       username: DEBUG_ADMIN_SESSION.username,
+      email: DEBUG_ADMIN_SESSION.email,
       namespace: DEBUG_ADMIN_SESSION.namespace,
       profile_image: '',
     },
@@ -59,6 +62,6 @@ type SignupDebugUser = {
   readonly username: string;
   readonly email: string;
   readonly namespace: string;
-  readonly accessLevel: number;
+  readonly accessLevel: 0;
   readonly status: 'Pending';
 };

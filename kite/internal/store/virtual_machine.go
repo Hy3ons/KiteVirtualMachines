@@ -6,6 +6,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/util/retry"
 )
 
 // KiteVirtualMachineSpec contains the spec fields stored in the KiteVirtualMachine CRD.
@@ -83,17 +84,24 @@ func (s *VirtualMachineStore) ListAll(ctx context.Context) (*unstructured.Unstru
 // Update replaces the spec of an existing namespaced KiteVirtualMachine custom resource.
 // ctx controls the Kubernetes API request lifetime.
 // record provides metadata.name, metadata.namespace, and desired spec values.
+// Controller status or finalizer writes can race with API updates, so conflicts
+// retry with a fresh object while preserving its latest status and metadata.
 // The returned object is the KiteVirtualMachine resource after the Kubernetes API update.
 func (s *VirtualMachineStore) Update(ctx context.Context, record KiteVirtualMachineRecord) (*unstructured.Unstructured, error) {
-	current, err := s.Get(ctx, record.Namespace, record.Name)
-	if err != nil {
-		return nil, err
-	}
+	var updated *unstructured.Unstructured
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		current, err := s.Get(ctx, record.Namespace, record.Name)
+		if err != nil {
+			return err
+		}
 
-	next := current.DeepCopy()
-	next.Object["spec"] = kiteVirtualMachineSpecMap(record.Spec)
+		next := current.DeepCopy()
+		next.Object["spec"] = kiteVirtualMachineSpecMap(record.Spec)
 
-	return s.dynamicClient.Resource(kiteVirtualMachineGVR).Namespace(record.Namespace).Update(ctx, next, metav1.UpdateOptions{})
+		updated, err = s.dynamicClient.Resource(kiteVirtualMachineGVR).Namespace(record.Namespace).Update(ctx, next, metav1.UpdateOptions{})
+		return err
+	})
+	return updated, err
 }
 
 // Delete deletes a namespaced KiteVirtualMachine custom resource.

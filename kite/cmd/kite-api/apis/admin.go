@@ -12,7 +12,8 @@ import (
 )
 
 type accessLevelUpdateRequest struct {
-	AccessLevel int `json:"access_level" binding:"required"`
+	// A pointer distinguishes the valid Level 0 from an omitted or null field.
+	AccessLevel *int `json:"access_level" binding:"required"`
 }
 
 type domainUpdateRequest struct {
@@ -91,7 +92,7 @@ func adminUserAccessLevelHandler(deps Dependencies) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "invalid request body"})
 			return
 		}
-		if !canCurrentUserChangeAccessLevel(c, deps, c.Param("name"), req.AccessLevel) {
+		if !canCurrentUserChangeAccessLevel(c, deps, c.Param("name"), *req.AccessLevel) {
 			return
 		}
 
@@ -100,9 +101,8 @@ func adminUserAccessLevelHandler(deps Dependencies) gin.HandlerFunc {
 			return
 		}
 
-		level := req.AccessLevel
 		user, err := accountService.Update(c.Request.Context(), userName, account.UpdateRequest{
-			AccessLevel: &level,
+			AccessLevel: req.AccessLevel,
 		})
 		if err != nil {
 			writeAccountError(c, err, "failed to update user access level")

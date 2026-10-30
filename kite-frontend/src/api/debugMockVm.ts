@@ -81,16 +81,16 @@ export const debugVmApi = {
 
   stopVm: async (name: string): Promise<VmResponse> => debugVmApi.updateVm(name, { powerState: 'Off' }),
 
-  deleteVm: async (name: string): Promise<VmResponse> => {
+  deleteVm: async (name: string) => {
     const state = readDebugState();
     const vm = state.vms.find((candidate) => candidate.name === name) || makeSyntheticVm(name, state);
     const deleted: UserVm = { ...vm, delete: true, phase: 'Terminating' };
     writeDebugState({ ...state, vms: replaceVm(state.vms, name, deleted) });
-    return { vm: deleted };
+    return { message: 'virtual machine delete requested', vm: deleted };
   },
 
-  createConsoleTicket: async (name: string): Promise<ConsoleTicketResponse> => ({
-    ticket: `debug-console-${name}`,
-    expiresAt: new Date(Date.now() + 30_000).toISOString(),
-  }),
+  createConsoleTicket: async (name: string, options: { readonly signal?: AbortSignal } = {}): Promise<ConsoleTicketResponse> => {
+    options.signal?.throwIfAborted();
+    return { ticket: `debug-console-${name}`, expiresAt: new Date(Date.now() + 30_000).toISOString() };
+  },
 };

@@ -40,9 +40,24 @@ func NewTokenService(secret string, ttl time.Duration) (*TokenService, error) {
 	}, nil
 }
 
+// IssueAccessToken signs subject and accessLevel using the configured lifetime.
+// It returns the JWT and expiry for API authentication and its tests.
 func (s *TokenService) IssueAccessToken(subject string, accessLevel int) (string, time.Time, error) {
+	return s.IssueAccessTokenWithLifetime(subject, accessLevel, s.ttl)
+}
+
+// IssueAccessTokenWithLifetime signs subject and accessLevel for the shorter of
+// lifetime and the configured TTL. Login uses lifetime to respect cookie retention.
+// It returns the signed JWT, its expiry, or an error for a non-positive lifetime.
+func (s *TokenService) IssueAccessTokenWithLifetime(subject string, accessLevel int, lifetime time.Duration) (string, time.Time, error) {
+	if lifetime <= 0 || s.ttl <= 0 {
+		return "", time.Time{}, fmt.Errorf("token lifetime must be positive")
+	}
+	if lifetime > s.ttl {
+		lifetime = s.ttl
+	}
 	now := time.Now().UTC()
-	expiresAt := now.Add(s.ttl)
+	expiresAt := now.Add(lifetime)
 
 	header := map[string]string{
 		"alg": "HS256",

@@ -1,5 +1,121 @@
 # Kite Development Install
 
+## Host Go API + Docker Minikube + Next.js
+
+For frontend work, keep Node and Go on macOS and use a dedicated `kite-dev`
+Minikube cluster as the API's Kubernetes storage. OrbStack must be running;
+its Docker engine is enough. No additional OrbStack VM is needed.
+Prerequisites: `minikube`, `kubectl`, Docker, Go matching `kite/go.mod`, and
+Node.js 22.12 or newer. On macOS, missing cluster tools can be installed with
+`brew install minikube kubernetes-cli`.
+
+From the repository root:
+
+```sh
+# Start Docker Minikube (4 CPUs, 4 GiB) and apply only the three Kite CRDs.
+bash build/dev/local.sh setup
+# Terminal 1: run the real API directly with Go on :8080.
+bash build/dev/local.sh api
+# Terminal 2: preview UI using browser-local mock data on :5173.
+cd kite-frontend
+npm ci
+npm run dev
+```
+
+To check real Go requests and SSR, stop the frontend dev process with Ctrl+C
+and run `npm run stage` in the same directory. Both modes use
+`http://127.0.0.1:5173`; run one frontend mode at a time. `stage` here is the
+npm mode, independent of the Git `stage` branch or a deployed staging cluster.
+`KITE_API_INTERNAL_URL` defaults to `http://127.0.0.1:8080` for SSR and the local
+same-origin `/api/v1` proxy. No frontend Docker build is needed for this flow.
+
+```text
+Browser -> Next.js :5173 (dev: mock data / stage: Go API + SSR)
+                   -> Go :8080 -> ~/.kube/config -> Docker Minikube kite-dev
+```
+
+The kubeconfig stays on macOS at `~/.kube/config`, with certificates under
+`~/.minikube`. Setup selects the `kite-dev` context. The current API code reads
+that exact kubeconfig file; `local.sh api` refuses to start if its current
+context points elsewhere. All setup kubectl writes explicitly target
+`kite-dev`. The API bootstraps namespace `kite`, `kite-runtime-config`, and
+`kite-runtime-secret` in this local cluster.
+On Apple Silicon macOS, the script prefers `/opt/homebrew/bin/kubectl` over
+OrbStack's bundled copy. Override it with `KITE_KUBECTL_BIN` if needed. For manual
+commands, use a kubectl version compatible with the cluster (for example,
+`/opt/homebrew/bin/kubectl --context kite-dev get nodes`).
+
+No controller, KubeVirt, CDI, Longhorn, golden image, ingress, or Kite workload
+Deployment is installed by this lightweight setup. Login, settings, user
+records, and VM/offer CRD requests can be developed; actual VM provisioning,
+power changes, console, and SSH need the full runtime. After a real signup,
+prepare its namespace before testing VM CRD creation (normally the controller
+does this):
+
+```sh
+kubectl --context kite-dev get kiteusers
+bash build/dev/local.sh namespace ku-REPLACE-WITH-RESOURCE-NAME
+```
+
+HTTP checks run without a browser:
+
+```sh
+# Go must be running. First run creates a local QA administrator in a fresh cluster.
+node build/dev/local-smoke.mjs
+# Additionally verify stage proxy, session redirects, and authenticated SSR pages:
+FRONTEND_ORIGIN=http://127.0.0.1:5173 node build/dev/local-smoke.mjs
+```
+
+### Isolated signup and frontend integration checks
+
+To verify the **first** signup without deleting accounts in `kite-dev`, use a
+separate Docker profile. These commands require OrbStack's Docker engine and
+keep the existing profile intact:
+
+```sh
+minikube start -p kite-local-qa --driver=docker --container-runtime=containerd --cpus=4 --memory=4096
+/opt/homebrew/bin/kubectl --context kite-local-qa apply -f build/kite/crds.yaml
+/opt/homebrew/bin/kubectl --context kite-local-qa wait --for=condition=Established --timeout=60s \
+  crd/kiteusers.hy3ons.github.io crd/kitevirtualmachines.hy3ons.github.io crd/kitevirtualmachineoffers.hy3ons.github.io
+# Select this local context BEFORE starting Go; it reads ~/.kube/config.
+/opt/homebrew/bin/kubectl config use-context kite-local-qa
+# Terminal 1, from kite/:
+GIN_MODE=release go run ./cmd/kite-api
+# Terminal 2, from kite-frontend/, with mock data and debug sessions disabled:
+NEXT_PUBLIC_USE_MOCK=false NEXT_PUBLIC_DEBUG_DIRECT_ROUTES=false npm run dev
+# Terminal 3, from kite-frontend/:
+npm run test:local
+```
+
+`test:local` is opt-in and excluded from `npm test`. It checks the current context
+is `kite-local-qa`, then calls the real loopback Go/Next servers using the same
+Zod endpoint adapters as the application. The first run needs a fresh QA profile:
+it creates `qa-admin@kite.local` (Level 3), followed by `qa-member@kite.local`
+(Level 0). Generated passwords are stored in `.local-dev/kite-local-qa/admin.json`
+and `member.json` with owner-only permissions. Reruns reuse those accounts.
+
+Checks cover cookie sessions, incorrect passwords, permission changes including
+Level 0, forbidden operations, authenticated SSR and redirects, VM CRD creation,
+power intent, deletion intent, and assigned-offer creation/claim/deletion.
+The suite prepares only these QA users' namespaces and removes its temporary
+VM/offer CRDs. Accounts remain for manual UI QA. It does not boot VMs, connect
+a console, or use a browser. Full runtime components are still required for
+those checks. Stop the QA profile with `minikube stop -p kite-local-qa` when done.
+
+The original `local-smoke.mjs` account is `local-admin@kite.local`; its generated password is saved in
+`.local-dev/login.json` with owner-only permissions, ignored by Git. Repeated
+checks reuse it. If you delete and recreate the cluster, remove that local
+credentials file before re-running the smoke check. Other signups start with
+read-only access. UI QA is manual; no Playwright or browser E2E is run.
+
+```sh
+bash build/dev/local.sh status
+# Stop Node and Go with Ctrl+C in their terminals, then stop the cluster:
+bash build/dev/local.sh stop
+```
+
+## Container deployment to a cluster
+
 `build/dev/dev.sh` builds the Kite API, controller, gateway, and frontend images with
 local Docker, then applies the shared `build/kite` manifests to the selected
 cluster.
@@ -55,13 +171,13 @@ only when the cluster pulls from a registry:
 PUSH_IMAGES=true IMAGE_REGISTRY=registry.example.com/kite KITE_CLUSTER=k8s build/dev/dev.sh
 ```
 
-The frontend image does not read `.env.*` files. `build/dev/dev.sh` injects Vite values
+The frontend Docker build excludes `.env.*` files. `build/dev/dev.sh` injects Next.js public values
 through Docker build args from the current shell session:
 
 ```sh
-FRONTEND_VITE_BUILD_MODE=production \
-FRONTEND_VITE_API_BASE_URL=/api/v1 \
-FRONTEND_VITE_USE_MOCK=false \
+FRONTEND_NEXT_BUILD_MODE=production \
+FRONTEND_NEXT_API_BASE_URL=/api/v1 \
+FRONTEND_NEXT_USE_MOCK=false \
 KITE_CLUSTER=k3s build/dev/dev.sh
 ```
 
@@ -106,13 +222,13 @@ build/dev/gateway.dev.sh
 build/dev/frontend.dev.sh
 ```
 
-The frontend script accepts the same Vite build environment as the full dev
+The frontend script accepts the same Next.js build environment as the full dev
 deploy:
 
 ```sh
-FRONTEND_VITE_BUILD_MODE=production \
-FRONTEND_VITE_API_BASE_URL=/api/v1 \
-FRONTEND_VITE_USE_MOCK=false \
+FRONTEND_NEXT_BUILD_MODE=production \
+FRONTEND_NEXT_API_BASE_URL=/api/v1 \
+FRONTEND_NEXT_USE_MOCK=false \
 IMAGE_TAG=frontend-qa \
 KITE_CLUSTER=k3s \
 build/dev/frontend.dev.sh

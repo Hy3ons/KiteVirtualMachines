@@ -36,9 +36,8 @@ type loginResponse struct {
 }
 
 const (
-	accessTokenCookieName        = "accessToken"
-	httpAccessTokenCookieMaxAge  = 10 * time.Minute
-	httpsAccessTokenCookieMaxAge = time.Hour
+	accessTokenCookieName   = "accessToken"
+	accessTokenCookieMaxAge = time.Hour
 )
 
 type accessTokenCookiePolicy struct {
@@ -92,6 +91,7 @@ func withConsoleDefaults(deps Dependencies) Dependencies {
 // deps provides the dynamic Kubernetes client, password salt, and token service from API startup.
 // The request email is matched against KiteUser spec.email and the password is verified against spec.password.
 // This handler is used by the frontend login page and stores the access token in an HTTP-only cookie.
+// JWT and response lifetime are capped by cookie retention to share one deadline.
 func loginHandler(deps Dependencies) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if deps.DynamicClient == nil {
@@ -131,7 +131,9 @@ func loginHandler(deps Dependencies) gin.HandlerFunc {
 			return
 		}
 
-		accessToken, expiresAt, err := deps.TokenService.IssueAccessToken(user.Username, int(user.AccessLevel))
+		cookiePolicy := accessTokenCookiePolicyForRequest(c, deps)
+		lifetime := min(cookiePolicy.maxAge, deps.Config.AccessTokenTTL)
+		accessToken, expiresAt, err := deps.TokenService.IssueAccessTokenWithLifetime(user.Username, int(user.AccessLevel), lifetime)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"message": "failed to issue access token",
@@ -139,11 +141,11 @@ func loginHandler(deps Dependencies) gin.HandlerFunc {
 			return
 		}
 
-		cookiePolicy := accessTokenCookiePolicyForRequest(c, deps)
+		cookiePolicy.maxAge = lifetime
 		c.Writer.Header().Add("Set-Cookie", cookiePolicy.accessTokenCookie(accessToken))
 
 		c.JSON(http.StatusOK, loginResponse{
-			ExpiresIn: int64(deps.Config.AccessTokenTTL.Seconds()),
+			ExpiresIn: int64(lifetime.Seconds()),
 			ExpiresAt: expiresAt.Format("2006-01-02T15:04:05Z07:00"),
 			User:      user,
 		})
@@ -163,15 +165,9 @@ func logoutHandler(deps Dependencies) gin.HandlerFunc {
 // deps provides live platform settings so forceHttps changes take effect without restarting kite-api.
 // The returned policy controls Secure and Max-Age for login and logout Set-Cookie headers.
 func accessTokenCookiePolicyForRequest(c *gin.Context, deps Dependencies) accessTokenCookiePolicy {
-	secure := requestUsesSecureCookie(c, deps)
-	maxAge := httpAccessTokenCookieMaxAge
-	if secure {
-		maxAge = httpsAccessTokenCookieMaxAge
-	}
-
 	return accessTokenCookiePolicy{
-		secure: secure,
-		maxAge: maxAge,
+		secure: requestUsesSecureCookie(c, deps),
+		maxAge: accessTokenCookieMaxAge,
 	}
 }
 

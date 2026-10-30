@@ -1,3 +1,4 @@
+import { readDebugState } from './debugMockState';
 import { debugAdminApi } from './debugMockAdmin';
 import { debugAuthApi } from './debugMockAuth';
 import { debugOfferApi } from './debugMockOffer';
@@ -8,5 +9,9 @@ export const debugMockApi = {
   ...debugVmApi,
   ...debugOfferApi,
   ...debugAdminApi,
-  getConfig: debugAdminApi.getSettings,
+  getConfig: async () => {
+    const { baseDomain, forceHttps, adminContact, hasTLSCertificate, sshGateway } = readDebugState().config;
+    const { status, ...gateway } = sshGateway;
+    return { config: { baseDomain, forceHttps, adminContact, hasTLSCertificate, sshGateway: { ...gateway, phase: status.phase, reason: status.reason, message: status.message } } };
+  },
 };
