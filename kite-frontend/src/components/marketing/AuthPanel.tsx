@@ -3,21 +3,17 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { App, Button } from 'antd';
-import { ArrowRightOutlined } from '@ant-design/icons';
+import { App } from 'antd';
 import { authApi } from '../../api';
 import { useAuthStore } from '../../store/useAuthStore';
-import { canManageUsers } from '../../domain/access';
-import { useLogout } from '../../hooks/useLogout';
 import { LoginForm } from './LoginForm';
 import type { LoginFormValues } from './LoginForm';
 
-// AuthPanel renders the dedicated login page's Go-backed form or current session actions.
-// Cookie ownership stays with the API; successful login refreshes the protected Next route.
+// AuthPanel renders the dedicated login page's Go-backed form.
+// Successful login requests the dashboard with the new API-owned session cookie.
 export function AuthPanel() {
   const { message, notification } = App.useApp();
-  const { login, authenticated, username, accessLevel } = useAuthStore();
-  const logout = useLogout();
+  const login = useAuthStore((state) => state.login);
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
@@ -34,43 +30,26 @@ export function AuthPanel() {
     }
   }, [notification, router]);
 
-  // submitLogin sends the labelled email and password to Go, then updates display state.
-  // values come from Ant Design's validated form; failures keep the user on the form.
+  // submitLogin sends validated form values to Go and navigates directly to the dashboard.
+  // A full navigation avoids refreshing the login route with the newly issued cookie.
+  // Failed requests keep the form available with an error message.
   const submitLogin = async (values: LoginFormValues) => {
     try {
       setLoading(true);
       const { user } = await authApi.login({ email: values.username, password: values.password });
       login(user);
-      message.success('로그인 되었습니다.');
-      router.push('/dashboard');
-      router.refresh();
+      window.location.replace('/dashboard');
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '로그인에 실패했습니다.');
-    } finally {
       setLoading(false);
+      message.error(error instanceof Error ? error.message : '로그인에 실패했습니다.');
     }
   };
 
   return (
     <div className="marketing-auth-panel">
-      {authenticated ? (
-        <div className="marketing-session">
-          <span className="marketing-eyebrow">Your workspace is ready</span>
-          <h1>{username}님,<br />다시 만나 반가워요.</h1>
-          <p>로그인된 계정으로 작업을 이어가세요.</p>
-          <Link href="/dashboard" className="marketing-button marketing-button--primary">내 가상머신으로 <ArrowRightOutlined /></Link>
-          {canManageUsers(accessLevel) && (
-            <Link href="/admin/dashboard" className="marketing-button marketing-button--secondary">Admin Console</Link>
-          )}
-          <Button type="text" onClick={logout} block>로그아웃</Button>
-        </div>
-      ) : (
-        <>
-          <div className="marketing-form-heading"><h1>Kite에 로그인</h1></div>
-          <LoginForm onFinish={submitLogin} loading={loading} />
-          <p className="marketing-form-footer">아직 계정이 없으신가요? <Link href="/signup">회원가입</Link></p>
-        </>
-      )}
+      <div className="marketing-form-heading"><h1>Kite에 로그인</h1></div>
+      <LoginForm onFinish={submitLogin} loading={loading} />
+      <p className="marketing-form-footer">아직 계정이 없으신가요? <Link href="/signup">회원가입</Link></p>
     </div>
   );
 }

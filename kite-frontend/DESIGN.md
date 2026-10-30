@@ -227,8 +227,9 @@ width. It is an in-memory UI preference; account data stays in page-local stores
   Assigned VM offers use four Korean-labelled columns: name/image, specs, expiry
   and claim action, with a 680px table minimum. The gift glyph is centered in a
   fixed 44px flex tile aligned with the section title.
-- AuthPanel: labelled email/password, inline validation, submit busy state,
-  current session actions. Login/signup continue to use authApi.
+- AuthPanel: labelled email/password, inline validation and submit busy state.
+  Login/signup continue to use authApi. A successful login navigates directly
+  to /dashboard with the new session cookie; no welcome panel appears in between.
   Login and signup field labels use the shared 16px control inset on both sides.
   Label wrappers have no vertical padding, placing labels directly above their
   inputs. Login form items have a 16px bottom gap; signup keeps its 24px field spacing.
