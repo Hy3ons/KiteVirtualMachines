@@ -176,11 +176,9 @@ width. It is an in-memory UI preference; account data stays in page-local stores
   At zero, clear display state, remove the cookie through Go and request login.
   Recheck the absolute deadline on tab focus/resume. Previews have no countdown.
   Its click popover has 24px inset, 24px outer radius and a 304px reading width,
-  showing the verified name/email and freshly requested personal VM totals.
-  Count all non-deleting VMs and show Running separately; loading/errors never
-  imply zero. The existing /vms adapter runs only while this popover is open.
+  showing the verified name/email without VM counts or extra usage API reads.
   Keep the live popover's content shell available while closed so Ant Design
-  can deliver the first open event; mount VM usage only after it opens. The
+  can deliver the first open event. The
   account actions include dashboard, admin-only system settings and logout.
   Include dashboard and logout actions, Escape dismissal and keyboard focus.
   Public headers receive a request-scoped Go-verified session; no shared cache
@@ -240,10 +238,19 @@ width. It is an in-memory UI preference; account data stays in page-local stores
   Login/signup continue to use authApi. A successful login navigates directly
   to /dashboard with the new session cookie; no welcome panel appears in between.
   Login and signup field labels use the shared 16px control inset on both sides.
-  Label wrappers have no vertical padding, placing labels directly above their
-  inputs. Login form items have a 16px bottom gap; signup keeps its 24px field spacing.
+  On the login page, labels have automatic height and 4px spacing above their
+  inputs, with an 8px gap between email and password fields. The password-to-submit
+  gap stays 16px; signup keeps its existing label geometry and 24px field spacing.
 - Ant Design overlays: consistent modal/drawer/input/button tokens; existing
   validation, popconfirm, error notification and pending indicators preserved.
+- Runtime secret status: a semantic definition list on a workspace-toned inset
+  surface, with a 16px radius and 16px horizontal content inset. Each row pairs a 14px
+  medium-weight name with the shared StatusBadge, centered on the same axis.
+  A neutral hairline separates the two rows; 12px vertical spacing keeps badges
+  clear of the corners. Present secrets use the green "생성됨" state, missing
+  secrets use red "없음", and unresolved status uses amber "확인 중". The list
+  announces updates politely. Rotation controls wrap below with an 8px gap and
+  20px separation from the status list; confirmation behavior stays unchanged.
 
 Default/hover/pressed/focus-visible are explicit for every custom control.
 Tooltips use 12px text with 20px line-height, a 40px minimum height, 8px vertical

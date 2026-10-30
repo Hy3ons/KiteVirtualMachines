@@ -28,17 +28,10 @@
 .account-panel-identity > div { display: grid; gap: var(--space-1); min-width: 0; }
 .account-panel-identity strong { font-size: 16px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
 .account-panel-identity > div > span { color: var(--ink-secondary); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
-.account-vm-usage { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin: var(--space-5) 0; }
-.account-vm-usage > div { padding: var(--space-3); border-radius: var(--radius-md); background: var(--surface); }
-.account-vm-usage dt { color: var(--ink-secondary); font-size: 11px; line-height: 1.5; }
-.account-vm-usage dd { margin: var(--space-2) 0 0; font-size: 24px; font-weight: 500; line-height: 1.25; font-variant-numeric: tabular-nums; }
-.account-vm-usage small { margin-inline-start: var(--space-1); font-size: 12px; color: var(--ink-secondary); }
-.account-usage-state { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); min-height: 88px; padding-block: var(--space-4); color: var(--ink-secondary); font-size: 12px; line-height: 1.7; }
-.account-retry { min-height: 36px; font-size: 12px; }
-.account-panel-actions { display: grid; gap: var(--space-1); }
+.account-panel-actions { display: grid; gap: var(--space-1); margin-block-start: var(--space-5); }
 .account-panel-actions > .appbar-action { justify-content: flex-start; width: 100%; font-size: 13px; }
 .account-panel-actions > .account-logout, .account-panel-actions > .account-logout:hover { color: var(--danger); }
-@supports (corner-shape: squircle) { .appbar-action, .appbar-action::before, .account-vm-usage > div { corner-shape: squircle; } }
+@supports (corner-shape: squircle) { .appbar-action, .appbar-action::before { corner-shape: squircle; } }
 @media (max-width: 720px) {
   .public-nav { gap: var(--space-1); }
   .public-page:not(.demo-login) > .public-header .public-repository, .public-page:not(.demo-login) > .public-header .public-login-link { display: none; }

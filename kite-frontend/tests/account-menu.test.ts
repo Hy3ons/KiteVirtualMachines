@@ -10,12 +10,11 @@ import { AccountMenu } from '../src/components/AccountMenu';
 const harness = vi.hoisted(() => {
   const changes: boolean[] = [];
   const popup: { requestOpen: ((visible: boolean) => void) | null; content: ReactNode } = { requestOpen: null, content: null };
-  return { changes, popup, accessLevel: 3, usage: vi.fn() };
+  return { changes, popup, accessLevel: 3 };
 });
 
 vi.mock('../src/store/useAuthStore', () => ({ useAuthStore: () => ({ username: 'review-user', email: 'review@example.test', accessLevel: harness.accessLevel }) }));
 vi.mock('../src/hooks/useLogout', () => ({ useLogout: () => vi.fn() }));
-vi.mock('../src/components/AccountVmUsage', () => ({ AccountVmUsage: () => { harness.usage(); return null; } }));
 vi.mock('antd', async (importOriginal) => {
   const actual = await importOriginal<typeof import('antd')>();
   return { ...actual, Popover: (props: PopoverProps) => {
@@ -35,7 +34,6 @@ beforeEach(() => {
   harness.popup.content = null;
   harness.popup.requestOpen = null;
   harness.accessLevel = 3;
-  harness.usage.mockClear();
   tooltip.default = forwardRef<TooltipRef, TooltipProps>((props, ref) => {
     // The browser-free renderer has no DOM instance to expose through the ref.
     void ref;
@@ -56,19 +54,20 @@ describe('account popup without a browser', () => {
     expect(harness.changes).toEqual([true]);
   });
 
-  it('provides identity and navigation while deferring VM queries until opened', () => {
+  it('provides identity and navigation without VM inventory counters', () => {
     // Given a closed administrator menu, including a possible pre-render of its content.
     renderToStaticMarkup(createElement(AccountMenu));
     const content = harness.popup.content;
     if (!isValidElement(content)) throw new TypeError('Account popup must have an initial content shell');
     // When its shell is rendered.
     const html = renderToStaticMarkup(content);
-    // Then identity/navigation are ready but no VM usage component has mounted.
+    // Then identity/navigation remain and inventory counters are absent.
     expect(html).toContain('review-user');
     expect(html).toContain('review@example.test');
     expect(html).toContain('href="/dashboard"');
     expect(html).toContain('href="/admin/settings"');
-    expect(harness.usage).not.toHaveBeenCalled();
+    expect(html).not.toContain('보유 가상머신');
+    expect(html).not.toContain('실행 중');
   });
 
   it('omits administrator settings for a regular account', () => {
@@ -92,6 +91,5 @@ describe('account popup without a browser', () => {
     // Then no popup content, state notification or VM query is exposed.
     expect(harness.popup.content).toBeNull();
     expect(harness.changes).toEqual([]);
-    expect(harness.usage).not.toHaveBeenCalled();
   });
 });

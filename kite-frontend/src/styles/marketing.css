@@ -50,6 +50,9 @@
 .marketing-auth-panel .ant-form-item { margin-bottom: var(--space-4); }
 .marketing-auth-panel .ant-form-item .ant-form-item-label,
 .marketing-signup-form .ant-form-item .ant-form-item-label { padding: 0 var(--inset-control); }
+.marketing-login-page .marketing-auth-panel .ant-form-item:first-child { margin-bottom: var(--space-2); }
+.marketing-login-page .marketing-auth-panel .ant-form-item .ant-form-item-label { display: flex; padding-block: 0 var(--space-1); }
+.marketing-login-page .marketing-auth-panel .ant-form-item-label > label { height: auto; line-height: 1.5; }
 .marketing-signup-form .ant-form-item { margin-bottom: var(--space-6); }
 .marketing-auth-panel .ant-input-lg, .marketing-auth-panel .ant-input-affix-wrapper-lg,
 .marketing-signup-form .ant-input-lg, .marketing-signup-form .ant-input-affix-wrapper-lg { min-height: 48px; font-size: 14px; }
