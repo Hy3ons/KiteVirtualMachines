@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { LegalPage } from '@/components/LegalPage';
+import { getSession } from '@/server/api';
 import { createPageMetadata } from '@/lib/metadata';
 
 // generateMetadata describes the public privacy policy using the shared page metadata.
@@ -13,9 +14,10 @@ export function generateMetadata(): Promise<Metadata> {
 
 // Privacy documents repository-backed data flows and the permitted scope of Google authentication.
 // Deployment-specific operator identity and retention settings must match the actual installation.
-export default function Privacy() {
+export default async function Privacy() {
+  const user = await getSession();
   return (
-    <LegalPage title="개인정보처리방침" document="privacy">
+    <LegalPage title="개인정보처리방침" document="privacy" user={user}>
       <section aria-labelledby="privacy-operator">
         <h2 id="privacy-operator">1. 적용 범위와 개인정보처리자</h2>
         <p>이 방침은 Kite 웹사이트의 계정 인증, 가상머신 할당·관리와 SSH Gateway·웹 콘솔 접속 과정에서 처리하는 개인정보에 적용됩니다. 개인정보처리자는 이용 중인 Kite 설치 환경을 직접 운영하는 개인 또는 조직(이하 “운영자”)입니다.</p>

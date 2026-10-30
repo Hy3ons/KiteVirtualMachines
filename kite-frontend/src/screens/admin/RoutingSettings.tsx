@@ -7,7 +7,7 @@ import type { AdminSettingsState } from './useAdminSettings';
 const { Title, Paragraph, Text } = Typography;
 
 // RoutingSettings renders its labelled settings group using shared form state and SSR defaults.
-export function RoutingSettings({ settings, initialData }: { readonly settings: AdminSettingsState; readonly initialData?: ConfigResponse }) {
+export function RoutingSettings({ settings, initialData }: { readonly settings: AdminSettingsState; readonly initialData?: ConfigResponse | null }) {
   const { domainForm, loadingDomain, handleSaveDomain, forceHTTPS, loadingHTTPS, handleToggleForceHTTPS } = settings;
   return (
     <>

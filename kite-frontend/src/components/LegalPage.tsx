@@ -2,18 +2,18 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { GlobalHeader } from './GlobalHeader';
 import { AuthProvider } from '../store/useAuthStore';
-import { getSession } from '../server/api';
+import type { SessionUser } from '../api/session';
 
 type LegalPageProps = {
   readonly title: string;
   readonly document: 'privacy' | 'terms';
+  readonly user: SessionUser | null;
   readonly children: ReactNode;
 };
 
 // LegalPage gives public policy documents a shared reading layout and document navigation.
 // document identifies the active policy; children supplies its server-rendered sections.
-export async function LegalPage({ title, document, children }: LegalPageProps) {
-  const user = await getSession();
+export function LegalPage({ title, document, user, children }: LegalPageProps) {
   return (
     <AuthProvider key={user ? user.username + ':' + user.access_level : 'anonymous'} user={user}>
     <div className="public-page">

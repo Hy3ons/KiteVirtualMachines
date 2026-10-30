@@ -16,6 +16,14 @@ export class ApiError extends Error {
   }
 }
 
+// ApiContractError identifies a successful response that was not valid JSON.
+export class ApiContractError extends Error {
+  readonly name = 'ApiContractError';
+  constructor(readonly method: string, readonly endpoint: string) {
+    super(`Invalid JSON response for ${method} ${endpoint}`);
+  }
+}
+
 type ClientOptions = {
   readonly cookie?: string;
   readonly timeout?: number;
@@ -33,7 +41,7 @@ export function createApiClient(baseUrl: string, options: ClientOptions = {}) {
 
   // request preserves the method, payload and cancellation supplied by API adapters.
   // It returns decoded JSON using the existing data response contract.
-  async function request<T>(method: string, endpoint: string, settings: Options = {}): Promise<{ readonly data: T }> {
+  async function request(method: string, endpoint: string, settings: Options = {}): Promise<{ readonly data: unknown }> {
     const response = await transport(`${baseUrl.replace(/\/$/, '')}${endpoint}`, { ...settings, method });
     if (!response.ok) {
       const raw: unknown = await response.json().catch((error: unknown) => {
@@ -44,14 +52,19 @@ export function createApiClient(baseUrl: string, options: ClientOptions = {}) {
       if (response.status === 401 && endpoint !== '/auth/login') options.onUnauthorized?.();
       throw new ApiError(response.status, parsed.success ? parsed.data.message : `API request failed (${response.status})`);
     }
-    return { data: await response.json<T>() };
+    try {
+      return { data: await response.json<unknown>() };
+    } catch (error) {
+      if (error instanceof SyntaxError) throw new ApiContractError(method, endpoint);
+      throw error;
+    }
   }
 
   return {
-    get: <T>(endpoint: string) => request<T>('GET', endpoint),
-    post: <T>(endpoint: string, json?: unknown, settings: Options = {}) => request<T>('POST', endpoint, { ...settings, ...(json === undefined ? {} : { json }) }),
-    patch: <T>(endpoint: string, json?: unknown) => request<T>('PATCH', endpoint, { json }),
-    delete: <T>(endpoint: string) => request<T>('DELETE', endpoint),
+    get: (endpoint: string) => request('GET', endpoint),
+    post: (endpoint: string, json?: unknown, settings: Options = {}) => request('POST', endpoint, { ...settings, ...(json === undefined ? {} : { json }) }),
+    patch: (endpoint: string, json?: unknown) => request('PATCH', endpoint, { json }),
+    delete: (endpoint: string) => request('DELETE', endpoint),
   };
 }
 

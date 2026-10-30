@@ -20,9 +20,9 @@ export function SecuritySettings({ settings }: { readonly settings: AdminSetting
 
           <Space wrap style={{ marginBottom: 16 }}>
             <Text strong>JWT Secret:</Text>
-            <Text>{runtimeStatus.hasJWTSecret ? '생성됨' : '없음'}</Text>
+            <Text>{runtimeStatus === null ? '확인 중' : runtimeStatus.hasJWTSecret ? '생성됨' : '없음'}</Text>
             <Text strong>Password Salt:</Text>
-            <Text>{runtimeStatus.hasPasswordSalt ? '생성됨' : '없음'}</Text>
+            <Text>{runtimeStatus === null ? '확인 중' : runtimeStatus.hasPasswordSalt ? '생성됨' : '없음'}</Text>
           </Space>
 
           <Space style={{ marginBottom: 16, display: 'flex', flexWrap: 'wrap' }}>

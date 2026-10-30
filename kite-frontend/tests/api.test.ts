@@ -1,3 +1,4 @@
+import { vm as fullVm, publicConfig, adminConfig } from './fixtures/api';
 import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { once } from 'node:events';
@@ -39,7 +40,8 @@ describe('fetch HTTP transport', () => {
     // Given a real HTTP endpoint and a cookie scoped to this SSR request.
     const client = createApiClient(baseUrl, { cookie: 'accessToken="Bearer fixture"' });
     // When a mutation is sent through the same transport used by the UI.
-    await client[method]('/vms/demo', { powerState: 'Off' });
+    if (method === 'delete') await client.delete('/vms/demo');
+    else await client[method]('/vms/demo', { powerState: 'Off' });
     // Then the server receives the expected wire contract.
     expect(requests).toEqual([{ method: method.toUpperCase(), path: '/api/v1/vms/demo', cookie: 'accessToken="Bearer fixture"', body: method === 'delete' ? '' : '{"powerState":"Off"}' }]);
   });
@@ -141,7 +143,7 @@ describe('SSR reads using Go response contracts', () => {
   it('loads VM lists, offers and settings from their existing endpoints', async () => {
     // Given response fields used by the Go API, including controller failure states.
     const vm = { id: 'ns/demo', name: 'demo', namespace: 'ns', owner: 'ns', domain: '', phase: 'Failed', powerState: 'On', currentPowerState: '', cpu: 2, memory: '4Gi', image: 'ubuntu', disk: '30Gi', domainPrefix: '', sshId: 'ubuntu', delete: false, dataVolumePhase: 'Failed', dataVolumeProgress: '', dataVolumeMessage: 'import failed' };
-    reply = (request, response) => response.end(JSON.stringify(request.url?.endsWith('/vms') ? { vms: [vm] } : request.url?.endsWith('/vm-offers') ? { offers: [] } : { config: { baseDomain: 'example.test', forceHttps: false, adminContact: '', sshGateway: { externalEnabled: false, externalPort: '22', publicPort: '22' } } }));
+    reply = (request, response) => response.end(JSON.stringify(request.url?.endsWith('/vms') ? { vms: [vm] } : request.url?.endsWith('/vm-offers') ? { offers: [] } : { config: publicConfig }));
     // When the dashboard loads on the server.
     const data = await loadDashboard(createApiClient(baseUrl));
     // Then data reaches the SSR screen without losing VM failure details.
@@ -164,7 +166,7 @@ describe('SSR reads using Go response contracts', () => {
 
 describe('browser API adapters', () => {
   it.each([
-    { vms: [{ phase: 'Running', delete: false }, { phase: 'Stopped', delete: false }, { phase: 'Running', delete: true }], usage: { total: 2, running: 1 } },
+    { vms: [{ ...fullVm, phase: 'Running', delete: false }, { ...fullVm, phase: 'Stopped', delete: false }, { ...fullVm, phase: 'Running', delete: true }], usage: { total: 2, running: 1 } },
     { vms: [], usage: { total: 0, running: 0 } },
   ])('loads account VM counts from the existing personal VM endpoint: $usage', async ({ vms, usage }) => {
     vi.stubEnv('NEXT_PUBLIC_API_BASE_URL', baseUrl);
@@ -183,8 +185,7 @@ describe('browser API adapters', () => {
     vi.resetModules();
     reply = (_request, response) => response.end('{"vms":null}');
     const { vmApi } = await import('../src/api');
-    const data = await vmApi.getVms();
-    expect(() => parseAccountVmUsage(data)).toThrow();
+    await expect(vmApi.getVms()).rejects.toMatchObject({ name: 'ZodError' });
   });
 
   it.each([true, false])('saves gateway exposure with externalEnabled=%s and separate Service/public ports', async (externalEnabled) => {
@@ -193,14 +194,14 @@ describe('browser API adapters', () => {
     vi.stubEnv('NEXT_PUBLIC_USE_MOCK', 'false');
     vi.resetModules();
     const payload = { externalEnabled, externalPort: '12311', publicPort: '22' };
-    reply = (_request, response) => response.end(JSON.stringify({ config: { sshGateway: payload } }));
+    reply = (_request, response) => response.end(JSON.stringify({ message: 'updated', config: { ...adminConfig, sshGateway: { ...payload, status: adminConfig.sshGateway.status } } }));
     const { adminApi } = await import('../src/api');
     // When activation or deactivation is saved from the editor.
     const result = await adminApi.saveSSHGateway(payload);
     // Then Go receives both distinct ports and the desired enabled state unchanged.
     expect(requests[0]).toMatchObject({ method: 'POST', path: '/api/v1/admin/ssh-gateway' });
     expect(JSON.parse(requests[0]?.body || '{}')).toEqual(payload);
-    expect(result.config.sshGateway).toEqual(payload);
+    expect(result.config.sshGateway).toMatchObject(payload);
   });
 
   it.each([
@@ -212,6 +213,7 @@ describe('browser API adapters', () => {
     vi.stubEnv('NEXT_PUBLIC_API_BASE_URL', baseUrl);
     vi.stubEnv('NEXT_PUBLIC_USE_MOCK', 'false');
     vi.resetModules();
+    reply = (_request, response) => response.end(JSON.stringify(method === 'getVms' ? { vms: [fullVm] } : method === 'createConsoleTicket' ? { ticket: 'fixture', expiresAt: '2030-01-01T00:00:00Z' } : { message: 'ok', vm: fullVm }));
     const { vmApi } = await import('../src/api');
     // When a UI operation calls its adapter.
     await vmApi[method]('demo');

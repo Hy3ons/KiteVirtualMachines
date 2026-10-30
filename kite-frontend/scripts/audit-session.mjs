@@ -7,8 +7,12 @@ const users = {
   alpha: { username: 'review-alpha', email: 'alpha@example.test', namespace: 'alpha-ns', access_level: 1, profile_image: '' },
   beta: { username: 'review-beta', email: 'beta@example.test', namespace: 'beta-ns', access_level: 1, profile_image: '' },
   manager: { username: 'review-manager', email: 'manager@example.test', namespace: 'manager-ns', access_level: 2, profile_image: '' },
+  viewer: { username: 'review-viewer', email: 'viewer@example.test', namespace: 'viewer-ns', access_level: 0, profile_image: '' },
+  admin: { username: 'review-admin', email: 'admin@example.test', namespace: 'admin-ns', access_level: 3, profile_image: '' },
+  malformed: { username: 'review-malformed', email: 'malformed@example.test', namespace: 'malformed-ns', access_level: 1, profile_image: '' },
 };
-const config = { baseDomain: 'example.test', forceHttps: true, adminContact: '', sshGateway: { externalEnabled: false, externalPort: '', publicPort: '' } };
+const config = { baseDomain: 'example.test', forceHttps: true, adminContact: '', hasTLSCertificate: true, sshGateway: { externalEnabled: false, externalPort: '', publicPort: '', phase: 'Disabled', reason: 'ExternalDisabled', message: '' } };
+const adminConfig = { ...config, hasJWTSecret: true, hasPasswordSalt: true, sshGateway: { externalEnabled: false, externalPort: '', publicPort: '', status: { phase: 'Disabled', reason: 'ExternalDisabled', message: '' } } };
 const requests = [];
 
 // vmFor supplies the complete Go-shaped VM contract for this isolated HTTP fixture.
@@ -22,14 +26,17 @@ const api = createServer((request, response) => {
   const user = Object.hasOwn(users, account) ? users[account] : null;
   requests.push({ method: request.method, path: request.url, account });
   response.setHeader('content-type', 'application/json');
+  if (account === 'outage') { response.statusCode = 503; response.end('{"message":"fixture unavailable"}'); return; }
   if (!user) { response.statusCode = 401; response.end('{"message":"unauthorized"}'); return; }
   switch (request.url) {
     case '/api/v1/me': response.end(JSON.stringify({ user })); break;
-    case '/api/v1/vms': response.end(JSON.stringify({ vms: [vmFor(user)] })); break;
+    case '/api/v1/vms': response.end(JSON.stringify({ vms: account === 'malformed' ? [{ name: 'invalid-fixture' }] : [vmFor(user)] })); break;
     case '/api/v1/vms/review-vm': response.end(JSON.stringify({ vm: vmFor(user) })); break;
     case '/api/v1/vm-offers': response.end('{"offers":[]}'); break;
     case '/api/v1/config': response.end(JSON.stringify({ config })); break;
     case '/api/v1/admin/users': response.end(JSON.stringify({ users: Object.values(users) })); break;
+    case '/api/v1/admin/vms': response.end(JSON.stringify({ vms: [vmFor(user)] })); break;
+    case '/api/v1/admin/settings': response.end(JSON.stringify({ config: adminConfig })); break;
     default: response.statusCode = 404; response.end('{"message":"not found"}');
   }
 });
@@ -116,15 +123,40 @@ try {
   const dashboard = await request('/dashboard', 'alpha');
   assert.equal(dashboard.status, 200);
   assert.ok((await dashboard.text()).includes('review-vm'));
+  const consoleStart = requests.length;
   const consolePage = await request('/dashboard/kite-machine/review-vm/console', 'alpha');
   assert.equal(consolePage.status, 200);
   assert.ok((await consolePage.text()).includes('<title>review-vm | 웹 콘솔 | Kite</title>'));
+  assert.deepEqual(requests.slice(consoleStart).map(entry => entry.path).sort(), ['/api/v1/me', '/api/v1/vms/review-vm']);
   const manager = await request('/admin/dashboard', 'manager');
   assert.equal(manager.status, 200);
   assert.ok(requests.some((entry) => entry.path === '/api/v1/admin/users' && entry.account === 'manager'));
   assert.ok(!requests.some((entry) => entry.path === '/api/v1/admin/vms'));
+  const detail = await request('/dashboard/kite-machine/review-vm', 'alpha');
+  assert.equal(detail.status, 200);
+  for (const account of ['viewer', 'manager']) {
+    const settings = await request('/admin/settings', account);
+    assert.equal(settings.status, 307);
+    assert.equal(settings.headers.get('location'), '/dashboard');
+  }
+  assert.equal((await request('/dashboard', 'viewer')).status, 200);
+  const viewerAdmin = await request('/admin/dashboard', 'viewer');
+  assert.equal(viewerAdmin.status, 307);
+  assert.equal(viewerAdmin.headers.get('location'), '/dashboard');
+  for (const path of ['/admin/dashboard', '/admin/settings']) {
+    const response = await request(path, 'admin');
+    assert.equal(response.status, 200, path);
+    assert.ok((await response.text()).includes(users.admin.email), path);
+  }
+  assert.ok(requests.some(entry => entry.path === '/api/v1/admin/vms' && entry.account === 'admin'));
+  assert.ok(requests.some(entry => entry.path === '/api/v1/admin/settings' && entry.account === 'admin'));
+  assert.equal((await request('/dashboard', 'malformed')).status, 500, 'Malformed successful data must fail SSR');
+  const outage = await request('/dashboard', 'outage');
+  assert.equal(outage.status, 500, 'A service outage must not become an anonymous redirect');
+  assert.equal(outage.headers.get('location'), null);
   assert.ok(requests.every((entry) => entry.method === 'GET'), 'Review must never mutate resources');
-  console.log('PASS dashboard/console SSR and role guards; manager skips admin VM endpoint; GET requests only');
+  console.log('PASS dashboard/detail/console/admin SSR; role 0/1/2/3 guards; console skips settings; GET requests only');
+  console.log('PASS malformed success and API outage fail SSR without pretending the user logged out');
 } finally {
   const stopped = once(app, 'exit');
   if (app.exitCode === null && app.signalCode === null) { app.kill('SIGTERM'); await stopped; }

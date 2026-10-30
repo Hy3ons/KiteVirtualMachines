@@ -1,21 +1,7 @@
-import { usersSchema } from './pageData';
-import { authResponseSchema } from './session';
+import { createEndpoints } from './endpoints';
 import { apiClient } from './http';
-import type {
-  AuthResponse, SignupResponse, ConfigResponse, VmsResponse, VmResponse, VmOffersResponse, VmOfferResponse, GlobalVmsResponse, ConsoleTicketResponse,
-  AdminCreateVmOfferPayload,
-  CertPayload,
-  ClaimVmOfferPayload,
-  CreateVmPayload,
-  HTTPSPolicyPayload,
-  LoginCredentials,
-  LogoutResponse,
-  RuntimeSecretRotation,
-  SSHGatewayPayload,
-  SignupPayload,
-  UpdateVmPayload,
-} from './types';
-
+import * as contracts from './contracts';
+import * as settings from './configContracts';
 class MockApiModeError extends Error {
   constructor(mode: string) {
     super(`NEXT_PUBLIC_USE_MOCK=true is only allowed in debug mode, current mode is ${mode}`);
@@ -42,236 +28,132 @@ const loadDebugMockApi = async (): Promise<DebugMockApi> => {
 };
 
 
-// ========================
-// Auth
-// ========================
+const endpoints = createEndpoints(apiClient);
 export const authApi = {
-  login: async (credentials: LoginCredentials) => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).login(credentials);
-    }
-    const { data } = await apiClient.post<unknown>('/auth/login', credentials);
-    return authResponseSchema.parse(data);
+  login: async (...args: Parameters<typeof endpoints.authApi.login>) => {
+    if (useMockApi) return contracts.authResponseSchema.parse(await (await loadDebugMockApi()).login(...args));
+    return endpoints.authApi.login(...args);
   },
-  signup: async (payload: SignupPayload) => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).signup(payload);
-    }
-    const { data } = await apiClient.post<SignupResponse>('/auth/signup', payload);
-    return data;
+  signup: async (...args: Parameters<typeof endpoints.authApi.signup>) => {
+    if (useMockApi) return contracts.signupResponseSchema.parse(await (await loadDebugMockApi()).signup(...args));
+    return endpoints.authApi.signup(...args);
   },
-  logout: async (): Promise<LogoutResponse> => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).logout();
-    }
-    const { data } = await apiClient.post<LogoutResponse>('/auth/logout');
-    return data;
+  logout: async (...args: Parameters<typeof endpoints.authApi.logout>) => {
+    if (useMockApi) return contracts.messageSchema.parse(await (await loadDebugMockApi()).logout(...args));
+    return endpoints.authApi.logout(...args);
   },
-  getMe: async () => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).getMe();
-    }
-    const { data } = await apiClient.get<{ readonly user: AuthResponse['user'] }>('/me');
-    return data;
+  getMe: async (...args: Parameters<typeof endpoints.authApi.getMe>) => {
+    if (useMockApi) return contracts.meSchema.parse(await (await loadDebugMockApi()).getMe(...args));
+    return endpoints.authApi.getMe(...args);
   },
 };
-
-// ========================
-// Config
-// ========================
 export const configApi = {
-  getConfig: async () => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).getConfig();
-    }
-    const { data } = await apiClient.get<ConfigResponse>('/config');
-    return data;
+  getConfig: async (...args: Parameters<typeof endpoints.configApi.getConfig>) => {
+    if (useMockApi) return settings.publicConfigSchema.parse(await (await loadDebugMockApi()).getConfig(...args));
+    return endpoints.configApi.getConfig(...args);
   },
 };
-
-// ========================
-// User VMs
-// ========================
 export const vmApi = {
-  getVms: async () => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).getVms();
-    }
-    const { data } = await apiClient.get<VmsResponse>('/vms');
-    return data;
+  getVms: async (...args: Parameters<typeof endpoints.vmApi.getVms>) => {
+    if (useMockApi) return contracts.vmsSchema.parse(await (await loadDebugMockApi()).getVms(...args));
+    return endpoints.vmApi.getVms(...args);
   },
-  getVm: async (name: string) => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).getVm(name);
-    }
-    const { data } = await apiClient.get<VmResponse>(`/vms/${encodeURIComponent(name)}`);
-    return data;
+  getVm: async (...args: Parameters<typeof endpoints.vmApi.getVm>) => {
+    if (useMockApi) return contracts.vmResponseSchema.parse(await (await loadDebugMockApi()).getVm(...args));
+    return endpoints.vmApi.getVm(...args);
   },
-  createVm: async (payload: CreateVmPayload) => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).createVm(payload);
-    }
-    const { data } = await apiClient.post<VmResponse>('/vms', payload);
-    return data;
+  createVm: async (...args: Parameters<typeof endpoints.vmApi.createVm>) => {
+    if (useMockApi) return contracts.vmResponseSchema.parse(await (await loadDebugMockApi()).createVm(...args));
+    return endpoints.vmApi.createVm(...args);
   },
-  updateVm: async (name: string, payload: UpdateVmPayload) => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).updateVm(name, payload);
-    }
-    const { data } = await apiClient.patch<VmResponse>(`/vms/${encodeURIComponent(name)}`, payload);
-    return data;
+  updateVm: async (...args: Parameters<typeof endpoints.vmApi.updateVm>) => {
+    if (useMockApi) return contracts.vmResponseSchema.parse(await (await loadDebugMockApi()).updateVm(...args));
+    return endpoints.vmApi.updateVm(...args);
   },
-  startVm: async (name: string) => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).startVm(name);
-    }
-    const { data } = await apiClient.post<{ readonly message: string }>(`/vms/${encodeURIComponent(name)}/start`);
-    return data;
+  startVm: async (...args: Parameters<typeof endpoints.vmApi.startVm>) => {
+    if (useMockApi) return contracts.vmResponseSchema.parse(await (await loadDebugMockApi()).startVm(...args));
+    return endpoints.vmApi.startVm(...args);
   },
-  stopVm: async (name: string) => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).stopVm(name);
-    }
-    const { data } = await apiClient.post<{ readonly message: string }>(`/vms/${encodeURIComponent(name)}/stop`);
-    return data;
+  stopVm: async (...args: Parameters<typeof endpoints.vmApi.stopVm>) => {
+    if (useMockApi) return contracts.vmResponseSchema.parse(await (await loadDebugMockApi()).stopVm(...args));
+    return endpoints.vmApi.stopVm(...args);
   },
-  deleteVm: async (name: string) => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).deleteVm(name);
-    }
-    const { data } = await apiClient.delete<{ readonly message: string }>(`/vms/${encodeURIComponent(name)}`);
-    return data;
+  deleteVm: async (...args: Parameters<typeof endpoints.vmApi.deleteVm>) => {
+    if (useMockApi) return contracts.vmDeletionSchema.parse(await (await loadDebugMockApi()).deleteVm(...args));
+    return endpoints.vmApi.deleteVm(...args);
   },
-  createConsoleTicket: async (name: string) => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).createConsoleTicket(name);
-    }
-    const { data } = await apiClient.post<ConsoleTicketResponse>(`/vms/${encodeURIComponent(name)}/console-ticket`);
-    return data;
+  createConsoleTicket: async (...args: Parameters<typeof endpoints.vmApi.createConsoleTicket>) => {
+    if (useMockApi) return contracts.consoleTicketSchema.parse(await (await loadDebugMockApi()).createConsoleTicket(...args));
+    return endpoints.vmApi.createConsoleTicket(...args);
   },
-  getOffers: async () => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).getOffers();
-    }
-    const { data } = await apiClient.get<VmOffersResponse>('/vm-offers');
-    return data;
+  getOffers: async (...args: Parameters<typeof endpoints.vmApi.getOffers>) => {
+    if (useMockApi) return contracts.offersSchema.parse(await (await loadDebugMockApi()).getOffers(...args));
+    return endpoints.vmApi.getOffers(...args);
   },
-  claimOffer: async (name: string, payload: ClaimVmOfferPayload) => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).claimOffer(name, payload);
-    }
-    const { data } = await apiClient.post<VmResponse>(`/vm-offers/${encodeURIComponent(name)}/claim`, payload);
-    return data;
+  claimOffer: async (...args: Parameters<typeof endpoints.vmApi.claimOffer>) => {
+    if (useMockApi) return contracts.vmResponseSchema.parse(await (await loadDebugMockApi()).claimOffer(...args));
+    return endpoints.vmApi.claimOffer(...args);
   },
 };
-
-// ========================
-// Admin
-// ========================
 export const adminApi = {
-  getUsers: async () => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).getUsers();
-    }
-    const { data } = await apiClient.get<unknown>('/admin/users');
-    return usersSchema.parse(data);
+  getUsers: async (...args: Parameters<typeof endpoints.adminApi.getUsers>) => {
+    if (useMockApi) return contracts.usersSchema.parse(await (await loadDebugMockApi()).getUsers(...args));
+    return endpoints.adminApi.getUsers(...args);
   },
-  updateUserAccess: async (nameOrUsername: string, accessLevel: number) => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).updateUserAccess(nameOrUsername, accessLevel);
-    }
-    const { data } = await apiClient.patch<{ readonly message: string }>(`/admin/users/${encodeURIComponent(nameOrUsername)}/access-level`, { access_level: accessLevel });
-    return data;
+  updateUserAccess: async (...args: Parameters<typeof endpoints.adminApi.updateUserAccess>) => {
+    if (useMockApi) return contracts.meSchema.parse(await (await loadDebugMockApi()).updateUserAccess(...args));
+    return endpoints.adminApi.updateUserAccess(...args);
   },
-  deleteUser: async (nameOrUsername: string) => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).deleteUser(nameOrUsername);
-    }
-    const { data } = await apiClient.delete<{ readonly message: string }>(`/admin/users/${encodeURIComponent(nameOrUsername)}`);
-    return data;
+  deleteUser: async (...args: Parameters<typeof endpoints.adminApi.deleteUser>) => {
+    if (useMockApi) return contracts.messageSchema.parse(await (await loadDebugMockApi()).deleteUser(...args));
+    return endpoints.adminApi.deleteUser(...args);
   },
-  getVms: async () => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).getAdminVms();
-    }
-    const { data } = await apiClient.get<GlobalVmsResponse>('/admin/vms');
-    return data;
+  getVms: async (...args: Parameters<typeof endpoints.adminApi.getVms>) => {
+    if (useMockApi) return contracts.globalVmsSchema.parse(await (await loadDebugMockApi()).getAdminVms(...args));
+    return endpoints.adminApi.getVms(...args);
   },
-  forceStopVm: async (namespace: string, name: string) => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).forceStopVm(namespace, name);
-    }
-    const { data } = await apiClient.patch<{ readonly message: string }>(`/admin/vms/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/power`, { powerState: 'Off' });
-    return data;
+  forceStopVm: async (...args: Parameters<typeof endpoints.adminApi.forceStopVm>) => {
+    if (useMockApi) return contracts.vmResponseSchema.parse(await (await loadDebugMockApi()).forceStopVm(...args));
+    return endpoints.adminApi.forceStopVm(...args);
   },
-  deleteVm: async (namespace: string, name: string) => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).deleteAdminVm(namespace, name);
-    }
-    const { data } = await apiClient.delete<{ readonly message: string }>(`/admin/vms/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`);
-    return data;
+  deleteVm: async (...args: Parameters<typeof endpoints.adminApi.deleteVm>) => {
+    if (useMockApi) return contracts.vmDeletionSchema.parse(await (await loadDebugMockApi()).deleteAdminVm(...args));
+    return endpoints.adminApi.deleteVm(...args);
   },
-  getSettings: async () => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).getSettings();
-    }
-    const { data } = await apiClient.get<ConfigResponse>('/admin/settings');
-    return data;
+  getSettings: async (...args: Parameters<typeof endpoints.adminApi.getSettings>) => {
+    if (useMockApi) return settings.adminConfigSchema.parse(await (await loadDebugMockApi()).getSettings(...args));
+    return endpoints.adminApi.getSettings(...args);
   },
-  saveDomain: async (baseDomain: string) => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).saveDomain(baseDomain);
-    }
-    const { data } = await apiClient.post<ConfigResponse>('/admin/domain', { baseDomain });
-    return data;
+  saveDomain: async (...args: Parameters<typeof endpoints.adminApi.saveDomain>) => {
+    if (useMockApi) return settings.settingsMutationSchema.parse(await (await loadDebugMockApi()).saveDomain(...args));
+    return endpoints.adminApi.saveDomain(...args);
   },
-  saveHTTPSPolicy: async (payload: HTTPSPolicyPayload) => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).saveHTTPSPolicy(payload);
-    }
-    const { data } = await apiClient.post<ConfigResponse>('/admin/https', payload);
-    return data;
+  saveHTTPSPolicy: async (...args: Parameters<typeof endpoints.adminApi.saveHTTPSPolicy>) => {
+    if (useMockApi) return settings.settingsMutationSchema.parse(await (await loadDebugMockApi()).saveHTTPSPolicy(...args));
+    return endpoints.adminApi.saveHTTPSPolicy(...args);
   },
-  saveSSHGateway: async (payload: SSHGatewayPayload) => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).saveSSHGateway(payload);
-    }
-    const { data } = await apiClient.post<ConfigResponse>('/admin/ssh-gateway', payload);
-    return data;
+  saveSSHGateway: async (...args: Parameters<typeof endpoints.adminApi.saveSSHGateway>) => {
+    if (useMockApi) return settings.settingsMutationSchema.parse(await (await loadDebugMockApi()).saveSSHGateway(...args));
+    return endpoints.adminApi.saveSSHGateway(...args);
   },
-  saveAdminContact: async (adminContact: string) => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).saveAdminContact(adminContact);
-    }
-    const { data } = await apiClient.post<ConfigResponse>('/admin/admin-contact', { adminContact });
-    return data;
+  saveAdminContact: async (...args: Parameters<typeof endpoints.adminApi.saveAdminContact>) => {
+    if (useMockApi) return settings.settingsMutationSchema.parse(await (await loadDebugMockApi()).saveAdminContact(...args));
+    return endpoints.adminApi.saveAdminContact(...args);
   },
-  createVmOffer: async (payload: AdminCreateVmOfferPayload) => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).createVmOffer(payload);
-    }
-    const { data } = await apiClient.post<VmOfferResponse>('/admin/vm-offers', payload);
-    return data;
+  createVmOffer: async (...args: Parameters<typeof endpoints.adminApi.createVmOffer>) => {
+    if (useMockApi) return contracts.offerResponseSchema.parse(await (await loadDebugMockApi()).createVmOffer(...args));
+    return endpoints.adminApi.createVmOffer(...args);
   },
-  deleteVmOffer: async (namespace: string, name: string) => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).deleteVmOffer(namespace, name);
-    }
-    const { data } = await apiClient.delete<{ readonly message: string }>(`/admin/vm-offers/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`);
-    return data;
+  deleteVmOffer: async (...args: Parameters<typeof endpoints.adminApi.deleteVmOffer>) => {
+    if (useMockApi) return contracts.messageSchema.parse(await (await loadDebugMockApi()).deleteVmOffer(...args));
+    return endpoints.adminApi.deleteVmOffer(...args);
   },
-  rotateRuntimeSecrets: async (payload: RuntimeSecretRotation) => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).rotateRuntimeSecrets(payload);
-    }
-    const { data } = await apiClient.post<ConfigResponse>('/admin/runtime-secrets/rotate', payload);
-    return data;
+  rotateRuntimeSecrets: async (...args: Parameters<typeof endpoints.adminApi.rotateRuntimeSecrets>) => {
+    if (useMockApi) return settings.settingsMutationSchema.parse(await (await loadDebugMockApi()).rotateRuntimeSecrets(...args));
+    return endpoints.adminApi.rotateRuntimeSecrets(...args);
   },
-  saveCert: async (payload: CertPayload) => {
-    if (useMockApi) {
-      return (await loadDebugMockApi()).saveCert(payload);
-    }
-    const { data } = await apiClient.post<ConfigResponse>('/admin/cert', payload);
-    return data;
+  saveCert: async (...args: Parameters<typeof endpoints.adminApi.saveCert>) => {
+    if (useMockApi) return settings.settingsMutationSchema.parse(await (await loadDebugMockApi()).saveCert(...args));
+    return endpoints.adminApi.saveCert(...args);
   },
 };

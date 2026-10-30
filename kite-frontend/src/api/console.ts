@@ -1,4 +1,5 @@
 import { apiClient } from './http';
+import { createEndpoints } from './endpoints';
 import type { ConsoleTicketResponse } from './types';
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1';
@@ -20,10 +21,5 @@ export const createConsoleTicket = async (
   vmName: string,
   options: ConsoleTicketRequestOptions = {},
 ): Promise<ConsoleTicketResponse> => {
-  const { data } = await apiClient.post<ConsoleTicketResponse>(
-    `/vms/${vmName}/console-ticket`,
-    undefined,
-    { signal: options.signal },
-  );
-  return data;
+  return createEndpoints(apiClient).vmApi.createConsoleTicket(vmName, options);
 };

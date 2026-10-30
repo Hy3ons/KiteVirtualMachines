@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { LegalPage } from '@/components/LegalPage';
+import { getSession } from '@/server/api';
 import { createPageMetadata } from '@/lib/metadata';
 
 // generateMetadata describes the public terms using the shared title and social metadata.
@@ -12,9 +13,10 @@ export function generateMetadata(): Promise<Metadata> {
 }
 
 // Terms explains platform, installation-operator and VM-user responsibilities on a public page.
-export default function Terms() {
+export default async function Terms() {
+  const user = await getSession();
   return (
-    <LegalPage title="서비스 이용약관" document="terms">
+    <LegalPage title="서비스 이용약관" document="terms" user={user}>
       <section aria-labelledby="terms-purpose">
         <h2 id="terms-purpose">1. 목적과 적용 범위</h2>
         <p>이 약관은 Kite를 설치해 서비스를 제공하는 개인 또는 조직(이하 “운영자”)과 해당 서비스의 계정 및 가상머신을 사용하는 사람(이하 “이용자”) 사이의 이용 조건을 정합니다. 오픈소스를 직접 설치해 사용하는 사람은 자신의 설치 환경에 대한 운영자 역할도 맡습니다.</p>

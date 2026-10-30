@@ -1,10 +1,11 @@
+import type { AccessLevel } from '../api/types';
 import { Button, Input, Select, Tooltip } from 'antd';
 import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 
 type UserDashboardToolbarProps = {
   readonly canCreateVm: boolean;
   readonly loading: boolean;
-  readonly accessLevel: number;
+  readonly accessLevel: AccessLevel;
   readonly adminContact: string;
   readonly onRefresh: () => void;
   readonly onCreate: () => void;

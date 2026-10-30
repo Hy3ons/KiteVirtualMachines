@@ -9,7 +9,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { AdminVmOfferPanel } from './AdminVmOfferPanel';
 import { useAdminDashboard } from './admin/useAdminDashboard';
 import type { AdminDashboardData } from '../api/pageData';
-import type { AdminUser, GlobalVm } from '../api/types';
+import type { AccessLevel, AdminUser, GlobalVm } from '../api/types';
 
 const { Text } = Typography;
 const accessOptions = [
@@ -20,7 +20,7 @@ const accessOptions = [
 ] as const;
 
 // AdminDashboard presents role-scoped resources and actions; initialData is verified server data.
-export function AdminDashboard({ initialData }: { readonly initialData?: AdminDashboardData }) {
+export function AdminDashboard({ initialData = null }: { readonly initialData?: AdminDashboardData | null }) {
   const { canManageAll, users, vms, loadingUsers, loadingVms, creatingOffer, fetchAllData, handleChangeAccessLevel, handleDeleteUser, handleForceStopVm, handleDeleteVm, handleCreateOffer } = useAdminDashboard(initialData);
   const [userQuery, setUserQuery] = useState('');
   const [vmQuery, setVmQuery] = useState('');
@@ -43,7 +43,7 @@ export function AdminDashboard({ initialData }: { readonly initialData?: AdminDa
           aria-label={`${record.username} 사용자 권한`}
           value={record.accessLevel}
           options={accessOptions.filter((option) => canManageAll || option.value <= 1 || option.value === record.accessLevel)}
-          onChange={(value: number) => handleChangeAccessLevel(record.username, value)}
+          onChange={(value: AccessLevel) => handleChangeAccessLevel(record.username, value)}
           disabled={record.username === 'admin' || (!canManageAll && record.accessLevel > 1)}
         />
       )

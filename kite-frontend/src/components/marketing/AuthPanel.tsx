@@ -7,6 +7,7 @@ import { App, Button } from 'antd';
 import { ArrowRightOutlined } from '@ant-design/icons';
 import { authApi } from '../../api';
 import { useAuthStore } from '../../store/useAuthStore';
+import { canManageUsers } from '../../domain/access';
 import { useLogout } from '../../hooks/useLogout';
 import { LoginForm } from './LoginForm';
 import type { LoginFormValues } from './LoginForm';
@@ -58,7 +59,7 @@ export function AuthPanel() {
           <h1>{username}님,<br />다시 만나 반가워요.</h1>
           <p>로그인된 계정으로 작업을 이어가세요.</p>
           <Link href="/dashboard" className="marketing-button marketing-button--primary">내 가상머신으로 <ArrowRightOutlined /></Link>
-          {accessLevel !== null && accessLevel >= 2 && (
+          {canManageUsers(accessLevel) && (
             <Link href="/admin/dashboard" className="marketing-button marketing-button--secondary">Admin Console</Link>
           )}
           <Button type="text" onClick={logout} block>로그아웃</Button>

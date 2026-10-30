@@ -61,6 +61,6 @@ type SignupDebugUser = {
   readonly username: string;
   readonly email: string;
   readonly namespace: string;
-  readonly accessLevel: number;
+  readonly accessLevel: 0;
   readonly status: 'Pending';
 };

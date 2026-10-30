@@ -1,5 +1,6 @@
 'use client';
 
+import { canControlVm } from '../domain/access';
 import { useState } from 'react';
 import { Button, Empty, Table } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
@@ -16,7 +17,7 @@ import { LEVEL_1_FIXED_CPU, LEVEL_1_FIXED_DISK_GI, LEVEL_1_FIXED_MEMORY, LEVEL_1
 import type { DashboardData } from '../api/pageData';
 
 // UserDashboard presents SSR resources and client filters without changing VM API or permission contracts.
-export function UserDashboard({ initialData }: { readonly initialData?: DashboardData }) {
+export function UserDashboard({ initialData = null }: { readonly initialData?: DashboardData | null }) {
   const dashboard = useDashboard(initialData);
   const router = useRouter();
   const [query, setQuery] = useState('');
@@ -33,7 +34,7 @@ export function UserDashboard({ initialData }: { readonly initialData?: Dashboar
     onConnect: dashboard.showConnectGuide,
     onOpenConsole: (name) => router.push(`/dashboard/kite-machine/${name}/console`),
     onStart: dashboard.handleStart, onStop: dashboard.handleStop, onDelete: dashboard.handleDelete,
-    canMutateVm: safeAccessLevel >= 1,
+    canMutateVm: canControlVm(safeAccessLevel),
   });
 
   return (

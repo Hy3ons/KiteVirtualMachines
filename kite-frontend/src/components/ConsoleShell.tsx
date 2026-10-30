@@ -9,6 +9,7 @@ import { Button, Tooltip } from 'antd';
 import { AppstoreOutlined, CloudServerOutlined, GiftOutlined, TeamOutlined, SettingOutlined, BookOutlined, GithubOutlined, MenuOutlined, CloseOutlined, RightOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../store/useAuthStore';
 import { useConsoleNavigation } from '../store/useConsoleNavigation';
+import { canManageSystem, canManageUsers } from '../domain/access';
 import { USE_MOCK_API } from '../config/debug';
 import { Brand } from './Brand';
 import { AccountMenu } from './AccountMenu';
@@ -58,7 +59,6 @@ export function ConsoleShell({ children, title, eyebrow, actions, section = 'wor
     }
     sidebarTransition.current = document.startViewTransition(update);
   };
-  const level = accessLevel ?? 0;
   const Content = preview ? 'div' : 'main';
   const navigationId = preview ? 'preview-console-navigation' : 'console-navigation';
   const isVm = pathname.startsWith('/dashboard/kite-machine/');
@@ -73,11 +73,11 @@ export function ConsoleShell({ children, title, eyebrow, actions, section = 'wor
       <header className="console-topbar">
         <Button type="text" icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} aria-label={collapsed ? '사이드바 펼치기' : '사이드바 접기'} aria-expanded={!collapsed} aria-controls={navigationId} onClick={toggleSidebar} className="console-sidebar-toggle appbar-action" />
         <Button type="text" icon={menuOpen ? <CloseOutlined /> : <MenuOutlined />} aria-label={menuOpen ? '탐색 메뉴 닫기' : '탐색 메뉴 열기'} aria-expanded={menuOpen} aria-controls={navigationId} onClick={() => setMenuOpen(!menuOpen)} className="console-menu-toggle appbar-action" />
-        <Brand href="/" className="console-brand" prefetch={preview ? false : undefined} />
+        <Brand href="/" className="console-brand" prefetch={preview ? false : null} />
         <span className="console-product-name">Cloud console</span>
         <div className="console-topbar-end">
           {USE_MOCK_API && <span className="environment-label"><span />Mock</span>}
-          <Tooltip title="이용 가이드"><Link className="icon-link appbar-action" href="/kite-docs" prefetch={preview ? false : undefined} aria-label="이용 가이드"><BookOutlined /></Link></Tooltip>
+          <Tooltip title="이용 가이드"><Link className="icon-link appbar-action" href="/kite-docs" prefetch={preview ? false : null} aria-label="이용 가이드"><BookOutlined /></Link></Tooltip>
           <AccountMenu preview={preview} />
         </div>
       </header>
@@ -86,14 +86,14 @@ export function ConsoleShell({ children, title, eyebrow, actions, section = 'wor
         <div className="sidebar-workspace"><span className="sidebar-workspace-icon"><CloudServerOutlined /></span><span>내 클라우드<small>개인 워크스페이스</small></span></div>
         <nav aria-label="콘솔 탐색">
           <p className="sidebar-label">워크스페이스</p>
-          {links.map((link) => <Link key={link.href} href={link.href} prefetch={preview ? false : undefined} aria-current={link.active ? 'page' : undefined} className={`sidebar-link${link.active ? ' is-active' : ''}`} onClick={() => { setMenuOpen(false); setAnchor(link.hash); }} title={link.label}>{link.icon}<span>{link.label}</span></Link>)}
-          {level >= 2 && <><p className="sidebar-label sidebar-label--section">관리</p><Link href="/admin/dashboard" aria-current={section === 'admin' ? 'page' : undefined} className={`sidebar-link${section === 'admin' ? ' is-active' : ''}`} onClick={() => setMenuOpen(false)} title="사용자 및 리소스"><TeamOutlined /><span>사용자 및 리소스</span></Link></>}
-          {level >= 3 && <Link href="/admin/settings" aria-current={section === 'settings' ? 'page' : undefined} className={`sidebar-link${section === 'settings' ? ' is-active' : ''}`} onClick={() => setMenuOpen(false)} title="시스템 설정"><SettingOutlined /><span>시스템 설정</span></Link>}
+          {links.map((link) => <Link key={link.href} href={link.href} prefetch={preview ? false : null} aria-current={link.active ? 'page' : undefined} className={`sidebar-link${link.active ? ' is-active' : ''}`} onClick={() => { setMenuOpen(false); setAnchor(link.hash); }} title={link.label}>{link.icon}<span>{link.label}</span></Link>)}
+          {canManageUsers(accessLevel) && <><p className="sidebar-label sidebar-label--section">관리</p><Link href="/admin/dashboard" aria-current={section === 'admin' ? 'page' : undefined} className={`sidebar-link${section === 'admin' ? ' is-active' : ''}`} onClick={() => setMenuOpen(false)} title="사용자 및 리소스"><TeamOutlined /><span>사용자 및 리소스</span></Link></>}
+          {canManageSystem(accessLevel) && <Link href="/admin/settings" aria-current={section === 'settings' ? 'page' : undefined} className={`sidebar-link${section === 'settings' ? ' is-active' : ''}`} onClick={() => setMenuOpen(false)} title="시스템 설정"><SettingOutlined /><span>시스템 설정</span></Link>}
         </nav>
-        <div className="sidebar-bottom"><Link href="/kite-docs" prefetch={preview ? false : undefined} className="sidebar-link" title="문서 및 도움말"><BookOutlined /><span>문서 및 도움말</span></Link><a href="https://github.com/Hy3ons/KiteVirtualMachines" target="_blank" rel="noreferrer" className="sidebar-link" title="GitHub"><GithubOutlined /><span>GitHub</span></a><div className="sidebar-version">Kite / Open source cloud</div></div>
+        <div className="sidebar-bottom"><Link href="/kite-docs" prefetch={preview ? false : null} className="sidebar-link" title="문서 및 도움말"><BookOutlined /><span>문서 및 도움말</span></Link><a href="https://github.com/Hy3ons/KiteVirtualMachines" target="_blank" rel="noreferrer" className="sidebar-link" title="GitHub"><GithubOutlined /><span>GitHub</span></a><div className="sidebar-version">Kite / Open source cloud</div></div>
       </aside>
       <Content id={preview ? undefined : 'main-content'} className="console-main" aria-label={title ?? groupLabel}>
-        <div className="console-breadcrumb"><Link href="/dashboard" prefetch={preview ? false : undefined}>Kite</Link><RightOutlined /><span>{eyebrow ?? groupLabel}</span></div>
+        <div className="console-breadcrumb"><Link href="/dashboard" prefetch={preview ? false : null}>Kite</Link><RightOutlined /><span>{eyebrow ?? groupLabel}</span></div>
         {(title || actions) && <div className="page-heading">{title && <div><h1>{title}</h1></div>}{actions && <div className="page-heading-actions">{actions}</div>}</div>}
         {children}
       </Content>

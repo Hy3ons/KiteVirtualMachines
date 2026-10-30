@@ -19,6 +19,6 @@ export default async function Page({ params }: Props) {
   const { vmName } = await params;
   const user = await requireSession('/dashboard/kite-machine/' + encodeURIComponent(vmName));
   const { client } = await getServerApi();
-  const data = USE_MOCK_API ? undefined : await loadVm(client, vmName);
+  const data = USE_MOCK_API ? null : await loadVm(client, vmName);
   return <AuthProvider key={vmName + ':' + user.username + ':' + user.access_level} user={user}><VmDetail initialData={data} /></AuthProvider>;
 }

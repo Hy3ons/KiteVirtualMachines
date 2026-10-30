@@ -18,7 +18,7 @@ const sections = [
 ] as const;
 
 // AdminSettings renders anchored configuration groups; initialData supplies verified server settings.
-export function AdminSettings({ initialData }: { readonly initialData?: ConfigResponse }) {
+export function AdminSettings({ initialData = null }: { readonly initialData?: ConfigResponse | null }) {
   const settings = useAdminSettings(initialData);
   return (
     <ConsoleShell section="settings" eyebrow="플랫폼 관리" title="시스템 설정">

@@ -10,7 +10,7 @@ type VmConnectionDrawerProps = {
   readonly open: boolean;
   readonly vm: DashboardVm | null;
   readonly baseDomain: string;
-  readonly sshGateway?: SSHGatewaySettings;
+  readonly sshGateway: SSHGatewaySettings | null;
   readonly onClose: () => void;
 };
 

@@ -15,6 +15,6 @@ export function generateMetadata(): Promise<Metadata> {
 export default async function Page() {
   const user = await requireSession('/admin/dashboard', 2);
   const { client } = await getServerApi();
-  const data = USE_MOCK_API ? undefined : await loadAdminDashboard(client, user.access_level);
+  const data = USE_MOCK_API ? null : await loadAdminDashboard(client, user.access_level);
   return <AuthProvider key={user ? user.username + ':' + user.access_level : 'anonymous'} user={user}><AdminDashboard initialData={data} /></AuthProvider>;
 }

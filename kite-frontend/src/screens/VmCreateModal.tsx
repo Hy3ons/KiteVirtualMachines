@@ -1,3 +1,4 @@
+import type { AccessLevel } from '../api/types';
 import React from 'react';
 import { Alert, Button, Form, Input, InputNumber, Modal, Typography } from 'antd';
 import type { ModalProps } from 'antd';
@@ -12,7 +13,7 @@ type VmCreateModalProps = {
   readonly onCreate: (values: VmCreateFormValues) => Promise<void>;
   readonly form: VmCreateForm;
   readonly canCreateVm: boolean;
-  readonly accessLevel: number;
+  readonly accessLevel: AccessLevel;
   readonly fixedCpu: number;
   readonly fixedMemory: string;
   readonly fixedDiskGi: number;
@@ -54,10 +55,10 @@ export const VmCreateModal: React.FC<VmCreateModalProps> = ({
       onCancel={onCancel}
       footer={null}
       centered
-      getContainer={getContainer}
-      focusable={focusable}
+      {...(getContainer === undefined ? {} : { getContainer })}
+      {...(focusable === undefined ? {} : { focusable })}
     >
-      <Form form={form} name={formName} layout="vertical" onFinish={onCreate} className="vm-create-form">
+      <Form form={form} {...(formName === undefined ? {} : { name: formName })} layout="vertical" onFinish={onCreate} className="vm-create-form">
         {accessLevel === 0 && (
           <Alert
             title="VM 생성 권한 없음"

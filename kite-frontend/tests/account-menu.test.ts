@@ -9,7 +9,7 @@ import { AccountMenu } from '../src/components/AccountMenu';
 
 const harness = vi.hoisted(() => {
   const changes: boolean[] = [];
-  const popup: { requestOpen?: (visible: boolean) => void; content: ReactNode } = { content: null };
+  const popup: { requestOpen: ((visible: boolean) => void) | null; content: ReactNode } = { requestOpen: null, content: null };
   return { changes, popup, accessLevel: 3, usage: vi.fn() };
 });
 
@@ -33,13 +33,13 @@ const originalTooltip = tooltip.default;
 beforeEach(() => {
   harness.changes.length = 0;
   harness.popup.content = null;
-  harness.popup.requestOpen = undefined;
+  harness.popup.requestOpen = null;
   harness.accessLevel = 3;
   harness.usage.mockClear();
   tooltip.default = forwardRef<TooltipRef, TooltipProps>((props, ref) => {
     // The browser-free renderer has no DOM instance to expose through the ref.
     void ref;
-    harness.popup.requestOpen = props.onVisibleChange;
+    harness.popup.requestOpen = props.onVisibleChange ?? null;
     return null;
   });
 });

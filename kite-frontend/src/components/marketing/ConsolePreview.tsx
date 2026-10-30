@@ -33,7 +33,7 @@ export function ConsolePreview() {
             <div className="demo-camera" data-demo-camera>
             <ConfigProvider getPopupContainer={() => root.current?.querySelector<HTMLElement>('[data-demo-camera]') ?? document.body}>
               <AuthProvider user={DEMO_USER}><ConsoleNavigationProvider>
-                {snapshot.scene === 'landing' ? <DemoLanding /> : snapshot.scene === 'login' ? <DemoLogin snapshot={snapshot} /> : <ConsoleShell preview section="workspace" title={snapshot.scene === 'console' ? DEMO_VM.name : undefined} eyebrow={snapshot.scene === 'console' ? '가상머신 / 콘솔' : undefined} actions={snapshot.scene === 'console' ? <><span className="serial-page-status"><StatusBadge phase="Running" /></span><Button icon={<ArrowLeftOutlined />} onClick={demoIgnore}>VM 상세</Button><Button icon={<ReloadOutlined />} onClick={demoIgnore}>새로고침</Button></> : undefined}>
+                {snapshot.scene === 'landing' ? <DemoLanding /> : snapshot.scene === 'login' ? <DemoLogin snapshot={snapshot} /> : <ConsoleShell preview section="workspace" {...(snapshot.scene === 'console' ? { title: DEMO_VM.name, eyebrow: '가상머신 / 콘솔' } : {})} actions={snapshot.scene === 'console' ? <><span className="serial-page-status"><StatusBadge phase="Running" /></span><Button icon={<ArrowLeftOutlined />} onClick={demoIgnore}>VM 상세</Button><Button icon={<ReloadOutlined />} onClick={demoIgnore}>새로고침</Button></> : undefined}>
                   {snapshot.scene === 'console' ? <DemoConsole snapshot={snapshot} /> : <DemoDashboard snapshot={snapshot} />}
                 </ConsoleShell>}
               </ConsoleNavigationProvider></AuthProvider>

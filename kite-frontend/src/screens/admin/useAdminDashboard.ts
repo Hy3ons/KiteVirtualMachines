@@ -1,16 +1,16 @@
+import { canManageSystem } from '../../domain/access';
 import { useState, useEffect, useCallback } from 'react';
 import { App as AntdApp } from 'antd';
 import { adminApi } from '../../api';
 import { useAuthStore } from '../../store/useAuthStore';
 import type { AdminDashboardData } from '../../api/pageData';
-import type { AdminCreateVmOfferPayload, AdminUser, GlobalVm } from '../../api/types';
+import type { AccessLevel, AdminCreateVmOfferPayload, AdminUser, GlobalVm } from '../../api/types';
 
 // useAdminDashboard retains role-scoped data and administrator actions using verified SSR initialData.
-export function useAdminDashboard(initialData?: AdminDashboardData) {
+export function useAdminDashboard(initialData: AdminDashboardData | null = null) {
   const { message } = AntdApp.useApp();
   const { accessLevel } = useAuthStore();
-  const safeAccessLevel = accessLevel ?? 0;
-  const canManageAll = safeAccessLevel >= 3;
+  const canManageAll = canManageSystem(accessLevel);
   
   const [users, setUsers] = useState<readonly AdminUser[]>(initialData?.users ?? []);
   const [vms, setVms] = useState<readonly GlobalVm[]>(initialData?.vms ?? []);
@@ -26,14 +26,15 @@ export function useAdminDashboard(initialData?: AdminDashboardData) {
         setLoadingVms(true);
       }
       const usersRes = await adminApi.getUsers();
-      setUsers(usersRes.users || []);
+      setUsers(usersRes.users);
       if (canManageAll) {
         const vmsRes = await adminApi.getVms();
-        setVms(vmsRes.vms || []);
+        setVms(vmsRes.vms);
       } else {
         setVms([]);
       }
-    } catch {
+    } catch (error: unknown) {
+      if (!(error instanceof Error)) throw error;
       message.error('관리자 데이터를 불러오는데 실패했습니다.');
     } finally {
       setLoadingUsers(false);
@@ -48,13 +49,14 @@ export function useAdminDashboard(initialData?: AdminDashboardData) {
   }, [fetchAllData, initialData]);
 
   // Updates targetUser to newLevel selected within the permitted role bounds.
-  const handleChangeAccessLevel = async (targetUser: string, newLevel: number) => {
+  const handleChangeAccessLevel = async (targetUser: string, newLevel: AccessLevel) => {
     try {
       message.loading({ content: '권한을 변경하고 있습니다…', key: 'level' });
       await adminApi.updateUserAccess(targetUser, newLevel);
       message.success({ content: '권한이 업데이트 되었습니다.', key: 'level' });
       fetchAllData();
-    } catch {
+    } catch (error: unknown) {
+      if (!(error instanceof Error)) throw error;
       message.error({ content: '권한 업데이트 실패', key: 'level' });
     }
   };
@@ -66,7 +68,8 @@ export function useAdminDashboard(initialData?: AdminDashboardData) {
       await adminApi.deleteUser(targetUser);
       message.success({ content: '유저 및 네임스페이스가 삭제되었습니다.', key: 'delete-user' });
       fetchAllData();
-    } catch {
+    } catch (error: unknown) {
+      if (!(error instanceof Error)) throw error;
       message.error({ content: '유저 삭제 실패', key: 'delete-user' });
     }
   };
@@ -78,7 +81,8 @@ export function useAdminDashboard(initialData?: AdminDashboardData) {
       await adminApi.forceStopVm(namespace, name);
       message.success({ content: '가상머신이 강제 종료 요청되었습니다.', key: 'stop-vm' });
       fetchAllData();
-    } catch {
+    } catch (error: unknown) {
+      if (!(error instanceof Error)) throw error;
       message.error({ content: '종료 요청 실패', key: 'stop-vm' });
     }
   };
@@ -90,7 +94,8 @@ export function useAdminDashboard(initialData?: AdminDashboardData) {
       await adminApi.deleteVm(namespace, name);
       message.success({ content: '가상머신이 강제 삭제 요청되었습니다.', key: 'delete-vm' });
       fetchAllData();
-    } catch {
+    } catch (error: unknown) {
+      if (!(error instanceof Error)) throw error;
       message.error({ content: '삭제 요청 실패', key: 'delete-vm' });
     }
   };
@@ -102,7 +107,8 @@ export function useAdminDashboard(initialData?: AdminDashboardData) {
       await adminApi.createVmOffer(payload);
       message.success('VM offer가 생성되었습니다. 대상 사용자 대시보드에 표시됩니다.');
       return true;
-    } catch {
+    } catch (error: unknown) {
+      if (!(error instanceof Error)) throw error;
       message.error('VM offer 생성에 실패했습니다.');
       return false;
     } finally {

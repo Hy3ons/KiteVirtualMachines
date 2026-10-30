@@ -14,7 +14,7 @@ type LoginFormProps = {
 // onFinish owns submission; this presentation component never calls authentication APIs itself.
 export function LoginForm({ loading, onFinish, form, name = 'login_form' }: LoginFormProps) {
   return (
-    <Form<LoginFormValues> form={form} name={name} layout="vertical" onFinish={onFinish} size="large" requiredMark={false}>
+    <Form<LoginFormValues> {...(form ? { form } : {})} name={name} layout="vertical" onFinish={onFinish} size="large" requiredMark={false}>
       <Form.Item name="username" label="이메일" rules={[{ required: true, message: '이메일을 입력해주세요.' }]}>
         <Input type="email" autoComplete="username" placeholder="you@example.com" />
       </Form.Item>

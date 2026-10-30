@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { VmConsolePage } from '@/screens/VmConsolePage';
 import { AuthProvider } from '@/store/useAuthStore';
 import { getServerApi, requireSession } from '@/server/api';
-import { loadVm } from '@/api/pageData';
+import { loadConsoleVm } from '@/api/pageData';
 import { USE_MOCK_API } from '@/config/debug';
 import { createPageMetadata } from '@/lib/metadata';
 
@@ -19,6 +19,6 @@ export default async function Page({ params }: Props) {
   const { vmName } = await params;
   const user = await requireSession('/dashboard/kite-machine/' + encodeURIComponent(vmName) + '/console');
   const { client } = await getServerApi();
-  const data = USE_MOCK_API ? undefined : await loadVm(client, vmName);
-  return <AuthProvider key={vmName + ':' + user.username + ':' + user.access_level} user={user}><VmConsolePage initialVm={data?.vm} /></AuthProvider>;
+  const data = USE_MOCK_API ? null : await loadConsoleVm(client, vmName);
+  return <AuthProvider key={vmName + ':' + user.username + ':' + user.access_level} user={user}><VmConsolePage initialVm={data?.vm ?? null} /></AuthProvider>;
 }

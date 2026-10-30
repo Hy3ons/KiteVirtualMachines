@@ -5,7 +5,7 @@ import type { AdminSettingsState } from './useAdminSettings';
 const { Title, Paragraph } = Typography;
 
 // ContactSettings renders its labelled settings group using shared form state and SSR defaults.
-export function ContactSettings({ settings, initialData }: { readonly settings: AdminSettingsState; readonly initialData?: ConfigResponse }) {
+export function ContactSettings({ settings, initialData }: { readonly settings: AdminSettingsState; readonly initialData?: ConfigResponse | null }) {
   const { contactForm, handleSaveAdminContact, loadingContact } = settings;
   return (
     <>

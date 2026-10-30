@@ -1,24 +1,24 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createDemoTimeline } from '../src/components/marketing/demo/demoTimeline';
-import { DEMO_DURATION, DEMO_PLAYBACK_RATE, DEMO_WIDTH, demoSnapshotAt } from '../src/components/marketing/demo/demoStory';
+import { createDemoAnimation } from '../src/components/marketing/demo/demoAnimation';
+import { DEMO_DURATION, DEMO_PLAYBACK_RATE, demoSnapshotAt } from '../src/components/marketing/demo/demoStory';
 
-vi.mock('../src/components/marketing/demo/demoScroll', () => ({ createDemoScroll: () => ({ update: vi.fn(), reset: vi.fn() }) }));
-vi.mock('../src/components/marketing/demo/demoCamera', () => ({ createDemoCamera: () => ({ update: vi.fn(), reset: vi.fn() }) }));
 
-// timelineFixture supplies plain-object GSAP targets and geometry without a browser or DOM engine.
-// Only scrolling/camera adapters are stubbed; the real GSAP timeline must wrap and refresh targets.
+// timelineFixture supplies plain GSAP targets and a measured point without a browser.
+// The real animation engine must wrap the story clock and remeasure targets each cycle.
 function timelineFixture() {
   let targetX = 400;
   const glyph = { rotation: 0, scale: 1, transformOrigin: '' };
   const pointer = { x: 0, y: 0, autoAlpha: 1, querySelector: () => glyph };
   const ring = { scale: 1, autoAlpha: 0 };
   const progress = { scaleX: 0 };
-  const canvas = { getBoundingClientRect: () => ({ left: 0, top: 0, width: DEMO_WIDTH }) };
-  const target = { getBoundingClientRect: () => ({ left: targetX, top: 200, width: 100, height: 40 }) };
-  const markup: Record<string, object> = { '[data-demo-canvas]': canvas, '[data-demo-camera]': {}, '[data-demo-pointer]': pointer, '[data-demo-click]': ring, '[data-demo-progress]': progress };
-  const root = { querySelector: (selector: string) => markup[selector] ?? target, querySelectorAll: () => [] } as unknown as HTMLElement;
   const tick = vi.fn<(time: number) => void>();
-  return { playback: createDemoTimeline(root, tick), tick, pointer, progress, moveTarget: (x: number) => { targetX = x; } };
+  return { playback: createDemoAnimation({ pointer, glyph, ring, progress, point: () => ({ x: targetX + 50, y: 220 }), scroll: { update: vi.fn(), reset: vi.fn() }, camera: { update: vi.fn(), reset: vi.fn() } }, tick), tick, pointer, progress, moveTarget: (x: number) => { targetX = x; } };
+}
+
+// lastTick requires a real animation callback before checking the current scene.
+function lastTick(call: readonly [number] | undefined): number {
+  if (!call) throw new TypeError('The animation did not publish its current time');
+  return call[0];
 }
 
 describe('real GSAP repetition without a browser', () => {
@@ -29,11 +29,11 @@ describe('real GSAP repetition without a browser', () => {
       expect(playback.timeline.timeScale()).toBe(DEMO_PLAYBACK_RATE);
       for (let cycle = 0; cycle < 3; cycle++) {
         playback.timeline.totalTime(cycle * DEMO_DURATION + 53.98, false);
-        expect(demoSnapshotAt(tick.mock.lastCall![0]).scene).toBe('landing');
+        expect(demoSnapshotAt(lastTick(tick.mock.lastCall)).scene).toBe('landing');
         expect(pointer.autoAlpha).toBe(0);
         playback.timeline.totalTime((cycle + 1) * DEMO_DURATION + .1, false);
         expect(playback.timeline.time()).toBeCloseTo(.1);
-        expect(demoSnapshotAt(tick.mock.lastCall![0])).toMatchObject({ scene: 'login', hasVm: false, loginEmail: '' });
+        expect(demoSnapshotAt(lastTick(tick.mock.lastCall))).toMatchObject({ scene: 'login', hasVm: false, loginEmail: '' });
         expect(pointer.autoAlpha).toBe(1);
         expect(progress.scaleX).toBeLessThan(.01);
       }

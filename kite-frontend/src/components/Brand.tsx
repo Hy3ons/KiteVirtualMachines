@@ -1,10 +1,10 @@
 import Link from 'next/link';
 
-type BrandProps = { readonly compact?: boolean; readonly href?: string; readonly className?: string; readonly prefetch?: boolean };
+type BrandProps = { readonly compact?: boolean; readonly href?: string; readonly className?: string; readonly prefetch?: boolean | null };
 
 // Brand links to href with the original folded-kite symbol and optional wordmark.
 // compact supplies an icon-only identity for narrow navigation and product previews.
-export function Brand({ compact = false, href = '/', className = '', prefetch }: BrandProps) {
+export function Brand({ compact = false, href = '/', className = '', prefetch = null }: BrandProps) {
   return (
     <Link href={href} prefetch={prefetch} className={`kite-brand ${className}`} aria-label="Kite 홈">
       <svg viewBox="0 0 40 40" className="kite-mark" aria-hidden="true">

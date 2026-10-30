@@ -1,9 +1,10 @@
+import type { AccessLevel } from '../api/types';
 import { CloudServerOutlined, PlayCircleOutlined, PauseCircleOutlined, AppstoreOutlined } from '@ant-design/icons';
 import { MetricCard } from '../components/MetricCard';
 import type { DashboardVm } from './UserDashboardTypes';
 
 type UserDashboardSummaryProps = {
-  readonly accessLevel: number;
+  readonly accessLevel: AccessLevel;
   readonly vms: readonly DashboardVm[];
   readonly quotaLimit: number;
   readonly accessDescription: string;

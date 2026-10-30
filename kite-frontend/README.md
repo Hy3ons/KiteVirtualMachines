@@ -1,7 +1,9 @@
 # Kite Frontend
 
-React + TypeScript + Next.js App Router frontend. The initial migration retains
-the existing Ant Design screens and Go API endpoints. UI/UX redesign follows separately.
+React + TypeScript + Next.js App Router frontend. Interactive screens use Ant
+Design and the existing Go API endpoints. See
+[`docs/architecture.md`](docs/architecture.md) for rendering, controller, policy,
+transport and Zod contract boundaries.
 Use Node.js 22.12 or newer and the checked-in npm lockfile.
 
 The visual system is documented in [`DESIGN.md`](DESIGN.md). Public pages use a
@@ -159,6 +161,10 @@ npm run typecheck
 npm test
 npm run lint
 ```
+
+TypeScript also checks exact optional properties and unchecked indexed access.
+Response types come from shared Zod schemas used by browser and SSR adapters;
+every consumed API success response is parsed, including mutation results.
 
 Tests use a local HTTP fixture and the actual fetch transport. They verify
 payloads, cookies, concurrent-user isolation, timeouts, authentication errors,

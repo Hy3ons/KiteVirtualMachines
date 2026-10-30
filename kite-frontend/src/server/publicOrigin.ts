@@ -19,9 +19,9 @@ export const getPublicOrigin = cache(async (): Promise<URL> => {
   }
 
   const incoming = await headers();
-  const host = (incoming.get('x-forwarded-host') || incoming.get('host') || '').split(',')[0].trim();
+  const host = (incoming.get('x-forwarded-host') || incoming.get('host') || '').split(',').at(0)?.trim() ?? '';
   if (!host || /[\s/@\\?#]/.test(host)) throw new InvalidPublicOriginError('A valid public request host is required');
-  const forwardedProtocol = incoming.get('x-forwarded-proto')?.split(',')[0].trim();
+  const forwardedProtocol = incoming.get('x-forwarded-proto')?.split(',').at(0)?.trim();
   const local = /^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/.test(host);
   const protocol = forwardedProtocol || (local ? 'http' : 'https');
   if (protocol !== 'http' && protocol !== 'https') throw new InvalidPublicOriginError('Public metadata requires HTTP or HTTPS');

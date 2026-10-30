@@ -5,6 +5,7 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createApiClient } from '../api/client';
 import { readSession } from '../api/session';
+import type { AccessLevel } from '../api/types';
 import { DEBUG_ADMIN_SESSION, DEBUG_DIRECT_ROUTES_ENABLED } from '../config/debug';
 
 // getServerApi forwards only the JWT cookie from the current request to the
@@ -31,7 +32,7 @@ export const getSession = cache(async () => {
 // requireSession guards each page and data load, including RSC navigation.
 // pathname is the fixed login-notice route; minimumAccessLevel is compared with
 // current CRD-backed /me permissions rather than locally decoded JWT claims.
-export async function requireSession(pathname: string, minimumAccessLevel = 0) {
+export async function requireSession(pathname: string, minimumAccessLevel: AccessLevel = 0) {
   const user = await getSession();
   if (!user) redirect(`/login?requireLogin=${encodeURIComponent(pathname)}`);
   if (user.access_level < minimumAccessLevel) redirect('/dashboard');

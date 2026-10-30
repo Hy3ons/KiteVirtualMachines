@@ -3,29 +3,9 @@
 import { createContext, useContext, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useStore } from 'zustand';
-import { createStore } from 'zustand/vanilla';
 import type { SessionUser } from '../api/session';
-
-type AuthState = {
-  readonly authenticated: boolean;
-  readonly accessLevel: number | null;
-  readonly username: string | null;
-  readonly email: string | null;
-  readonly namespace: string | null;
-  readonly login: (user: SessionUser) => void;
-  readonly logout: () => void;
-};
-
-// createAuthStore isolates display state per SSR request and page provider.
-// user is verified by /me; JWTs and permission claims are never read from browser storage.
-function createAuthStore(user: SessionUser | null) {
-  return createStore<AuthState>((set) => ({
-    authenticated: user !== null, accessLevel: user?.access_level ?? null,
-    username: user?.username ?? null, email: user?.email ?? null, namespace: user?.namespace ?? null,
-    login: (profile) => set({ authenticated: true, accessLevel: profile.access_level, username: profile.username, email: profile.email, namespace: profile.namespace }),
-    logout: () => set({ authenticated: false, accessLevel: null, username: null, email: null, namespace: null }),
-  }));
-}
+import { createAuthStore } from './authState';
+import type { AuthState } from './authState';
 
 const AuthContext = createContext<ReturnType<typeof createAuthStore> | null>(null);
 

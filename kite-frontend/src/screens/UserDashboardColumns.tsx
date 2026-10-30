@@ -28,6 +28,6 @@ export const createUserDashboardColumns = (options: UserDashboardColumnsOptions)
   { title: '상태', dataIndex: 'phase', key: 'phase', width: 120, render: (phase: string) => <StatusBadge phase={phase} /> },
   {
     title: '작업', key: 'actions', width: 80, align: 'center',
-    render: (_, vm) => <VmRowActions vm={vm} previewOpen={options.previewMenuOpen} canMutate={options.canMutateVm} onConnect={options.onConnect} onOpenConsole={options.onOpenConsole} onStart={options.onStart} onStop={options.onStop} onDelete={options.onDelete} />,
+    render: (_, vm) => <VmRowActions vm={vm} {...(options.previewMenuOpen === undefined ? {} : { previewOpen: options.previewMenuOpen })} canMutate={options.canMutateVm} onConnect={options.onConnect} onOpenConsole={options.onOpenConsole} onStart={options.onStart} onStop={options.onStop} onDelete={options.onDelete} />,
   },
 ];

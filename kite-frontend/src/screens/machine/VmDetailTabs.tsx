@@ -1,3 +1,4 @@
+import { vmLifecycle } from '../../domain/vmLifecycle';
 import { Alert, Button, Popconfirm, Space, Tabs } from 'antd';
 import { CloudServerOutlined, CodeOutlined, CopyOutlined, DeleteOutlined, SettingOutlined } from '@ant-design/icons';
 import { StatusBadge } from '../../components/StatusBadge';
@@ -35,13 +36,13 @@ export function VmDetailTabs({ vm, secure, canMutate, sshState, onCopy, onDelete
           <p>VM을 만들 때 지정한 SSH 계정과 초기 비밀번호를 사용하세요.</p>
           {!sshState.ready && <Alert className="form-alert" title="SSH gateway 설정 대기" description={sshState.message} type="warning" showIcon />}
           {vm.phase !== 'Running' && <Alert className="form-alert" title="VM이 실행 중이 아닙니다." description="Running 상태가 된 후 SSH에 연결할 수 있습니다." type="warning" showIcon />}
-          {sshState.ready && <div className="machine-command"><div><span>SSH 명령어</span><Button size="small" icon={<CopyOutlined />} onClick={onCopy}>복사</Button></div><code>{sshState.command}</code></div>}
+          {sshState.ready && <div className="machine-command"><div><span>SSH 명령어</span><Button size="small" icon={<CopyOutlined />} onClick={onCopy} disabled={!vmLifecycle(vm).canConnect}>복사</Button></div><code>{sshState.command}</code></div>}
           <p className="machine-section-caption">초기 비밀번호는 Kite에서 확인하거나 복구할 수 없습니다.</p>
         </section>
       ) },
       { key: 'settings', label: <span><SettingOutlined /> 설정</span>, children: (
         <section className="machine-surface machine-danger"><h2>가상머신 삭제</h2><p>가상머신과 연결된 데이터가 영구적으로 삭제됩니다. 필요한 데이터를 먼저 백업하세요.</p>
-          <Space><Popconfirm title="가상머신을 삭제하시겠습니까?" description="모든 데이터가 영구적으로 삭제됩니다." onConfirm={onDelete} okText="삭제" cancelText="취소" okButtonProps={{ danger: true }} disabled={!canMutate}><Button danger icon={<DeleteOutlined />} disabled={!canMutate}>가상머신 삭제</Button></Popconfirm></Space>
+          <Space><Popconfirm title="가상머신을 삭제하시겠습니까?" description="모든 데이터가 영구적으로 삭제됩니다." onConfirm={onDelete} okText="삭제" cancelText="취소" okButtonProps={{ danger: true }} disabled={!canMutate || !vmLifecycle(vm).canMutate}><Button danger icon={<DeleteOutlined />} disabled={!canMutate || !vmLifecycle(vm).canMutate}>가상머신 삭제</Button></Popconfirm></Space>
         </section>
       ) },
     ]} />

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { vmApi } from '../api';
-import { parseAccountVmUsage } from '../api/accountUsage';
+import { accountVmUsage } from '../api/accountUsage';
 import type { AccountVmUsage as VmUsage } from '../api/accountUsage';
 
 type UsageState = { readonly status: 'loading' } | { readonly status: 'loaded'; readonly usage: VmUsage } | { readonly status: 'error' };
@@ -15,7 +15,7 @@ export function AccountVmUsage() {
   useEffect(() => {
     let active = true;
     vmApi.getVms().then((response) => {
-      const usage = parseAccountVmUsage(response);
+      const usage = accountVmUsage(response.vms);
       if (active) setState({ status: 'loaded', usage });
     }).catch((error: unknown) => {
       if (!(error instanceof Error)) throw error;
