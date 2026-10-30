@@ -60,7 +60,7 @@ export function KiteDocsPage() {
               <p>일반 사용자는 직접 VM을 만들 수 있지만 스펙과 생성 한도가 고정됩니다. Frontend와 API가 모두 2대 초과 생성을 막습니다.</p>
               <dl className="marketing-policy-specs"><div><dt>CPU</dt><dd>2</dd></div><div><dt>Memory</dt><dd>4Gi</dd></div><div><dt>Disk</dt><dd>25Gi</dd></div><div><dt>Quota</dt><dd>2 VMs</dd></div></dl>
               <div className="marketing-policy-note"><h3>Level 2 · 자기 VM은 자유 스펙으로</h3><p>자기 VM을 자유 스펙으로 만들 수 있지만 admin API에서는 사용자 권한 0과 1만 조정합니다. 전체 VM 제어, settings, 사용자 삭제, offer 생성은 Level 3 관리자 작업입니다.</p></div>
-              <div className="marketing-policy-note"><h3>Level 0 · 로그인과 권한 확인</h3><p>로그인할 수 있지만 VM을 직접 생성하거나 제어하는 작업은 할 수 없습니다. Dashboard는 관리자 연락처를 보여줍니다. 관리자가 배정한 VM Offer는 명시적 배정 흐름을 따르며 직접 생성 제한과는 분리됩니다.</p></div>
+              <div className="marketing-policy-note"><h3>Level 0 · 배정된 VM 사용</h3><p>관리자가 배정한 VM을 받아 접속하고, 시작·중지·삭제할 수 있습니다. VM 직접 생성과 사양 변경에는 별도 권한이 필요합니다.</p></div>
             </section>
 
             <VmOfferGuide />

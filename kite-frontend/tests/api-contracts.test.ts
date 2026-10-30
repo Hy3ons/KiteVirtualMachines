@@ -8,7 +8,7 @@ import { user, vm, offer, publicConfig, adminConfig } from './fixtures/api';
 type Endpoints = ReturnType<typeof createEndpoints>;
 const create = { name: 'demo', domainPrefix: 'demo', sshId: 'ubuntu', sshPassword: 'secret', disk: 30 };
 const cases: readonly { readonly name: string; readonly method: string; readonly path: string; readonly response: unknown; readonly run: (api: Endpoints) => Promise<unknown> }[] = [
-  { name: 'login', method: 'POST', path: '/auth/login', response: { user, expiresIn: 600, expiresAt: '2030-01-01T00:00:00Z' }, run: a => a.authApi.login({ email: 'demo', password: 'secret' }) },
+  { name: 'login', method: 'POST', path: '/auth/login', response: { user, expiresIn: 3600, expiresAt: '2030-01-01T00:00:00Z' }, run: a => a.authApi.login({ email: 'demo', password: 'secret' }) },
   { name: 'signup', method: 'POST', path: '/auth/signup', response: { user, message: 'created' }, run: a => a.authApi.signup({ username: 'demo', email: 'demo', password: 'secret', profile_image: '' }) },
   { name: 'logout', method: 'POST', path: '/auth/logout', response: { message: 'out' }, run: a => a.authApi.logout() },
   { name: 'me', method: 'GET', path: '/me', response: { user, expiresAt: '2030-01-01T00:00:00Z' }, run: a => a.authApi.getMe() },

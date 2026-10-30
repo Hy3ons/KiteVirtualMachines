@@ -6,7 +6,6 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { ApiError, createApiClient } from '../src/api/client';
 import { readSession } from '../src/api/session';
 import { loadAdminDashboard, loadDashboard } from '../src/api/pageData';
-import { parseAccountVmUsage } from '../src/api/accountUsage';
 
 let baseUrl = '';
 const requests: { readonly method: string; readonly path: string; readonly cookie: string; readonly body: string }[] = [];
@@ -171,20 +170,20 @@ describe('SSR reads using Go response contracts', () => {
 
 describe('browser API adapters', () => {
   it.each([
-    { vms: [{ ...fullVm, phase: 'Running', delete: false }, { ...fullVm, phase: 'Stopped', delete: false }, { ...fullVm, phase: 'Running', delete: true }], usage: { total: 2, running: 1 } },
-    { vms: [], usage: { total: 0, running: 0 } },
-  ])('loads account VM counts from the existing personal VM endpoint: $usage', async ({ vms, usage }) => {
+    { vms: [{ ...fullVm, phase: 'Running', delete: false }, { ...fullVm, phase: 'Stopped', delete: false }, { ...fullVm, phase: 'Running', delete: true }] },
+    { vms: [] },
+  ])('loads personal VM inventory from the existing endpoint', async ({ vms }) => {
     vi.stubEnv('NEXT_PUBLIC_API_BASE_URL', baseUrl);
     vi.stubEnv('NEXT_PUBLIC_USE_MOCK', 'false');
     vi.resetModules();
     reply = (_request, response) => response.end(JSON.stringify({ vms }));
     const { vmApi } = await import('../src/api');
-    expect(parseAccountVmUsage(await vmApi.getVms())).toEqual(usage);
+    expect((await vmApi.getVms()).vms).toEqual(vms);
     expect(requests).toHaveLength(1);
     expect(requests[0]).toMatchObject({ method: 'GET', path: '/api/v1/vms' });
   });
 
-  it('rejects a malformed VM-count response instead of displaying a false zero', async () => {
+  it('rejects a malformed personal VM inventory response', async () => {
     vi.stubEnv('NEXT_PUBLIC_API_BASE_URL', baseUrl);
     vi.stubEnv('NEXT_PUBLIC_USE_MOCK', 'false');
     vi.resetModules();
@@ -233,7 +232,7 @@ describe('browser API adapters', () => {
     vi.resetModules();
     reply = (_request, response) => {
       response.setHeader('Set-Cookie', 'accessToken="Bearer fixture"; Path=/; HttpOnly; SameSite=Lax');
-      response.end('{"expiresIn":600,"expiresAt":"2026-10-30T00:00:00Z","user":{"username":"demo","email":"demo@example.test","namespace":"demo-ns","access_level":1,"accessToken":"must not hydrate"}}');
+      response.end('{"expiresIn":3600,"expiresAt":"2026-10-30T00:00:00Z","user":{"username":"demo","email":"demo@example.test","namespace":"demo-ns","access_level":1,"accessToken":"must not hydrate"}}');
     };
     const { authApi } = await import('../src/api');
     // When login is submitted.

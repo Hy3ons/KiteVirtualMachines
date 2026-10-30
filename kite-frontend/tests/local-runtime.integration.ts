@@ -112,7 +112,8 @@ describe('real Next -> Go -> isolated Minikube', () => {
   test('verified expiry reaches both headers and expired cookies are removed before SSR', async () => {
     const session = await admin.authApi.getMe();
     expect(Date.parse(session.expiresAt)).toBeGreaterThan(Date.now());
-    expect(Date.parse(session.expiresAt) - Date.now()).toBeLessThanOrEqual(600_000);
+    expect(Date.parse(session.expiresAt) - Date.now()).toBeLessThanOrEqual(3600_000);
+    expect(Date.parse(session.expiresAt) - Date.now()).toBeGreaterThan(3500_000);
     for (const path of ['/', '/dashboard']) {
       const response = await page(path, adminCookie);
       const html = await response.text();

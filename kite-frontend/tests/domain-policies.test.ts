@@ -13,7 +13,7 @@ describe('workspace access policy', () => {
     // When workspace capabilities are derived.
     const capabilities = [canControlVm(role), canManageUsers(role), canManageSystem(role)];
     // Then only the authorized role levels gain each capability.
-    expect(capabilities).toEqual([role !== null && role >= 1, role !== null && role >= 2, role === 3]);
+    expect(capabilities).toEqual([role !== null, role !== null && role >= 2, role === 3]);
   });
   it.each([0, 1, 2, 3])('counts inventory entries including deletion-pending entries at count %i', (count) => {
     // Given the complete inventory length, without filtering deletion-pending entries.

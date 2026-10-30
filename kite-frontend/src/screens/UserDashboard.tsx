@@ -1,6 +1,5 @@
 'use client';
 
-import { canControlVm } from '../domain/access';
 import { useState } from 'react';
 import { Button, Empty, Table } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
@@ -34,7 +33,7 @@ export function UserDashboard({ initialData = null }: { readonly initialData?: D
     onConnect: dashboard.showConnectGuide,
     onOpenConsole: (name) => router.push(`/dashboard/kite-machine/${name}/console`),
     onStart: dashboard.handleStart, onStop: dashboard.handleStop, onDelete: dashboard.handleDelete,
-    canMutateVm: canControlVm(safeAccessLevel),
+    canMutateVm: dashboard.canMutateVm,
   });
 
   return (

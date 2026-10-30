@@ -13,7 +13,7 @@ import type { AccessLevel, AdminUser, GlobalVm } from '../api/types';
 
 const { Text } = Typography;
 const accessOptions = [
-  { value: 0, label: 'Level 0 · 대기' },
+  { value: 0, label: 'Level 0 · 배정형 사용자' },
   { value: 1, label: 'Level 1 · 사용자' },
   { value: 2, label: 'Level 2 · 매니저' },
   { value: 3, label: 'Level 3 · 관리자' },

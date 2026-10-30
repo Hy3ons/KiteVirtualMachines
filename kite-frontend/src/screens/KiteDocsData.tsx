@@ -15,9 +15,9 @@ export const accessLevelDocs: readonly AccessLevelDoc[] = [
   {
     level: '0',
     title: 'No VM Create',
-    tone: '권한 요청 단계',
-    summary: '로그인은 허용하지만 VM 생성과 제어는 제한합니다.',
-    rules: ['Dashboard는 계정 상태를 보여주고 VM 생성 흐름은 열지 않습니다.', 'API 직접 호출로 VM 생성/수정/전원/삭제를 시도하면 403을 반환합니다.'],
+    tone: '배정형 사용자',
+    summary: '관리자가 배정한 VM을 사용하고 전원과 삭제를 제어할 수 있습니다.',
+    rules: ['VM 직접 생성과 사양 변경은 허용하지 않습니다.', '자기 VM에 접속하고 시작·중지·삭제할 수 있습니다. 다른 사용자의 VM에는 접근할 수 없습니다.'],
   },
   {
     level: '1',

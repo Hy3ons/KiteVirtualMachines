@@ -7,13 +7,13 @@ export const MIN_DISK_GI = 20;
 export const LEVEL_1_VM_QUOTA = 2;
 
 // Access predicates fail closed for an unavailable session throughout the workspace.
-export const canControlVm = (level: AccessLevel | null): boolean => (level ?? 0) >= 1;
+export const canControlVm = (level: AccessLevel | null): boolean => level !== null;
 export const canManageUsers = (level: AccessLevel | null): boolean => (level ?? 0) >= 2;
 export const canManageSystem = (level: AccessLevel | null): boolean => level === 3;
 
 // Counts include deleting VMs until the API removes them from the inventory.
 export function creationPolicy(level: AccessLevel | null, inventoryCount: number): 'allowed' | 'forbidden' | 'quota' {
-  if (!canControlVm(level)) return 'forbidden';
+  if (level === null || level === 0) return 'forbidden';
   if (level === 1 && inventoryCount >= LEVEL_1_VM_QUOTA) return 'quota';
   return 'allowed';
 }

@@ -7,6 +7,7 @@ import { VmDetailTabs } from '../src/screens/machine/VmDetailTabs';
 import { vmSchema } from '../src/api/contracts';
 import { vm as fixtureVm } from './fixtures/api';
 import type { VmPhase } from '../src/api/types';
+import { canControlVm } from '../src/domain/access';
 
 const harness = vi.hoisted(() => {
   const state: { menu: MenuProps | null; copyDisabled: boolean | null; readonly copy: () => Promise<void> } = {
@@ -39,6 +40,12 @@ function disabledAction(key: string): boolean {
 }
 
 describe('SSH preparation and live console actions', () => {
+  it.each(['Running', 'Stopped'] satisfies VmPhase[])('enables assigned VM lifecycle actions for Level 0 while %s', phase => {
+    const vm = vmSchema.parse({ ...fixtureVm, phase, delete: false });
+    renderToStaticMarkup(createElement(VmRowActions, { vm, canMutate: canControlVm(0), onConnect: vi.fn(), onOpenConsole: vi.fn(), onStart: vi.fn(), onStop: vi.fn(), onDelete: vi.fn() }));
+    expect(disabledAction('power')).toBe(false);
+    expect(disabledAction('delete')).toBe(false);
+  });
   it.each([
     { phase: 'Stopped', deleting: false, sshDisabled: false, consoleDisabled: true },
     { phase: 'Running', deleting: false, sshDisabled: false, consoleDisabled: false },

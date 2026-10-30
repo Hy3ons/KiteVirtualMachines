@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { App as AntdApp, Form } from 'antd';
 import { configApi, vmApi } from '../../api';
 import { useAuthStore } from '../../store/useAuthStore';
-import { buildVmCreatePayload, creationPolicy, LEVEL_1_VM_QUOTA } from '../../domain/access';
+import { buildVmCreatePayload, canControlVm, creationPolicy, LEVEL_1_VM_QUOTA } from '../../domain/access';
 import type { DashboardData } from '../../api/pageData';
 import type { SSHGatewaySettings, VmOffer } from '../../api/types';
 import type { DashboardVm, VmCreateFormValues, VmOfferClaimFormValues } from '../UserDashboardTypes';
@@ -174,7 +174,7 @@ export function useDashboard(initialData: DashboardData | null = null) {
   };
 
   return {
-    username, namespace, safeAccessLevel, vms, offers, loading, loadingOffers,
+    username, namespace, safeAccessLevel, canMutateVm: canControlVm(accessLevel), vms, offers, loading, loadingOffers,
     baseDomain, adminContact, sshGateway, isModalVisible, setIsModalVisible, form,
     isDrawerVisible, setIsDrawerVisible, selectedVm, canCreateVm, fetchVms,
     fetchOffers, handleStart, handleStop, handleDelete, handleCreate, handleClaimOffer, showConnectGuide,

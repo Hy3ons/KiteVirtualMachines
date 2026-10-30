@@ -36,9 +36,8 @@ type loginResponse struct {
 }
 
 const (
-	accessTokenCookieName        = "accessToken"
-	httpAccessTokenCookieMaxAge  = 10 * time.Minute
-	httpsAccessTokenCookieMaxAge = time.Hour
+	accessTokenCookieName   = "accessToken"
+	accessTokenCookieMaxAge = time.Hour
 )
 
 type accessTokenCookiePolicy struct {
@@ -166,15 +165,9 @@ func logoutHandler(deps Dependencies) gin.HandlerFunc {
 // deps provides live platform settings so forceHttps changes take effect without restarting kite-api.
 // The returned policy controls Secure and Max-Age for login and logout Set-Cookie headers.
 func accessTokenCookiePolicyForRequest(c *gin.Context, deps Dependencies) accessTokenCookiePolicy {
-	secure := requestUsesSecureCookie(c, deps)
-	maxAge := httpAccessTokenCookieMaxAge
-	if secure {
-		maxAge = httpsAccessTokenCookieMaxAge
-	}
-
 	return accessTokenCookiePolicy{
-		secure: secure,
-		maxAge: maxAge,
+		secure: requestUsesSecureCookie(c, deps),
+		maxAge: accessTokenCookieMaxAge,
 	}
 }
 

@@ -29,8 +29,8 @@ func TestSessionMetadataMatchesSignedExpiryAndCookieLifetime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if login.ExpiresIn != 600 || cookie.MaxAge != 600 || claims.ExpiresAt-claims.IssuedAt != 600 {
-		t.Fatal("HTTP cookie, JWT and login metadata must all expire after ten minutes")
+	if login.ExpiresIn != 3600 || cookie.MaxAge != 3600 || claims.ExpiresAt-claims.IssuedAt != 3600 {
+		t.Fatal("HTTP cookie, JWT and login metadata must all expire after sixty minutes")
 	}
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
 	req.AddCookie(cookie)

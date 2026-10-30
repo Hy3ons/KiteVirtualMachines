@@ -132,8 +132,8 @@ func TestLoginOmitsSecureCookieOnPlainHTTP(t *testing.T) {
 	if cookies[0].Secure {
 		t.Fatal("plain HTTP dev and QA requests must receive a storable non-Secure cookie")
 	}
-	if cookies[0].MaxAge != int((10 * time.Minute).Seconds()) {
-		t.Fatalf("expected plain HTTP cookie Max-Age=600, got %d", cookies[0].MaxAge)
+	if cookies[0].MaxAge != int(time.Hour.Seconds()) {
+		t.Fatalf("expected plain HTTP cookie Max-Age=3600, got %d", cookies[0].MaxAge)
 	}
 }
 

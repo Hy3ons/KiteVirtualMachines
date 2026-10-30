@@ -3,7 +3,7 @@ import { LEVEL_1_FIXED_CPU, LEVEL_1_FIXED_MEMORY, LEVEL_1_FIXED_DISK_GI, LEVEL_1
 export { LEVEL_1_FIXED_CPU, LEVEL_1_FIXED_MEMORY, LEVEL_1_FIXED_DISK_GI, LEVEL_1_VM_QUOTA, MIN_DISK_GI } from '../domain/access';
 
 export const getAccessLevelDescription = (level: AccessLevel): string => {
-  if (level === 0) return '로그인과 대시보드 확인만 가능하며, VM 직접 생성과 제어는 막혀 있습니다.';
+  if (level === 0) return '배정된 VM에 접속하고 시작·중지·삭제할 수 있습니다. VM을 직접 생성하려면 관리자에게 권한을 요청하세요.';
   if (level === 1) return `일반 계정입니다. 직접 생성 VM은 최대 ${LEVEL_1_VM_QUOTA}개이며 CPU ${LEVEL_1_FIXED_CPU}, RAM ${LEVEL_1_FIXED_MEMORY}, 디스크 ${LEVEL_1_FIXED_DISK_GI}GiB로 고정됩니다. 더 큰 디스크가 필요하면 관리자에게 요청하세요.`;
   if (level === 2) return '팀 운영자 계정입니다. 자기 VM은 자유 스펙으로 만들 수 있고, 관리자 화면에서는 Level 0/1 권한만 조정할 수 있습니다.';
   if (level >= 3) return '전체 관리자 계정입니다. 사용자, VM, 시스템 설정, VM offer를 모두 관리할 수 있습니다.';
