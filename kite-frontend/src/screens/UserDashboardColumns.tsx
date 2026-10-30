@@ -12,6 +12,7 @@ type UserDashboardColumnsOptions = {
   readonly onStop: (name: string) => Promise<void>;
   readonly onDelete: (name: string) => Promise<void>;
   readonly canMutateVm: boolean;
+  readonly previewMenuOpen?: boolean;
 };
 
 // createUserDashboardColumns builds a compact VM list with hover specs and a row action menu.
@@ -27,6 +28,6 @@ export const createUserDashboardColumns = (options: UserDashboardColumnsOptions)
   { title: '상태', dataIndex: 'phase', key: 'phase', width: 120, render: (phase: string) => <StatusBadge phase={phase} /> },
   {
     title: '작업', key: 'actions', width: 80, align: 'center',
-    render: (_, vm) => <VmRowActions vm={vm} canMutate={options.canMutateVm} onConnect={options.onConnect} onOpenConsole={options.onOpenConsole} onStart={options.onStart} onStop={options.onStop} onDelete={options.onDelete} />,
+    render: (_, vm) => <VmRowActions vm={vm} previewOpen={options.previewMenuOpen} canMutate={options.canMutateVm} onConnect={options.onConnect} onOpenConsole={options.onOpenConsole} onStart={options.onStart} onStop={options.onStop} onDelete={options.onDelete} />,
   },
 ];

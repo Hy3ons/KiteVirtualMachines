@@ -1,5 +1,6 @@
 import React from 'react';
 import { Alert, Button, Form, Input, InputNumber, Modal, Typography } from 'antd';
+import type { ModalProps } from 'antd';
 import { UI_EXAMPLE_BASE_DOMAIN } from '../config/uiDefaults';
 import type { VmCreateForm, VmCreateFormValues } from './UserDashboardTypes';
 
@@ -18,6 +19,10 @@ type VmCreateModalProps = {
   readonly minDiskGi: number;
   readonly adminContact: string;
   readonly baseDomain: string;
+  readonly getContainer?: ModalProps['getContainer'];
+  readonly focusable?: ModalProps['focusable'];
+  readonly formName?: string;
+  readonly submitting?: boolean;
 };
 
 // VmCreateModal collects VM identity and credentials while displaying the access-level specification limits.
@@ -34,6 +39,10 @@ export const VmCreateModal: React.FC<VmCreateModalProps> = ({
   minDiskGi,
   adminContact,
   baseDomain,
+  getContainer,
+  focusable,
+  formName,
+  submitting = false,
 }) => {
   const domainExample = baseDomain.trim() || UI_EXAMPLE_BASE_DOMAIN;
 
@@ -45,8 +54,10 @@ export const VmCreateModal: React.FC<VmCreateModalProps> = ({
       onCancel={onCancel}
       footer={null}
       centered
+      getContainer={getContainer}
+      focusable={focusable}
     >
-      <Form form={form} layout="vertical" onFinish={onCreate} className="vm-create-form">
+      <Form form={form} name={formName} layout="vertical" onFinish={onCreate} className="vm-create-form">
         {accessLevel === 0 && (
           <Alert
             title="VM 생성 권한 없음"
@@ -108,7 +119,7 @@ export const VmCreateModal: React.FC<VmCreateModalProps> = ({
 
         <Form.Item className="form-actions">
           <Button onClick={onCancel}>취소</Button>
-          <Button type="primary" htmlType="submit" disabled={!canCreateVm}>가상머신 만들기</Button>
+          <Button type="primary" htmlType="submit" disabled={!canCreateVm} loading={submitting}>가상머신 만들기</Button>
         </Form.Item>
       </Form>
     </Modal>

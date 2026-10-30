@@ -1,14 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Space, Typography } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import { buildConsoleWebSocketUrl, createConsoleTicket } from '../api/console';
-import { StatusBadge } from '../components/StatusBadge';
+import { SerialConsoleFrame } from '../components/SerialConsoleFrame';
 import { designTokens } from '../design/tokens';
-
-const { Text } = Typography;
 
 type ConsoleStatus = 'idle' | 'connecting' | 'connected' | 'closed' | 'failed';
 
@@ -180,20 +176,8 @@ export const VmConsoleTerminal: React.FC<VmConsoleTerminalProps> = ({ vmName, en
   }, [enabled, mock, reconnectKey, vmName]);
 
   return (
-    <div className="console-panel">
-      <div className="console-panel-header">
-        <Space>
-          <Text strong>Serial console</Text>
-          <StatusBadge phase={status} />
-        </Space>
-        <Button icon={<ReloadOutlined />} disabled={!enabled || status === 'connecting'} onClick={() => setReconnectKey((value) => value + 1)}>
-          다시 연결
-        </Button>
-      </div>
-      <Alert title={message} type={status === 'failed' ? 'error' : 'info'} showIcon className="console-status" />
-      <div className="console-terminal-frame">
-        <div ref={containerRef} className="console-terminal" />
-      </div>
-    </div>
+    <SerialConsoleFrame status={status} message={message} reconnectDisabled={!enabled || status === 'connecting'} onReconnect={() => setReconnectKey((value) => value + 1)}>
+      <div ref={containerRef} className="console-terminal" />
+    </SerialConsoleFrame>
   );
 };

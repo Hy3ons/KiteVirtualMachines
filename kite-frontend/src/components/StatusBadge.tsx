@@ -6,7 +6,8 @@ const phaseTones: Readonly<Record<string, string>> = {
 };
 
 // StatusBadge presents phase with text and a redundant dot in workspace surfaces.
+// label optionally supplies context while phase still determines the semantic tone.
 // Unknown phases stay visible and neutral instead of implying a successful state.
-export function StatusBadge({ phase }: { readonly phase: string }) {
-  return <span className={`status-badge status-badge--${phaseTones[phase] ?? 'neutral'}`}><span className="status-dot" aria-hidden="true" />{phase}</span>;
+export function StatusBadge({ phase, label = phase }: { readonly phase: string; readonly label?: string }) {
+  return <span className={`status-badge status-badge--${phaseTones[phase] ?? 'neutral'}`}><span className="status-dot" aria-hidden="true" />{label}</span>;
 }

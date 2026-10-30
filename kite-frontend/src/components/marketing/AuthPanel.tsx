@@ -3,13 +3,13 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { App, Button, Form, Input } from 'antd';
+import { App, Button } from 'antd';
 import { ArrowRightOutlined } from '@ant-design/icons';
 import { authApi } from '../../api';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useLogout } from '../../hooks/useLogout';
-
-type LoginFormValues = { readonly username: string; readonly password: string };
+import { LoginForm } from './LoginForm';
+import type { LoginFormValues } from './LoginForm';
 
 // AuthPanel renders the dedicated login page's Go-backed form or current session actions.
 // Cookie ownership stays with the API; successful login refreshes the protected Next route.
@@ -66,15 +66,7 @@ export function AuthPanel() {
       ) : (
         <>
           <div className="marketing-form-heading"><h1>Kite에 로그인</h1></div>
-          <Form<LoginFormValues> name="login_form" layout="vertical" onFinish={submitLogin} size="large" requiredMark={false}>
-            <Form.Item name="username" label="이메일" rules={[{ required: true, message: '이메일을 입력해주세요.' }]}>
-              <Input type="email" autoComplete="username" placeholder="you@example.com" />
-            </Form.Item>
-            <Form.Item name="password" label="비밀번호" rules={[{ required: true, message: '비밀번호를 입력해주세요.' }]}>
-              <Input.Password autoComplete="current-password" placeholder="비밀번호를 입력하세요" />
-            </Form.Item>
-            <Form.Item><Button type="primary" htmlType="submit" block loading={loading} className="marketing-submit">로그인 <ArrowRightOutlined /></Button></Form.Item>
-          </Form>
+          <LoginForm onFinish={submitLogin} loading={loading} />
           <p className="marketing-form-footer">아직 계정이 없으신가요? <Link href="/signup">회원가입</Link></p>
         </>
       )}

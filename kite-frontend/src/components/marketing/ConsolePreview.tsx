@@ -1,31 +1,54 @@
-import { CloudServerOutlined, CodeOutlined, FolderOutlined, SlidersOutlined } from '@ant-design/icons';
+'use client';
 
-// ConsolePreview illustrates the product on the public landing page with clearly labelled examples.
-// It is static presentation, so its visual navigation and resource labels are not interactive controls.
+import { useRef } from 'react';
+import { Button, ConfigProvider } from 'antd';
+import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons';
+import { AuthProvider } from '../../store/useAuthStore';
+import { ConsoleNavigationProvider } from '../../store/useConsoleNavigation';
+import { ConsoleShell } from '../ConsoleShell';
+import { StatusBadge } from '../StatusBadge';
+import { DemoLogin } from './demo/DemoLogin';
+import { DemoLanding } from './demo/DemoLanding';
+import { DemoDashboard } from './demo/DemoDashboard';
+import { DemoConsole } from './demo/DemoConsole';
+import { DemoControls } from './demo/DemoControls';
+import { DemoBrowserChrome } from './demo/DemoBrowserChrome';
+import { DEMO_HEIGHT, DEMO_WIDTH } from './demo/demoStory';
+import { DEMO_USER, DEMO_VM, demoIgnore } from './demo/demoData';
+import { useDemoPlayback } from './demo/useDemoPlayback';
+
+// ConsolePreview embeds the real workspace primitives in an isolated, inert product demonstration.
+// The logical canvas preserves the live 900px content width; GSAP never clicks or calls real APIs.
 export function ConsolePreview() {
+  const root = useRef<HTMLElement>(null);
+  const playback = useDemoPlayback(root);
+  const { snapshot } = playback;
   return (
-    <figure className="marketing-preview-stage">
-      <div className="marketing-preview-window">
-        <div className="marketing-preview-chrome"><span className="marketing-preview-wordmark">Kite <span>/ workspace</span></span><span>제품 화면 예시</span></div>
-        <div className="marketing-preview-layout">
-          <div className="marketing-preview-sidebar" aria-hidden="true">
-            <span className="marketing-preview-nav-current"><CloudServerOutlined /> 가상머신</span>
-            <span><FolderOutlined /> 내 작업 공간</span>
-            <span><SlidersOutlined /> 계정 정보</span>
-            <div className="marketing-preview-sidebar-note">Your infrastructure.<br />Your workspace.</div>
-          </div>
-          <div className="marketing-preview-body">
-            <div className="marketing-preview-heading"><div><span className="marketing-eyebrow">Workspace overview</span><h2>내 가상머신</h2></div><span className="marketing-preview-label">Workspace / example</span></div>
-            <div className="marketing-preview-resource">
-              <div className="marketing-preview-resource-title"><span className="marketing-preview-resource-icon"><CloudServerOutlined /></span><div><strong>my-workspace</strong><span>가상머신 구성 예시</span></div><span className="marketing-preview-policy">Level 1</span></div>
-              <dl className="marketing-preview-specs"><div><dt>CPU</dt><dd>2 <span>vCPU</span></dd></div><div><dt>메모리</dt><dd>4 <span>GiB</span></dd></div><div><dt>디스크</dt><dd>25 <span>GiB</span></dd></div></dl>
-              <div className="marketing-preview-resource-footer"><span>계정 정책에 맞춘 리소스</span><span>생성 · 시작 · 중지</span></div>
+    <figure ref={root} className={`product-demo${playback.reduced ? ' is-reduced-motion' : ''}`} aria-label="Kite 로그인과 워크스페이스 미리보기">
+      <DemoControls playback={playback} />
+      <div className="demo-window">
+        <DemoBrowserChrome scene={snapshot.scene} />
+        <div className="demo-viewport" data-demo-viewport style={{ aspectRatio: `${DEMO_WIDTH} / ${DEMO_HEIGHT}` }}>
+          <div className="demo-canvas" data-demo-canvas style={{ width: DEMO_WIDTH, height: DEMO_HEIGHT, transform: `scale(${playback.scale})` }} aria-hidden="true" inert>
+            <div className="demo-camera" data-demo-camera>
+            <ConfigProvider getPopupContainer={() => root.current?.querySelector<HTMLElement>('[data-demo-camera]') ?? document.body}>
+              <AuthProvider user={DEMO_USER}><ConsoleNavigationProvider>
+                {snapshot.scene === 'landing' ? <DemoLanding /> : snapshot.scene === 'login' ? <DemoLogin snapshot={snapshot} /> : <ConsoleShell preview section="workspace" title={snapshot.scene === 'console' ? DEMO_VM.name : undefined} eyebrow={snapshot.scene === 'console' ? '가상머신 / 콘솔' : undefined} actions={snapshot.scene === 'console' ? <><span className="serial-page-status"><StatusBadge phase="Running" /></span><Button icon={<ArrowLeftOutlined />} onClick={demoIgnore}>VM 상세</Button><Button icon={<ReloadOutlined />} onClick={demoIgnore}>새로고침</Button></> : undefined}>
+                  {snapshot.scene === 'console' ? <DemoConsole snapshot={snapshot} /> : <DemoDashboard snapshot={snapshot} />}
+                </ConsoleShell>}
+              </ConsoleNavigationProvider></AuthProvider>
+            </ConfigProvider>
             </div>
-            <div className="marketing-preview-connection"><CodeOutlined /><div><strong>작업 공간으로 연결</strong><span>웹 콘솔과 SSH Gateway</span></div><span className="marketing-preview-connection-arrow" aria-hidden="true">↗</span></div>
+            <span className="demo-pointer" data-demo-pointer>
+              <span className="demo-pointer-appearance" style={{ transform: `scale(${1 / playback.scale})` }}>
+                <span className="demo-click-ring" data-demo-click />
+                <svg className="demo-pointer-glyph" width="28" height="35" viewBox="0 0 32 40" fill="none"><path d="M0 0V29L8.5 22.3L15 36L21.2 33.2L14.8 19.7H26.8L0 0Z" fill="var(--ink)" stroke="var(--canvas)" strokeWidth="2.4" strokeLinejoin="round" /></svg>
+              </span>
+            </span>
           </div>
         </div>
+        <div className="demo-progress" aria-hidden="true"><span data-demo-progress /></div>
       </div>
-      <figcaption>Kite console · 화면 구성 예시이며 실제 리소스 상태가 아닙니다.</figcaption>
     </figure>
   );
 }

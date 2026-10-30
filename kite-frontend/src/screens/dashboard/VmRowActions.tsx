@@ -12,13 +12,15 @@ type VmRowActionsProps = {
   readonly onStart: (name: string) => Promise<void>;
   readonly onStop: (name: string) => Promise<void>;
   readonly onDelete: (name: string) => Promise<void>;
+  readonly previewOpen?: boolean;
 };
 
 // VmRowActions groups the existing row callbacks in a text-only dropdown.
 // vm and canMutate determine availability; deletion still requires explicit confirmation.
-export function VmRowActions({ vm, canMutate, onConnect, onOpenConsole, onStart, onStop, onDelete }: VmRowActionsProps) {
+export function VmRowActions({ vm, canMutate, onConnect, onOpenConsole, onStart, onStop, onDelete, previewOpen }: VmRowActionsProps) {
   const { modal } = App.useApp();
-  const [open, setOpen] = useState(false);
+  const [localOpen, setOpen] = useState(false);
+  const open = previewOpen ?? localOpen;
   const running = vm.phase === 'Running';
   const items: MenuProps['items'] = [
     { key: 'ssh', label: 'SSH 연결', disabled: vm.delete, onClick: () => onConnect(vm) },
@@ -35,7 +37,7 @@ export function VmRowActions({ vm, canMutate, onConnect, onOpenConsole, onStart,
     } },
   ];
   return (
-    <Dropdown menu={{ items, onClick: () => setOpen(false) }} trigger={['click']} placement="bottomRight" open={open} onOpenChange={setOpen} autoFocus classNames={{ root: 'workspace-vm-actions-menu' }}>
+    <Dropdown menu={{ items, onClick: () => setOpen(false) }} trigger={['click']} placement="bottomRight" open={open} onOpenChange={setOpen} autoFocus={previewOpen === undefined} classNames={{ root: 'workspace-vm-actions-menu' }}>
       <Button type="text" icon={<MoreOutlined />} aria-label={`${vm.name} 작업 메뉴`} aria-haspopup="menu" aria-expanded={open} />
     </Dropdown>
   );

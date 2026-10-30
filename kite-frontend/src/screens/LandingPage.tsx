@@ -4,9 +4,10 @@ import Link from 'next/link';
 import { ArrowRightOutlined } from '@ant-design/icons';
 import { GlobalHeader } from '../components/GlobalHeader';
 import { ConsolePreview } from '../components/marketing/ConsolePreview';
+import { LandingHeroCopy } from '../components/marketing/LandingHeroCopy';
 
 // LandingPage introduces Kite and links account access to the dedicated login route.
-// Its static product illustration explains capabilities without presenting live account data.
+// Its bounded product animation demonstrates the existing UI without using live account data.
 export function LandingPage() {
   return (
     <div className="public-page">
@@ -14,15 +15,7 @@ export function LandingPage() {
       <main id="main-content" className="marketing-main">
         <section className="marketing-hero" aria-labelledby="marketing-title">
           <div className="marketing-content">
-            <div className="marketing-hero-copy">
-              <p className="marketing-eyebrow">Your own space in the cloud</p>
-              <h1 id="marketing-title">당신의 클라우드,<br />가볍게 펼치세요.</h1>
-              <p className="marketing-lead">가상머신을 만들고, 연결하고, 관리하는 일.<br className="marketing-desktop-break" /> Kubernetes 위에서 Kite로 간결하게.</p>
-              <div className="marketing-actions">
-                <Link href="/login" className="marketing-button marketing-button--primary">Kite 시작하기 <ArrowRightOutlined /></Link>
-                <Link href="/kite-docs" className="marketing-text-link">어떻게 동작하나요? <ArrowRightOutlined /></Link>
-              </div>
-            </div>
+            <LandingHeroCopy />
             <ConsolePreview />
           </div>
         </section>
