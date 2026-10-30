@@ -1,29 +1,10 @@
 import { DEBUG_STATE_KEY, defaultDebugState, type DebugState } from './debugMockData';
 import type { GlobalVm, UserVm } from './types';
 
-const hasKey = <Key extends string>(value: object, key: Key): value is Record<Key, unknown> => key in value;
-
-const isDebugState = (value: unknown): value is DebugState => {
-  if (typeof value !== 'object' || value === null) {
-    return false;
-  }
-
-  return (
-    hasKey(value, 'users') &&
-    hasKey(value, 'vms') &&
-    hasKey(value, 'offers') &&
-    hasKey(value, 'config') &&
-    hasKey(value, 'nextVmId') &&
-    hasKey(value, 'nextOfferId') &&
-    Array.isArray(value.users) &&
-    Array.isArray(value.vms) &&
-    Array.isArray(value.offers) &&
-    typeof value.config === 'object' &&
-    value.config !== null &&
-    typeof value.nextVmId === 'number' &&
-    typeof value.nextOfferId === 'number'
-  );
-};
+import { z } from 'zod';
+import { adminUserSchema, vmSchema, offerSchema } from './contracts';
+import { adminConfigSchema } from './configContracts';
+const debugStateSchema = z.object({ users: z.array(adminUserSchema), vms: z.array(vmSchema), offers: z.array(offerSchema), config: adminConfigSchema.shape.config, nextVmId: z.number().int().positive(), nextOfferId: z.number().int().positive() });
 
 const getBrowserStorage = (): Storage | null => {
   if (typeof window === 'undefined') {
@@ -47,8 +28,9 @@ export const readDebugState = (): DebugState => {
 
   try {
     const parsed: unknown = JSON.parse(rawState);
-    if (isDebugState(parsed)) {
-      return parsed;
+    const result = debugStateSchema.safeParse(parsed);
+    if (result.success) {
+      return result.data;
     }
   } catch (error) {
     if (error instanceof SyntaxError) {

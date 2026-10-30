@@ -136,7 +136,7 @@ sshd로 우회하지 않습니다. host 운영 접속은 운영자가 관리하�
 
 ### Frontend
 
-- `kite-frontend`: Vite/React 기반 웹 UI입니다. 사용자 로그인, VM 목록/상세, 관리자 대시보드, 전역 설정 화면을 제공합니다.
+- `kite-frontend`: Next.js/React 기반 SSR 웹 UI입니다. 사용자 로그인, VM 목록/상세, 관리자 대시보드, 전역 설정 화면을 제공합니다.
 
 ## Custom Resources
 

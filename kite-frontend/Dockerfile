@@ -1,43 +1,35 @@
-# Stage 1: Build the static files
-FROM node:20-alpine AS build
+FROM node:22-alpine AS dependencies
 WORKDIR /app
-
-ARG VITE_BUILD_MODE=production
-ARG VITE_API_BASE_URL=/api/v1
-ARG VITE_USE_MOCK=false
-ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
-ENV VITE_USE_MOCK=${VITE_USE_MOCK}
-
-# Copy package.json and install dependencies
 COPY package*.json ./
-RUN npm install
+RUN npm ci --no-audit --no-fund
 
-# Copy the rest of the source code and build
+FROM node:22-alpine AS build
+WORKDIR /app
+COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
-RUN if [ "${VITE_BUILD_MODE}" != "debug" ] && [ "${VITE_USE_MOCK}" = "true" ]; then \
-      echo "VITE_USE_MOCK=true is only allowed when VITE_BUILD_MODE=debug" >&2; \
-      exit 1; \
-    fi
-RUN npm run build -- --mode "${VITE_BUILD_MODE}"
 
-# Stage 2: Serve the static files with Nginx
-FROM nginx:alpine
+ARG NEXT_PUBLIC_KITE_MODE=production
+ARG NEXT_PUBLIC_API_BASE_URL=/api/v1
+ARG NEXT_PUBLIC_USE_MOCK=false
+ENV NEXT_PUBLIC_KITE_MODE=${NEXT_PUBLIC_KITE_MODE} \
+    NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL} \
+    NEXT_PUBLIC_USE_MOCK=${NEXT_PUBLIC_USE_MOCK} \
+    NEXT_TELEMETRY_DISABLED=1
+RUN npm run build
 
+FROM node:22-alpine AS runtime
+WORKDIR /app
 LABEL org.opencontainers.image.source="https://github.com/Hy3ons/KiteVirtualMachines" \
-      org.opencontainers.image.description="Kite React frontend served by Nginx" \
+      org.opencontainers.image.description="Kite Next.js frontend" \
       org.opencontainers.image.licenses="MIT"
-
-# Remove default nginx static assets
-RUN rm -rf /usr/share/nginx/html/*
-
-# Configure SPA route fallback so direct requests such as /dashboard serve index.html.
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Copy the static files from the build stage
-COPY --from=build /app/dist /usr/share/nginx/html
-
-# Expose port 80
-EXPOSE 80
-
-# Start Nginx
-CMD ["nginx", "-g", "daemon off;"]
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0 \
+    KITE_API_INTERNAL_URL=http://kite-api:8080
+COPY --from=build --chown=node:node /app/.next/standalone ./
+COPY --from=build --chown=node:node /app/.next/static ./.next/static
+COPY --from=build --chown=node:node /app/public ./public
+USER node
+EXPOSE 3000
+CMD ["node", "server.js"]

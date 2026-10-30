@@ -20,7 +20,7 @@ const resolveTargetNamespace = (payload: AdminCreateVmOfferPayload): string => {
   return user?.namespace || targetUser;
 };
 
-const activeOffers = (offers: readonly VmOffer[]): readonly VmOffer[] =>
+const activeOffers = (offers: readonly VmOffer[]): VmOffer[] =>
   offers.filter((offer) => offer.phase === 'Available' && new Date(offer.expiresAt).getTime() > Date.now());
 
 export const debugOfferApi = {

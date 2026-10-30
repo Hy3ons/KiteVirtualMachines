@@ -1,7 +1,8 @@
+import { ApiError } from './client';
+import type { AccessLevel, AdminUser } from './types';
 import { readDebugState, toGlobalVm, writeDebugState } from './debugMockState';
 import { debugVmApi } from './debugMockVm';
 import type {
-  AdminUsersResponse,
   CertPayload,
   ConfigResponse,
   GlobalVmsResponse,
@@ -14,25 +15,27 @@ import type {
 } from './types';
 
 export const debugAdminApi = {
-  getUsers: async (): Promise<AdminUsersResponse> => ({ users: readDebugState().users }),
+  getUsers: async () => ({ users: readDebugState().users.map(toWireUser) }),
 
-  updateUserAccess: async (nameOrUsername: string, accessLevel: number): Promise<AdminUsersResponse> => {
+  updateUserAccess: async (nameOrUsername: string, accessLevel: AccessLevel) => {
     const state = readDebugState();
     const users = state.users.map((user) =>
-      user.username === nameOrUsername ? { ...user, accessLevel, status: 'Active' as const } : user
+      user.username === nameOrUsername ? { ...user, accessLevel, status: accessLevel > 0 ? 'Active' as const : 'Pending' as const } : user
     );
     writeDebugState({ ...state, users });
-    return { users };
+    const updated = users.find((user) => user.username === nameOrUsername);
+    if (!updated) throw new ApiError(404, 'User not found');
+    return { user: toWireUser(updated) };
   },
 
-  deleteUser: async (nameOrUsername: string): Promise<AdminUsersResponse> => {
+  deleteUser: async (nameOrUsername: string) => {
     const state = readDebugState();
     const user = state.users.find((candidate) => candidate.username === nameOrUsername);
     const namespace = user?.namespace || nameOrUsername;
     const users = state.users.filter((candidate) => candidate.username !== nameOrUsername);
     const vms = state.vms.filter((vm) => vm.namespace !== namespace);
     writeDebugState({ ...state, users, vms });
-    return { users };
+    return { message: 'kite user deleted successfully' };
   },
 
   getAdminVms: async (): Promise<GlobalVmsResponse> => ({
@@ -54,7 +57,7 @@ export const debugAdminApi = {
     return { vm: stopped };
   },
 
-  deleteAdminVm: async (namespace: string, name: string): Promise<VmResponse> => {
+  deleteAdminVm: async (namespace: string, name: string) => {
     const state = readDebugState();
     const vm = state.vms.find((candidate) => candidate.namespace === namespace && candidate.name === name);
     if (!vm) {
@@ -66,27 +69,27 @@ export const debugAdminApi = {
       ...state,
       vms: [...state.vms.filter((candidate) => candidate.id !== vm.id), deleted],
     });
-    return { vm: deleted };
+    return { message: 'virtual machine delete requested', vm: deleted };
   },
 
   getSettings: async (): Promise<ConfigResponse> => ({ config: readDebugState().config }),
 
-  saveDomain: async (baseDomain: string): Promise<ConfigResponse> => {
+  saveDomain: async (baseDomain: string) => {
     const state = readDebugState();
     const config = { ...state.config, baseDomain };
     const vms = state.vms.map((vm) => ({ ...vm, domain: `${vm.domainPrefix}.${baseDomain}` }));
     writeDebugState({ ...state, config, vms });
-    return { config };
+    return { message: 'settings updated', config };
   },
 
-  saveHTTPSPolicy: async (payload: HTTPSPolicyPayload): Promise<ConfigResponse> => {
+  saveHTTPSPolicy: async (payload: HTTPSPolicyPayload) => {
     const state = readDebugState();
     const config = { ...state.config, forceHttps: payload.forceHttps };
     writeDebugState({ ...state, config });
-    return { config };
+    return { message: 'settings updated', config };
   },
 
-  saveSSHGateway: async (payload: SSHGatewayPayload): Promise<ConfigResponse> => {
+  saveSSHGateway: async (payload: SSHGatewayPayload) => {
     const state = readDebugState();
     const blockedByMissingExternalPort = payload.externalEnabled && payload.externalPort.trim() === '';
     const phase: SSHGatewayPhase = blockedByMissingExternalPort
@@ -118,17 +121,17 @@ export const debugAdminApi = {
       },
     };
     writeDebugState({ ...state, config });
-    return { config };
+    return { message: 'settings updated', config };
   },
 
-  saveAdminContact: async (adminContact: string): Promise<ConfigResponse> => {
+  saveAdminContact: async (adminContact: string) => {
     const state = readDebugState();
     const config = { ...state.config, adminContact };
     writeDebugState({ ...state, config });
-    return { config };
+    return { message: 'settings updated', config };
   },
 
-  rotateRuntimeSecrets: async (payload: RuntimeSecretRotation): Promise<ConfigResponse> => {
+  rotateRuntimeSecrets: async (payload: RuntimeSecretRotation) => {
     const state = readDebugState();
     const config = {
       ...state.config,
@@ -136,13 +139,18 @@ export const debugAdminApi = {
       hasPasswordSalt: payload.rotatePasswordSalt ? true : state.config.hasPasswordSalt,
     };
     writeDebugState({ ...state, config });
-    return { config };
+    return { message: 'settings updated', config };
   },
 
-  saveCert: async (payload: CertPayload): Promise<ConfigResponse> => {
+  saveCert: async (payload: CertPayload) => {
     const state = readDebugState();
     const config = { ...state.config, hasTLSCertificate: payload.tlsCert.length > 0 && payload.tlsKey.length > 0 };
     writeDebugState({ ...state, config });
-    return { config };
+    return { message: 'settings updated', config };
   },
 };
+
+// toWireUser gives debug mutations the same public fields emitted by Go.
+function toWireUser(user: AdminUser) {
+ return { username: user.username, email: user.email, namespace: user.namespace, access_level: user.accessLevel, profile_image: '' };
+}

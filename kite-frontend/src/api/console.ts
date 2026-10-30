@@ -1,7 +1,8 @@
-import { apiClient } from './axios';
+import { apiClient } from './http';
+import { createEndpoints } from './endpoints';
 import type { ConsoleTicketResponse } from './types';
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1';
 
 type ConsoleTicketRequestOptions = {
   readonly signal?: AbortSignal;
@@ -20,10 +21,5 @@ export const createConsoleTicket = async (
   vmName: string,
   options: ConsoleTicketRequestOptions = {},
 ): Promise<ConsoleTicketResponse> => {
-  const { data } = await apiClient.post<ConsoleTicketResponse>(
-    `/vms/${vmName}/console-ticket`,
-    undefined,
-    { signal: options.signal },
-  );
-  return data;
+  return createEndpoints(apiClient).vmApi.createConsoleTicket(vmName, options);
 };

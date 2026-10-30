@@ -1,3 +1,33 @@
+import type { z } from 'zod';
+import type {
+  sessionUserSchema,
+  authResponseSchema,
+  messageSchema,
+  signupResponseSchema,
+  vmPhaseSchema,
+  vmSchema,
+  vmsSchema,
+  vmResponseSchema,
+  offerPhaseSchema,
+  offerSchema,
+  offersSchema,
+  offerResponseSchema,
+  consoleTicketSchema,
+  adminUserSchema,
+  usersSchema,
+  globalVmSchema,
+  globalVmsSchema,
+} from './contracts';
+import type {
+  gatewayPhaseSchema,
+  gatewayStatusSchema,
+  gatewaySettingsSchema,
+  adminConfigSchema,
+  publicConfigSchema,
+} from './configContracts';
+export type PublicConfigResponse = Readonly<z.infer<typeof publicConfigSchema>>;
+export type AdminConfigResponse = ConfigResponse;
+export type AccessLevel = KiteUser['access_level'];
 export type LoginCredentials = {
   readonly email: string;
   readonly password: string;
@@ -10,114 +40,35 @@ export type SignupPayload = {
   readonly profile_image: string;
 };
 
-export type KiteUser = {
-  readonly access_level: number;
-  readonly username: string;
-  readonly namespace: string;
-  readonly profile_image: string;
-};
+export type KiteUser = Readonly<z.infer<typeof sessionUserSchema>>;
 
-export type AuthResponse = {
-  readonly expiresIn: number;
-  readonly expiresAt: string;
-  readonly user: KiteUser;
-};
+export type AuthResponse = Readonly<z.infer<typeof authResponseSchema>>;
 
-export type LogoutResponse = {
-  readonly message: string;
-};
+export type LogoutResponse = Readonly<z.infer<typeof messageSchema>>;
 
-export type SignupResponse = {
-  readonly message: string;
-  readonly user: KiteUser & {
-    readonly email: string;
-  };
-};
+export type SignupResponse = Readonly<z.infer<typeof signupResponseSchema>>;
 
-export type SSHGatewayPhase = 'Disabled' | 'Reconciling' | 'Ready' | 'Blocked' | 'Failed';
+export type SSHGatewayPhase = z.infer<typeof gatewayPhaseSchema>;
 
-export type SSHGatewayStatus = {
-  readonly phase: SSHGatewayPhase;
-  readonly reason: string;
-  readonly message: string;
-  readonly observedExternalPort?: string;
-  readonly observedServiceName?: string;
-  readonly lastTransitionTime?: string;
-};
+export type SSHGatewayStatus = Readonly<z.infer<typeof gatewayStatusSchema>>;
 
-export type SSHGatewaySettings = {
-  readonly externalEnabled: boolean;
-  readonly externalPort: string;
-  readonly publicPort: string;
-  readonly phase?: SSHGatewayPhase;
-  readonly reason?: string;
-  readonly message?: string;
-  readonly status?: SSHGatewayStatus;
-};
+export type SSHGatewaySettings = Readonly<z.infer<typeof gatewaySettingsSchema>>;
 
-export type ConfigResponse = {
-  readonly config: {
-    readonly baseDomain: string;
-    readonly forceHttps: boolean;
-    readonly adminContact: string;
-    readonly hasJWTSecret?: boolean;
-    readonly hasPasswordSalt?: boolean;
-    readonly hasTLSCertificate?: boolean;
-    readonly sshGateway: SSHGatewaySettings;
-  };
-};
+export type ConfigResponse = Readonly<z.infer<typeof adminConfigSchema>>;
 
-export type VmPhase = 'Running' | 'Stopped' | 'Creating' | 'Terminating';
+export type VmPhase = z.infer<typeof vmPhaseSchema>;
 
-export type UserVm = {
-  readonly id: string;
-  readonly name: string;
-  readonly namespace: string;
-  readonly owner: string;
-  readonly domain: string;
-  readonly phase: VmPhase;
-  readonly powerState: 'On' | 'Off';
-  readonly currentPowerState: 'On' | 'Off' | '';
-  readonly cpu: number;
-  readonly memory: string;
-  readonly image: string;
-  readonly disk: string;
-  readonly domainPrefix: string;
-  readonly sshId: string;
-  readonly delete: boolean;
-  readonly dataVolumePhase: string;
-  readonly dataVolumeProgress: string;
-  readonly dataVolumeMessage: string;
-};
+export type UserVm = Readonly<z.infer<typeof vmSchema>>;
 
-export type VmsResponse = {
-  readonly vms: readonly UserVm[];
-};
+export type VmsResponse = Readonly<z.infer<typeof vmsSchema>>;
 
-export type VmResponse = {
-  readonly vm: UserVm;
-};
+export type VmResponse = Readonly<z.infer<typeof vmResponseSchema>>;
 
-export type VmOfferPhase = 'Available' | 'Claimed' | 'Expired';
+export type VmOfferPhase = z.infer<typeof offerPhaseSchema>;
 
-export type VmOffer = {
-  readonly id: string;
-  readonly name: string;
-  readonly namespace: string;
-  readonly cpu: number;
-  readonly memory: string;
-  readonly disk: string;
-  readonly image: string;
-  readonly expiresAt: string;
-  readonly createdBy: string;
-  readonly phase: VmOfferPhase;
-  readonly claimedBy: string;
-  readonly message: string;
-};
+export type VmOffer = Readonly<z.infer<typeof offerSchema>>;
 
-export type VmOffersResponse = {
-  readonly offers: readonly VmOffer[];
-};
+export type VmOffersResponse = Readonly<z.infer<typeof offersSchema>>;
 
 export type ClaimVmOfferPayload = {
   readonly vmName: string;
@@ -137,14 +88,9 @@ export type AdminCreateVmOfferPayload = {
   readonly expiresAt?: string;
 };
 
-export type VmOfferResponse = {
-  readonly offer: VmOffer;
-};
+export type VmOfferResponse = Readonly<z.infer<typeof offerResponseSchema>>;
 
-export type ConsoleTicketResponse = {
-  readonly ticket: string;
-  readonly expiresAt: string;
-};
+export type ConsoleTicketResponse = Readonly<z.infer<typeof consoleTicketSchema>>;
 
 export type CreateVmPayload = {
   readonly name: string;
@@ -162,32 +108,13 @@ export type UpdateVmPayload = {
   readonly powerState?: 'On' | 'Off';
 };
 
-export type AdminUser = {
-  readonly username: string;
-  readonly email: string;
-  readonly namespace: string;
-  readonly accessLevel: number;
-  readonly status: 'Active' | 'Pending';
-};
+export type AdminUser = Readonly<z.infer<typeof adminUserSchema>>;
 
-export type AdminUsersResponse = {
-  readonly users: readonly AdminUser[];
-};
+export type AdminUsersResponse = Readonly<z.infer<typeof usersSchema>>;
 
-export type GlobalVm = {
-  readonly id: string;
-  readonly owner: string;
-  readonly namespace: string;
-  readonly name: string;
-  readonly domain: string;
-  readonly phase: VmPhase;
-  readonly cpu: number;
-  readonly memory: string;
-};
+export type GlobalVm = Readonly<z.infer<typeof globalVmSchema>>;
 
-export type GlobalVmsResponse = {
-  readonly vms: readonly GlobalVm[];
-};
+export type GlobalVmsResponse = Readonly<z.infer<typeof globalVmsSchema>>;
 
 export type RuntimeSecretRotation = {
   readonly rotateJWTSecret?: boolean;
