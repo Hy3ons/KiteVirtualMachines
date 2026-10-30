@@ -14,7 +14,8 @@
     "start": "next start --hostname 0.0.0.0 --port ${PORT:-3000}",
     "lint": "eslint .",
     "test": "vitest run",
-    "audit:metadata": "node scripts/audit-metadata.mjs"
+    "audit:metadata": "node scripts/audit-metadata.mjs",
+    "audit:session": "node scripts/audit-session.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.2.5",

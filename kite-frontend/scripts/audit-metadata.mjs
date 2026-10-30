@@ -41,6 +41,12 @@ function request(path, headers = crawlerHeaders) {
 
 for (const [path, title, noIndex] of routes) {
   const response = await request(path);
+  const pathname = new URL(path, origin).pathname;
+  if (response.status === 307 && pathname === '/login') {
+    assert.equal(response.headers.get('location'), '/', path);
+    console.log(`PASS ${path}: authenticated access redirects to landing`);
+    continue;
+  }
   if (response.status === 307 && (path.startsWith('/dashboard') || path.startsWith('/admin'))) {
     assert.ok(response.headers.get('location')?.startsWith('/login?requireLogin='), path);
     console.log(`PASS ${path}: anonymous access redirects to login`);
@@ -63,7 +69,6 @@ for (const [path, title, noIndex] of routes) {
   assert.ok(metaValues(head, 'robots').some((value) => noIndex ? value.includes('noindex') : value.includes('index') && !value.includes('noindex')), path);
   const canonical = [...head.matchAll(/<link\b[^>]*>/g)].map((match) => attributes(match[0])).filter((value) => value.rel === 'canonical');
   assert.equal(canonical.length, noIndex ? 0 : 1, `${path}: canonical indexing policy`);
-  const pathname = new URL(path, origin).pathname;
   if (!noIndex) assert.equal(new URL(canonical[0].href).href, new URL(pathname, publicOrigin).href, path);
   if (!path.includes('missing-page')) {
     assert.equal(new URL(metaValues(head, 'og:url')[0]).href, new URL(pathname, publicOrigin).href, path);

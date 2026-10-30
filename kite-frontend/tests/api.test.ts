@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { ApiError, createApiClient } from '../src/api/client';
 import { readSession } from '../src/api/session';
 import { loadAdminDashboard, loadDashboard } from '../src/api/pageData';
+import { parseAccountVmUsage } from '../src/api/accountUsage';
 
 let baseUrl = '';
 const requests: { readonly method: string; readonly path: string; readonly cookie: string; readonly body: string }[] = [];
@@ -162,6 +163,30 @@ describe('SSR reads using Go response contracts', () => {
 });
 
 describe('browser API adapters', () => {
+  it.each([
+    { vms: [{ phase: 'Running', delete: false }, { phase: 'Stopped', delete: false }, { phase: 'Running', delete: true }], usage: { total: 2, running: 1 } },
+    { vms: [], usage: { total: 0, running: 0 } },
+  ])('loads account VM counts from the existing personal VM endpoint: $usage', async ({ vms, usage }) => {
+    vi.stubEnv('NEXT_PUBLIC_API_BASE_URL', baseUrl);
+    vi.stubEnv('NEXT_PUBLIC_USE_MOCK', 'false');
+    vi.resetModules();
+    reply = (_request, response) => response.end(JSON.stringify({ vms }));
+    const { vmApi } = await import('../src/api');
+    expect(parseAccountVmUsage(await vmApi.getVms())).toEqual(usage);
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({ method: 'GET', path: '/api/v1/vms' });
+  });
+
+  it('rejects a malformed VM-count response instead of displaying a false zero', async () => {
+    vi.stubEnv('NEXT_PUBLIC_API_BASE_URL', baseUrl);
+    vi.stubEnv('NEXT_PUBLIC_USE_MOCK', 'false');
+    vi.resetModules();
+    reply = (_request, response) => response.end('{"vms":null}');
+    const { vmApi } = await import('../src/api');
+    const data = await vmApi.getVms();
+    expect(() => parseAccountVmUsage(data)).toThrow();
+  });
+
   it.each([true, false])('saves gateway exposure with externalEnabled=%s and separate Service/public ports', async (externalEnabled) => {
     // Given the gateway editor's payload and a Go-shaped settings response.
     vi.stubEnv('NEXT_PUBLIC_API_BASE_URL', baseUrl);

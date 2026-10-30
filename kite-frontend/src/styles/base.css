@@ -45,6 +45,7 @@ p { text-wrap: pretty; word-break: keep-all; overflow-wrap: anywhere; }
 .public-footer-bottom > nav { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); }
 .public-footer-bottom > nav > a { display: inline-flex; align-items: center; min-height: 44px; }
 .public-footer a:hover { color: var(--ink); }
+.public-footer-credit { text-decoration: underline; text-underline-offset: 3px; }
 .route-message { min-height: 70dvh; max-width: 680px; margin: auto; padding: var(--space-12) var(--space-6); }
 .route-message .kite-brand { margin-block-end: var(--space-9); }
 .route-message h1 { font-size: clamp(28px, 5vw, 44px); line-height: 1.25; }

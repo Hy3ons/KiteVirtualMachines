@@ -18,7 +18,7 @@ export function GlobalFooter() {
         <a href="https://github.com/Hy3ons/KiteVirtualMachines" target="_blank" rel="noreferrer"><GithubOutlined /> GitHub에서 함께 만들기 <ArrowUpOutlined className="diagonal-arrow" /></a>
       </div>
       <div className="public-footer-bottom">
-        <span>© {new Date().getUTCFullYear()} Kite. Created by Hy3ons.</span>
+        <span>© {new Date().getUTCFullYear()} Kite. Created by <a className="public-footer-credit" href="https://github.com/hy3ons" target="_blank" rel="noreferrer">Hy3ons</a>.</span>
         <nav aria-label="이용 안내 및 정책"><Link href="/kite-docs">이용 가이드</Link><Link href="/privacy">개인정보처리방침</Link><Link href="/terms">서비스 이용약관</Link></nav>
         <span>Open source. On your terms.</span>
       </div>
