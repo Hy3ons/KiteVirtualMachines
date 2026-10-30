@@ -205,7 +205,7 @@ main() {
 
   ensure_kite_namespace
   # golden image는 VM DataVolume clone 원본으로 쓰이므로 app 배포 전에 준비한다.
-  run_step "${APPLY_GOLDEN_IMAGE}" "applying Ubuntu golden image" kubectl apply -f "${ROOT_DIR}/build/kite-storage/golden-images"
+  run_step "${APPLY_GOLDEN_IMAGE}" "applying Ubuntu golden image" "${ROOT_DIR}/build/deploy/scripts/apply-golden-image.sh"
   run_step "${APPLY_GOLDEN_IMAGE}" "waiting for Ubuntu golden image" "${ROOT_DIR}/build/deploy/scripts/wait-golden-image.sh" ubuntu-22.04
 
   run_step "${DEPLOY_KITE}" "building local Kite images and deploying Kite" "${ROOT_DIR}/build/dev/dev.sh"
