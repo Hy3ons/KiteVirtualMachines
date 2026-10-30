@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { ArrowRightOutlined } from '@ant-design/icons';
 import { GlobalHeader } from '../components/GlobalHeader';
 import { ConsolePreview } from '../components/marketing/ConsolePreview';
@@ -36,19 +37,17 @@ export function LandingPage() {
             <li><span className="marketing-step-number">03</span><div><h3>SSH Gateway로 외부에서도 접속</h3><p>클러스터 내부의 VM까지 SSH 연결을 중계하는 Gateway를 제공합니다. 대시보드에 표시된 명령으로 접속하고, 브라우저에서는 웹 콘솔을 사용할 수 있습니다.</p></div></li>
           </ol>
         </section>
-        <section className="marketing-system" aria-labelledby="system-title">
+        <section id="architecture" className="marketing-system" aria-labelledby="system-title">
           <div className="marketing-content marketing-system-content">
-            <div>
-              <p className="marketing-eyebrow">Open by design</p>
-              <h2 id="system-title">단순한 화면 뒤,<br />분명한 구조.</h2>
-              <p>요청은 API로, 원하는 상태는 CRD로.<br />Kite controller가 실제 리소스를 맞춥니다.</p>
-              <a className="marketing-text-link" href="https://github.com/Hy3ons/KiteVirtualMachines" target="_blank" rel="noreferrer">소스 살펴보기 <ArrowRightOutlined /></a>
-            </div>
-            <ol className="marketing-system-flow" aria-label="Kite 리소스 생성 구조">
-              <li><span>01 / Request</span><strong>Kite API</strong><p>세션과 권한 확인</p></li>
-              <li><span>02 / Desired state</span><strong>Kubernetes CRD</strong><p>사용자가 요청한 상태 기록</p></li>
-              <li><span>03 / Reconcile</span><strong>Kite controller</strong><p>KubeVirt 리소스 조정</p></li>
-            </ol>
+            <header className="marketing-system-heading">
+              <h2 id="system-title">Kubernetes와 CRD로,<br />상태를 설계합니다.</h2>
+              <p>사용자의 요청을 CRD로 정의한 Kubernetes 리소스에 기록합니다. Kite Controller는 선언된 내용을 기준으로 VM과 관련 리소스를 지속적으로 조정하며 안정적인 운영을 제공합니다.</p>
+            </header>
+            <figure className="marketing-system-figure">
+              <a href="/images/kite-kubernetes-crd-diagram.webp" target="_blank" rel="noreferrer" aria-label="Kubernetes와 CRD 개념도 원본 보기 (새 탭)">
+                <Image className="marketing-system-art" src="/images/kite-kubernetes-crd-diagram.webp" width={1672} height={941} sizes="(max-width: 680px) calc(100vw - 112px), (max-width: 900px) 568px, 492px" alt="CRD가 KiteVirtualMachine의 형식을 정의하고, 컨트롤러가 spec을 읽어 KubeVirt VM을 조정한 뒤 status를 갱신하는 Kubernetes 제어 루프." />
+              </a>
+            </figure>
           </div>
         </section>
       </main>

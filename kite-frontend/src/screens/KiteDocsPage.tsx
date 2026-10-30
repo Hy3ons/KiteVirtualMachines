@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { ArrowRightOutlined, ArrowUpOutlined } from '@ant-design/icons';
 import { GlobalHeader } from '../components/GlobalHeader';
 import { accessLevelDocs, architectureTimelineItems } from './KiteDocsData';
@@ -41,7 +42,7 @@ export function KiteDocsPage() {
             <section id="access-levels" className="marketing-guide-section" aria-labelledby="access-title">
               <p className="marketing-eyebrow">01 / Access control</p>
               <h2 id="access-title">계정마다 알맞은 권한.</h2>
-              <p>Kite는 숫자가 높을수록 더 넓은 작업을 허용하되, Level 2와 Level 3의 권한 범위를 분리합니다.</p>
+              <p>Kite는 숫자가 높을수록 더 넓은 작업을 허용하되 Level 2와 Level 3의 권한 범위를 분리합니다.</p>
               <div className="marketing-access-list">
                 {accessLevelDocs.map((item) => (
                   <article className="marketing-access-row" key={item.level}>
@@ -58,8 +59,8 @@ export function KiteDocsPage() {
               <h3>Level 1 · 고정 스펙과 생성 한도</h3>
               <p>일반 사용자는 직접 VM을 만들 수 있지만 스펙과 생성 한도가 고정됩니다. Frontend와 API가 모두 2대 초과 생성을 막습니다.</p>
               <dl className="marketing-policy-specs"><div><dt>CPU</dt><dd>2</dd></div><div><dt>Memory</dt><dd>4Gi</dd></div><div><dt>Disk</dt><dd>25Gi</dd></div><div><dt>Quota</dt><dd>2 VMs</dd></div></dl>
-              <div className="marketing-policy-note"><h3>Level 2 · 자기 VM은 자유 스펙으로</h3><p>자기 VM을 자유 스펙으로 만들 수 있지만, admin API에서는 사용자 권한 0과 1만 조정합니다. 전체 VM 제어, settings, 사용자 삭제, offer 생성은 Level 3 관리자 작업입니다.</p></div>
-              <div className="marketing-policy-note"><h3>Level 0 · 로그인과 권한 확인</h3><p>로그인할 수 있지만 VM 직접 생성과 제어 작업은 열리지 않습니다. Dashboard는 관리자 연락처를 보여줍니다. 관리자가 배정한 VM Offer는 직접 생성 제한과 분리된 명시적 배정 흐름입니다.</p></div>
+              <div className="marketing-policy-note"><h3>Level 2 · 자기 VM은 자유 스펙으로</h3><p>자기 VM을 자유 스펙으로 만들 수 있지만 admin API에서는 사용자 권한 0과 1만 조정합니다. 전체 VM 제어, settings, 사용자 삭제, offer 생성은 Level 3 관리자 작업입니다.</p></div>
+              <div className="marketing-policy-note"><h3>Level 0 · 로그인과 권한 확인</h3><p>로그인할 수 있지만 VM을 직접 생성하거나 제어하는 작업은 할 수 없습니다. Dashboard는 관리자 연락처를 보여줍니다. 관리자가 배정한 VM Offer는 명시적 배정 흐름을 따르며 직접 생성 제한과는 분리됩니다.</p></div>
             </section>
 
             <VmOfferGuide />
@@ -67,7 +68,13 @@ export function KiteDocsPage() {
             <section id="architecture" className="marketing-guide-section" aria-labelledby="architecture-title">
               <p className="marketing-eyebrow">04 / Architecture</p>
               <h2 id="architecture-title">요청에서 실제 가상머신까지.</h2>
-              <p>Kite는 Frontend가 KubeVirt를 직접 제어하지 않도록 역할을 나눕니다. API는 권한과 입력을 확인하고, controller는 CRD spec을 기준으로 클러스터 안의 실제 리소스를 조정합니다.</p>
+              <p>Kite는 Frontend가 KubeVirt를 직접 제어하지 않도록 역할을 나눕니다. API는 권한과 입력을 확인하고 controller는 CRD spec을 기준으로 클러스터 안의 실제 리소스를 조정합니다.</p>
+              <figure className="docs-concept-figure">
+                <a href="/images/docs/web-api-architecture.webp" target="_blank" rel="noreferrer" aria-label="웹 요청과 컨테이너 아키텍처 원본 보기 (새 탭)">
+                  <Image src="/images/docs/web-api-architecture.webp" width={1512} height={1040} sizes="(max-width: 720px) calc(100vw - 72px), (max-width: 1024px) calc(100vw - 336px), 664px" alt="브라우저 요청을 Ingress가 Next.js 프런트엔드와 Go API 컨테이너로 나눠 전달합니다. Go API가 Kubernetes에 CRD spec을 기록하면 Controller 컨테이너가 이를 감시해 KubeVirt 리소스를 조정하고 관찰한 상태를 status에 기록합니다." />
+                </a>
+                <figcaption className="docs-figure-label">컨테이너 기반의 웹 요청·VM 관리 구조 · /api 요청은 Go API로 직접 전달됩니다. 이미지를 누르면 크게 볼 수 있습니다.</figcaption>
+              </figure>
               <ol className="marketing-guide-steps marketing-architecture-steps">
                 {architectureTimelineItems?.map((item, index) => (
                   <li key={index}><span>0{index + 1}</span><div>{item.content}</div></li>
@@ -77,9 +84,15 @@ export function KiteDocsPage() {
 
             <section id="ssh-gateway" className="marketing-guide-section" aria-labelledby="gateway-title">
               <p className="marketing-eyebrow">05 / SSH gateway</p>
-              <h2 id="gateway-title">하나의 진입점으로 연결.</h2>
+              <h2 id="gateway-title">하나의 SSH 주소로 VM에 접속하세요.</h2>
               <h3>도입한 이유</h3>
               <p>VM마다 외부 SSH 포트를 따로 열지 않기 위해 Kite Gateway가 하나의 SSH 진입점을 받습니다. Gateway는 SSH username을 <code>spec.sshId</code>와 매칭해 대상 VM을 찾습니다.</p>
+              <figure className="docs-concept-figure">
+                <a href="/images/docs/ssh-gateway-routing.webp" target="_blank" rel="noreferrer" aria-label="SSH Gateway 연결 구조 원본 보기 (새 탭)">
+                  <Image src="/images/docs/ssh-gateway-routing.webp" width={1983} height={793} sizes="(max-width: 720px) calc(100vw - 72px), (max-width: 1024px) calc(100vw - 336px), 664px" alt="SSH 클라이언트가 라우터와 LoadBalancer Service를 거쳐 Kite SSH Gateway에 연결합니다. Gateway는 SSH ID와 초기 비밀번호를 확인하고 관리 SSH 키로 클러스터 내부 VM의 22번 포트에 연결합니다. 사용자 비밀번호는 VM에 전달하지 않습니다." />
+                </a>
+                <figcaption className="docs-figure-label">SSH Gateway 연결 구조 · 외부 22번 → Service 12311번은 포트 전달 예시입니다. 이미지를 누르면 크게 볼 수 있습니다.</figcaption>
+              </figure>
               <h3>로그인 프록시 방식</h3>
               <p>사용자는 VM 생성 시 입력한 초기 비밀번호로 Gateway에 로그인합니다. Gateway는 이 비밀번호를 VM에 전달하지 않습니다. 인증 후 Kite 관리 SSH key로 VM sshd에 접속하고 세션만 중계합니다.</p>
               <div className="marketing-guide-callout"><strong>현재 지원 범위</strong><p>외부 사용자 public key 인증은 아직 지원하지 않습니다.</p></div>

@@ -12,12 +12,36 @@ https://openai.com/ko-KR/business/openai-presence/ (page content; live browser
 initially challenged). Aside supplies bright framing and soft continuous corners;
 Presence supplies restrained section hierarchy. Google Cloud/Analytics are user
 references for navigation and information architecture, not copied assets.
-No source logos, screenshots, marketing copy, or invented live metrics are reused.
+No reference-site logos, screenshots, marketing copy, or invented live metrics
+are reused. The architecture figure uses the Kubernetes symbol as a technical
+identifier at the user's request.
 
 The landing hero uses an original generated pastel cloudscape with a folded-paper
 kite, saved as `public/images/kite-pastel-hero.webp`. It is decorative background
 artwork with a quiet, light center for the live heading and actions. Its prompt
 and provenance are recorded in `docs/assets/kite-pastel-hero.md`.
+
+The landing architecture section explains the declarative control loop rather
+than repeating a request pipeline. Keep exactly two visual groups: the title
+and one short paragraph on the left, the concept diagram on the right. No
+eyebrow, action row, step list, caption or spec/status definition strip. The
+1000px content grid uses .9fr / 1.1fr tracks, a 48px gap and vertical centering.
+The title uses a fluid 32–40px size and the paragraph uses 16px/1.8 text.
+At <=900px the copy precedes the image in one column; the image is bounded at
+600px. The diagram itself links to its full-size asset, with a labelled link
+and the existing visible keyboard focus treatment.
+The diagram uses the Kubernetes helm, a clearly bounded cluster, a CRD schema,
+the KiteVirtualMachine custom resource with spec/status, Kite controller and
+KubeVirt VMs. Labelled directional arrows explain spec watches, resource apply,
+runtime observation and status updates. Use a flat white/pale-blue documentation
+style, with readable English labels; no abstract 3D objects. It is conceptual
+rather than a literal network or deployment topology. The 1000px
+content limit remains inside the wider workspace-toned section. Its figure has
+16px safe inset, a 24px outer squircle and a 16px image radius.
+Use explicit image dimensions, responsive sizes and lazy loading. No added
+motion, runtime dependency or illustrative claims of automatic recovery from
+host/storage failure. Asset provenance and final prompt live in
+`docs/assets/kite-declarative-diagram.md`.
 
 The previous cream/brown, Georgia-heading, zero-radius design is retired by the
 user's explicit redesign instruction. Existing Go endpoints, authorization,
@@ -71,7 +95,11 @@ system section backgrounds keep their wider frames; an inner marketing-content
 wrapper limits their actual content. Prose is 62ch; hero background max 1440px
 with 16px outer inset.
 The public footer starts with a neutral hairline and presents the brand, a short
-single-node VM platform description and repository link. Its policy navigation
+single-node VM platform description and repository link. The repository action
+is a black squircle link with a white GitHub mark and the white label "Github",
+using the shared 48px primary-button geometry with 12px/24px padding. Its icon
+has a non-shrinking 20px slot with an 18px SVG, and hover retains white text.
+Its policy navigation
 wraps on small screens. Privacy and terms pages share the public header, 1000px
 outer content limit and a centered 760px reading column, with numbered sections,
 44px document links and a last-revised date. Policy prose describes account/VM
@@ -82,14 +110,28 @@ responsibilities, with announced idle-VM management and emergency intervention.
 Deployment identity, retention and actual OAuth configuration require operational
 verification; never replace unknown facts with invented providers or periods.
 Documentation uses a compact page introduction, sticky chapter navigation and
-task-oriented prose. The VM offer chapter pairs an original generated conceptual
-illustration with live numbered captions, role prerequisites, actual menu paths,
-field definitions and troubleshooting. The illustration is explicitly labelled
-as a conceptual diagram rather than a product screenshot. Figures use a 16px
-radius with 16px inset, fixed intrinsic dimensions and responsive width; captions
-and three-column role summaries stack at <=720px. Native details/summary provides
-keyboard-accessible optional operational notes and troubleshooting, with 44px
-summary targets, neutral rules and no new motion or runtime dependencies.
+task-oriented prose. The VM offer chapter is a short feature introduction:
+one paragraph explaining administrator allocation and user acceptance, plus the
+existing generated illustration and one concise conceptual-diagram caption.
+Detailed prerequisites, operation steps, field definitions, troubleshooting and
+controller internals are omitted at the user's request. Figures use a 16px
+radius with 16px inset, fixed intrinsic dimensions and responsive width.
+The SSH Gateway chapter uses the same figure geometry for an original generated
+cloud-documentation concept diagram. It separates client password verification
+from managed-key authentication to the VM, places router forwarding outside the
+Kubernetes boundary and labels public 22 → Service 12311 as an example. Its
+caption repeats that ports are illustrative; the image links to its full-size
+asset for reading small labels. Provenance and the final prompt are recorded in
+`docs/assets/kite-ssh-gateway-diagram.md`.
+The architecture chapter uses the same concept-figure primitive for the web/API
+and VM control path. Show browser → Ingress with separate / and /api routes,
+the Next.js, Go API and controller containers in the kite namespace, and the
+Kubernetes API/CRDs plus KubeVirt as separate cluster components. Internal
+session/SSR reads must not imply all browser API traffic goes through Next.js.
+The controller watches CRDs, applies resources and records observed status;
+no direct API-to-controller RPC or API-to-KubeVirt control arrow. Container
+glyphs identify application images without implying Docker-engine nesting.
+Asset provenance lives in `docs/assets/kite-web-api-architecture.md`.
 Workspace topbar 64px, sidebar 224px, actual body content max 900px via
 --console-content-width, centered within the right column with page padding 32px.
 Page and resource-section headings have titles and actions without explanatory
@@ -120,14 +162,26 @@ width. It is an in-memory UI preference; account data stays in page-local stores
 
 - Brand: original black folded-kite mark, wordmark, compact icon-only variant.
 - GlobalHeader: public wordmark, docs/repository links, login/console action.
-  Authenticated public and console headers use a single person-icon button.
+  Authenticated public and console headers use one account button with a person
+  icon plus the verified name and email always visible in two rows. The button
+  has a 48px minimum height, 4px/12px inset and 240px maximum width. Name uses
+  14px semibold text; email uses 12px secondary text, both at 1.4 line height.
+  Long values truncate within available header space and retain native titles.
+  Small screens keep both rows visible; only their available width shrinks.
+  Showing identity uses the existing page-local session without extra API reads.
   Its click popover has 24px inset, 24px outer radius and a 304px reading width,
   showing the verified name/email and freshly requested personal VM totals.
   Count all non-deleting VMs and show Running separately; loading/errors never
   imply zero. The existing /vms adapter runs only while this popover is open.
+  Keep the live popover's content shell available while closed so Ant Design
+  can deliver the first open event; mount VM usage only after it opens. The
+  account actions include dashboard, admin-only system settings and logout.
   Include dashboard and logout actions, Escape dismissal and keyboard focus.
   Public headers receive a request-scoped Go-verified session; no shared cache
   or browser storage supplies identity. Inert demo headers never fetch account data.
+  Public GitHub navigation reserves a non-shrinking 20px icon slot with an 18px
+  block SVG centered inside it. Visible SVG overflow protects the mark's edges
+  from viewport clipping; icon alignment does not depend on the text baseline.
   Header text/icon actions share a gray squircle hover surface, using an isolated
   pseudo-element that rises 3px and scales .94 to 1 while fading in over 200ms.
   Text stays stationary. Keyboard focus/open state retain the surface; reduced
