@@ -2,25 +2,24 @@
 
 import { useCallback } from 'react';
 import { App } from 'antd';
-import { useRouter } from 'next/navigation';
 import { authApi } from '../api';
 import { useAuthStore } from '../store/useAuthStore';
 
-// useLogout clears display state only after Go has removed the HttpOnly JWT cookie.
-// It refreshes server-rendered data; failures stay visible so the user can retry.
-export const useLogout = () => {
+// useLogout removes the API-owned cookie and requests a fresh anonymous page.
+// reason distinguishes an explicit logout from an already expired session.
+// Expiry discards display state even if Go is unavailable; SSR also removes expired cookies.
+export const useLogout = (reason: 'manual' | 'expired' = 'manual') => {
   const clearAuth = useAuthStore((state) => state.logout);
-  const router = useRouter();
   const { message } = App.useApp();
   return useCallback(async () => {
+    if (reason === 'expired') clearAuth();
     try {
       await authApi.logout();
-      clearAuth();
-      router.replace('/');
-      router.refresh();
     } catch (error) {
-      if (error instanceof Error) { message.error('로그아웃에 실패했습니다. 다시 시도해 주세요.'); return; }
-      throw error;
+      if (!(error instanceof Error)) throw error;
+      if (reason === 'manual') { message.error('로그아웃에 실패했습니다. 다시 시도해 주세요.'); return; }
     }
-  }, [clearAuth, message, router]);
+    clearAuth();
+    window.location.replace(reason === 'expired' ? '/login?sessionExpired=true' : '/');
+  }, [clearAuth, message, reason]);
 };

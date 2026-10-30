@@ -36,8 +36,8 @@ export function AuthPanel() {
   const submitLogin = async (values: LoginFormValues) => {
     try {
       setLoading(true);
-      const { user } = await authApi.login({ email: values.username, password: values.password });
-      login(user);
+      const { user, expiresAt } = await authApi.login({ email: values.username, password: values.password });
+      login({ ...user, sessionExpiresAt: expiresAt });
       window.location.replace('/dashboard');
     } catch (error) {
       setLoading(false);

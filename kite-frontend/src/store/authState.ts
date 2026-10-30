@@ -2,6 +2,7 @@ import { createStore } from 'zustand/vanilla';
 import type { SessionUser } from '../api/session';
 
 type AnonymousProfile = {
+  readonly sessionExpiresAt: null;
   readonly authenticated: false;
   readonly accessLevel: null;
   readonly username: null;
@@ -10,6 +11,7 @@ type AnonymousProfile = {
 };
 
 type AuthenticatedProfile = {
+  readonly sessionExpiresAt: string | null;
   readonly authenticated: true;
   readonly accessLevel: SessionUser['access_level'];
   readonly username: string;
@@ -26,8 +28,8 @@ export type AuthState = AuthProfile & {
 // profileFor derives the complete display snapshot from a backend-verified user.
 // null represents an anonymous session, so identity and permissions change together.
 function profileFor(user: SessionUser | null): AuthProfile {
-  if (user === null) return { authenticated: false, accessLevel: null, username: null, email: null, namespace: null };
-  return { authenticated: true, accessLevel: user.access_level, username: user.username, email: user.email, namespace: user.namespace };
+  if (user === null) return { authenticated: false, accessLevel: null, username: null, email: null, namespace: null, sessionExpiresAt: null };
+  return { authenticated: true, accessLevel: user.access_level, username: user.username, email: user.email, namespace: user.namespace, sessionExpiresAt: user.sessionExpiresAt };
 }
 
 // createAuthStore isolates display state per SSR request and page provider.

@@ -9,8 +9,9 @@ export const sessionUserSchema = z.object({
   profile_image: z.string().default(''),
 });
 export const meSchema = z.object({ user: sessionUserSchema });
+export const sessionResponseSchema = meSchema.extend({ expiresAt: z.iso.datetime() });
 export const messageSchema = z.object({ message: z.string() });
-export const authResponseSchema = meSchema.extend({ expiresIn: z.number().int().nonnegative(), expiresAt: z.string() });
+export const authResponseSchema = sessionResponseSchema.extend({ expiresIn: z.number().int().nonnegative() });
 export const signupResponseSchema = meSchema.extend({ message: z.string() });
 export const vmPhaseSchema = z.enum([
   'Running', 'Stopped', 'Creating', 'Terminating', 'Provisioning', 'Ready', 'Deleting', 'Failed',

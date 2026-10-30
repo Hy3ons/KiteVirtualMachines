@@ -82,6 +82,21 @@ HttpOnly JWT cookie. SSR forwards only that cookie using a new request-local
 client, with `no-store` caching and no retry. React memoization deduplicates only
 within a request. Authentication failures and service outages remain distinct.
 
+Login aligns JWT `exp`, cookie retention and response expiry to the shorter of
+the configured token lifetime and cookie policy (HTTP 10 minutes, HTTPS 60 minutes).
+`/me` returns the verified `expiresAt` separately from the user profile. Zod validates
+the ISO timestamp; SSR hydrates only that timestamp alongside safe identity fields.
+Already elapsed deadlines never become authenticated SSR profiles. A lightweight
+Next proxy removes malformed/expired cookie input before page rendering and deletes
+it in the outgoing response; it never grants access by decoding a JWT. Go still
+verifies the signature, expiry and current CRD permissions on every protected call.
+
+Public and console account menus share a countdown with an absolute deadline,
+one-second updates and focus/visibility rechecks. Expiry fires once and clears
+identity and permissions, calls Go logout, then requests the login page. Cleanup
+cancels timers/listeners and prevents an unmounted page from expiring a new page.
+The inert product preview has no deadline and never logs out a live account.
+
 The landing animation uses isolated example state and explicit GSAP targets. Its
 DOM adapter discovers targets; its animation engine controls timing. It never
 submits real forms or invokes VM/authentication APIs.

@@ -8,10 +8,10 @@ import { user, vm, offer, publicConfig, adminConfig } from './fixtures/api';
 type Endpoints = ReturnType<typeof createEndpoints>;
 const create = { name: 'demo', domainPrefix: 'demo', sshId: 'ubuntu', sshPassword: 'secret', disk: 30 };
 const cases: readonly { readonly name: string; readonly method: string; readonly path: string; readonly response: unknown; readonly run: (api: Endpoints) => Promise<unknown> }[] = [
-  { name: 'login', method: 'POST', path: '/auth/login', response: { user, expiresIn: 600, expiresAt: '2030-01-01' }, run: a => a.authApi.login({ email: 'demo', password: 'secret' }) },
+  { name: 'login', method: 'POST', path: '/auth/login', response: { user, expiresIn: 600, expiresAt: '2030-01-01T00:00:00Z' }, run: a => a.authApi.login({ email: 'demo', password: 'secret' }) },
   { name: 'signup', method: 'POST', path: '/auth/signup', response: { user, message: 'created' }, run: a => a.authApi.signup({ username: 'demo', email: 'demo', password: 'secret', profile_image: '' }) },
   { name: 'logout', method: 'POST', path: '/auth/logout', response: { message: 'out' }, run: a => a.authApi.logout() },
-  { name: 'me', method: 'GET', path: '/me', response: { user }, run: a => a.authApi.getMe() },
+  { name: 'me', method: 'GET', path: '/me', response: { user, expiresAt: '2030-01-01T00:00:00Z' }, run: a => a.authApi.getMe() },
   { name: 'public config', method: 'GET', path: '/config', response: { config: publicConfig }, run: a => a.configApi.getConfig() },
   { name: 'vms', method: 'GET', path: '/vms', response: { vms: [vm] }, run: a => a.vmApi.getVms() },
   { name: 'vm', method: 'GET', path: '/vms/demo', response: { vm }, run: a => a.vmApi.getVm('demo') },
@@ -107,7 +107,7 @@ it.each([-1, 4, 1.5, '1'])('rejects invalid role %s across identity and user lis
 });
 it.each([-1, 0.5, '600'])('rejects invalid session lifetime %s', async expiresIn => {
   // Given a login success containing an invalid integer lifetime.
-  responseBody = JSON.stringify({ user, expiresIn, expiresAt: '2030-01-01' });
+  responseBody = JSON.stringify({ user, expiresIn, expiresAt: '2030-01-01T00:00:00Z' });
   // When authentication parses the server response.
   const result = createEndpoints(createApiClient(baseUrl)).authApi.login({ email: 'demo', password: 'secret' });
   // Then invalid expiration data cannot become an authenticated profile.

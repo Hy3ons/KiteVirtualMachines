@@ -45,10 +45,14 @@ succeeds.
 
 ## Verification
 
-- `npm run test:local`: 5 integration scenarios passed (44.54 seconds).
-- `npm test`: 217 tests across 12 files passed.
+- `npm run test:local`: 7 integration scenarios passed (51.43 seconds), including
+  cookie-based landing CTA selection and expiry metadata/SSR cookie cleanup.
+- `npm test`: 227 tests across 13 files passed, including countdown expiry,
+  suspended-clock recovery, cleanup and request/response cookie removal.
 - `npm run typecheck` and `npm run lint`: passed.
-- `go test -race -shuffle=on -count=1 ./cmd/kite-api/apis`: passed.
+- `npm run build:prod`: passed with dynamic SSR pages and the expiry-cleanup Proxy.
+- `go test -race -shuffle=on -count=1 ./internal/auth ./cmd/kite-api/apis`: passed,
+  including cookie/JWT lifetime alignment and genuine signed expired-token rejection.
 
 The integration suite is opt-in: `vitest.local.config.ts` includes only
 `tests/local-runtime.integration.ts`, while default `npm test` excludes it.

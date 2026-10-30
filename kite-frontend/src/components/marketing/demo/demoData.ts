@@ -1,7 +1,7 @@
 import type { DashboardVm } from '../../../screens/UserDashboardTypes';
 import type { SessionUser } from '../../../api/session';
 
-export const DEMO_USER: SessionUser = { username: 'builder', email: 'builder@kite.local', namespace: 'demo', access_level: 1, profile_image: '' };
+export const DEMO_USER: SessionUser = { username: 'builder', email: 'builder@kite.local', namespace: 'demo', access_level: 1, profile_image: '', sessionExpiresAt: null };
 export const DEMO_VM: DashboardVm = {
   id: 'demo-vm', name: 'demo-vm', namespace: 'demo', owner: 'builder',
   domain: 'demo-vm.apps.example.com', domainPrefix: 'demo-vm', sshId: 'builder',

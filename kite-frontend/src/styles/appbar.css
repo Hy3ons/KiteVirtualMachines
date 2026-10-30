@@ -4,6 +4,10 @@
 .appbar-action:is(a, button):hover { color: var(--ink); }
 .appbar-action.ant-btn:not(:disabled):is(:hover, :active) { background: transparent; color: var(--ink); }
 .public-nav { gap: var(--space-2); }
+.account-controls { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.session-countdown { display: inline-flex; align-items: center; gap: var(--space-2); flex: none; white-space: nowrap; font-size: 12px; line-height: 1.5; font-variant-numeric: tabular-nums; color: var(--ink-secondary); }
+.session-countdown.is-expiring { color: var(--danger); }
+@media (max-width: 480px) { .session-countdown-label { display: none; } }
 .public-repository > .anticon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 20px; inline-size: 20px; block-size: 20px; font-size: 18px; line-height: 1; overflow: visible; }
 .public-repository > .anticon > svg { display: block; flex: none; inline-size: 18px; block-size: 18px; overflow: visible; }
 .account-menu-trigger { min-width: 0; max-width: 240px; min-height: 48px; padding: var(--space-1) var(--space-3); font-size: 18px; flex: 0 1 auto; }

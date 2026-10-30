@@ -46,7 +46,8 @@ export const debugAuthApi = {
     message: 'debug session cleared',
   }),
 
-  getMe: async (): Promise<{ readonly user: AuthResponse['user'] }> => ({
+  getMe: async (): Promise<{ readonly user: AuthResponse['user']; readonly expiresAt: string }> => ({
+    expiresAt: new Date(Date.now() + 3600_000).toISOString(),
     user: {
       access_level: DEBUG_ADMIN_SESSION.accessLevel,
       username: DEBUG_ADMIN_SESSION.username,

@@ -103,12 +103,17 @@ describe('Go-backed session validation', () => {
 
   it('uses the current backend role and strips non-public session fields', async () => {
     // Given a stale admin JWT whose current backend role is read-only.
-    reply = (_request, response) => response.end(JSON.stringify({ user: { username: 'viewer', email: 'viewer@example.test', namespace: 'viewer-ns', access_level: 0, password: 'never serialize', accessToken: 'never serialize' } }));
+    reply = (_request, response) => response.end(JSON.stringify({ expiresAt: '2030-01-01T00:00:00Z', user: { username: 'viewer', email: 'viewer@example.test', namespace: 'viewer-ns', access_level: 0, password: 'never serialize', accessToken: 'never serialize' } }));
     // When /me verifies that cookie.
     const user = await readSession(createApiClient(baseUrl, { cookie: 'accessToken=stale-admin' }), true);
     // Then only the current safe profile is passed to React.
-    expect(user).toEqual({ username: 'viewer', email: 'viewer@example.test', namespace: 'viewer-ns', access_level: 0, profile_image: '' });
+    expect(user).toEqual({ username: 'viewer', email: 'viewer@example.test', namespace: 'viewer-ns', access_level: 0, profile_image: '', sessionExpiresAt: '2030-01-01T00:00:00Z' });
     expect(requests[0]?.cookie).toBe('accessToken=stale-admin');
+  });
+
+  it('does not hydrate a session whose deadline already passed', async () => {
+    reply = (_request, response) => response.end(JSON.stringify({ expiresAt: '2000-01-01T00:00:00Z', user: { username: 'expired', email: 'e@example.test', namespace: 'e-ns', access_level: 1 } }));
+    expect(await readSession(createApiClient(baseUrl), true)).toBeNull();
   });
 
   it.each([401, 403, 404])('returns no session when Go rejects it with %s', async (status) => {

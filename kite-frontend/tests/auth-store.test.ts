@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { SessionUser } from '../src/api/session';
 import { createAuthStore } from '../src/store/authState';
 
-const profile: SessionUser = { username: 'member', email: 'member@example.test', namespace: 'member-ns', access_level: 1, profile_image: '' };
+const profile: SessionUser = { username: 'member', email: 'member@example.test', namespace: 'member-ns', access_level: 1, profile_image: '', sessionExpiresAt: '2030-01-01T00:00:00Z' };
 
 describe('page-local authentication state', () => {
   it('changes the full identity when an anonymous session logs in', () => {
@@ -20,7 +20,7 @@ describe('page-local authentication state', () => {
     // When the session ends.
     store.getState().logout();
     // Then no account fields survive in the anonymous state.
-    expect(store.getState()).toMatchObject({ authenticated: false, username: null, email: null, namespace: null, accessLevel: null });
+    expect(store.getState()).toMatchObject({ authenticated: false, username: null, email: null, namespace: null, accessLevel: null, sessionExpiresAt: null });
   });
 
   it('keeps a different SSR request isolated when one store changes', () => {

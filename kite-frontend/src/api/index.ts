@@ -43,7 +43,7 @@ export const authApi = {
     return endpoints.authApi.logout(...args);
   },
   getMe: async (...args: Parameters<typeof endpoints.authApi.getMe>) => {
-    if (useMockApi) return contracts.meSchema.parse(await (await loadDebugMockApi()).getMe(...args));
+    if (useMockApi) return contracts.sessionResponseSchema.parse(await (await loadDebugMockApi()).getMe(...args));
     return endpoints.authApi.getMe(...args);
   },
 };

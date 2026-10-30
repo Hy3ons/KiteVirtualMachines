@@ -109,6 +109,37 @@ describe('real Next -> Go -> isolated Minikube', () => {
     }
   });
 
+  test('verified expiry reaches both headers and expired cookies are removed before SSR', async () => {
+    const session = await admin.authApi.getMe();
+    expect(Date.parse(session.expiresAt)).toBeGreaterThan(Date.now());
+    expect(Date.parse(session.expiresAt) - Date.now()).toBeLessThanOrEqual(600_000);
+    for (const path of ['/', '/dashboard']) {
+      const response = await page(path, adminCookie);
+      const html = await response.text();
+      expect(response.status).toBe(200);
+      expect(html.includes('class="session-countdown')).toBe(true);
+      expect(html.includes('로그인 세션 만료까지 남은 시간')).toBe(true);
+      expect(html.includes('Bearer ')).toBe(false);
+    }
+    const payload = Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) - 1 })).toString('base64url');
+    const expired = `accessToken=header.${payload}.invalid`;
+    const landing = await page('/', expired);
+    const html = await landing.text();
+    expect(landing.status).toBe(200);
+    expect((landing.headers.get('set-cookie') ?? '').includes('accessToken=;')).toBe(true);
+    expect(html.match(/<a\b[^>]*href="([^"]+)"[^>]*>Kite 시작하기/)?.[1]).toBe('/login');
+    expect(html.includes('class="session-countdown')).toBe(false);
+    const dashboard = await page('/dashboard', expired);
+    expect(dashboard.status).toBe(307);
+    expect((dashboard.headers.get('set-cookie') ?? '').includes('accessToken=;')).toBe(true);
+    const futurePayload = Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 600 })).toString('base64url');
+    const forged = await page('/', `accessToken=header.${futurePayload}.invalid`);
+    const forgedHtml = await forged.text();
+    expect(forged.status).toBe(200);
+    expect(forgedHtml.includes('class="session-countdown')).toBe(false);
+    expect(forgedHtml.match(/<a\b[^>]*href="([^"]+)"[^>]*>Kite 시작하기/)?.[1]).toBe('/login');
+  });
+
   test('real proxy cookies, authenticated SSR, route guards and logout', async () => {
     const cookie = await login(adminCredentials, `${frontend}/api/v1`);
     expect((await page('/dashboard')).status).toBe(307);

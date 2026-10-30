@@ -23,7 +23,7 @@ export const getServerApi = cache(async () => {
 // Only explicit debug/mock builds can seed a synthetic session.
 export const getSession = cache(async () => {
   if (DEBUG_DIRECT_ROUTES_ENABLED) {
-    return { username: DEBUG_ADMIN_SESSION.username, email: DEBUG_ADMIN_SESSION.email, namespace: DEBUG_ADMIN_SESSION.namespace, access_level: DEBUG_ADMIN_SESSION.accessLevel, profile_image: '' };
+    return { username: DEBUG_ADMIN_SESSION.username, email: DEBUG_ADMIN_SESSION.email, namespace: DEBUG_ADMIN_SESSION.namespace, access_level: DEBUG_ADMIN_SESSION.accessLevel, profile_image: '', sessionExpiresAt: null };
   }
   const { client, hasCookie } = await getServerApi();
   return readSession(client, hasCookie);

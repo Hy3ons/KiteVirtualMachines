@@ -32,7 +32,7 @@ export function createEndpoints(apiClient: ApiClient) {
     },
     getMe: async () => {
       const { data } = await apiClient.get('/me');
-      return contracts.meSchema.parse(data);
+      return contracts.sessionResponseSchema.parse(data);
     },
   };
   const configApi = {

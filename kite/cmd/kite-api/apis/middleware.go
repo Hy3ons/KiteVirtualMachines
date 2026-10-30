@@ -15,6 +15,7 @@ const claimsContextKey = "authClaims"
 // deps is used to access the token verification service.
 // minimumAccessLevel specifies the lowest access level allowed (e.g., auth.AccessLevelManager).
 // This function is used to protect API routes that require specific privileges.
+// Invalid or expired tokens also clear the browser's stale authentication cookie.
 func RequireAccessLevel(deps Dependencies, minimumAccessLevel int) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token := accessTokenCookieValue(c)
@@ -28,6 +29,8 @@ func RequireAccessLevel(deps Dependencies, minimumAccessLevel int) gin.HandlerFu
 
 		claims, err := deps.TokenService.VerifyAccessToken(token)
 		if err != nil {
+			policy := accessTokenCookiePolicyForRequest(c, deps)
+			c.Writer.Header().Add("Set-Cookie", policy.clearAccessTokenCookie())
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"message": "invalid access token",
 			})

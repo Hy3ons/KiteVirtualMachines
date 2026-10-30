@@ -169,6 +169,12 @@ width. It is an in-memory UI preference; account data stays in page-local stores
   Long values truncate within available header space and retain native titles.
   Small screens keep both rows visible; only their available width shrinks.
   Showing identity uses the existing page-local session without extra API reads.
+  Live public and console account controls show "만료까지 MM:SS" immediately left
+  of the person button, with tabular 12px secondary text and an 8px gap. At <=480px
+  omit only the label, retaining the digits. The last minute uses danger ink.
+  Expiry is verified by Go and hydrated as metadata; never expose the JWT.
+  At zero, clear display state, remove the cookie through Go and request login.
+  Recheck the absolute deadline on tab focus/resume. Previews have no countdown.
   Its click popover has 24px inset, 24px outer radius and a 304px reading width,
   showing the verified name/email and freshly requested personal VM totals.
   Count all non-deleting VMs and show Running separately; loading/errors never
