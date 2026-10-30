@@ -36,7 +36,7 @@ export function VmDetailTabs({ vm, secure, canMutate, sshState, onCopy, onDelete
           <p>VM을 만들 때 지정한 SSH 계정과 초기 비밀번호를 사용하세요.</p>
           {!sshState.ready && <Alert className="form-alert" title="SSH gateway 설정 대기" description={sshState.message} type="warning" showIcon />}
           {vm.phase !== 'Running' && <Alert className="form-alert" title="VM이 실행 중이 아닙니다." description="Running 상태가 된 후 SSH에 연결할 수 있습니다." type="warning" showIcon />}
-          {sshState.ready && <div className="machine-command"><div><span>SSH 명령어</span><Button size="small" icon={<CopyOutlined />} onClick={onCopy} disabled={!vmLifecycle(vm).canConnect}>복사</Button></div><code>{sshState.command}</code></div>}
+          {sshState.ready && <div className="machine-command"><div><span>SSH 명령어</span><Button size="small" icon={<CopyOutlined />} onClick={onCopy}>복사</Button></div><code>{sshState.command}</code></div>}
           <p className="machine-section-caption">초기 비밀번호는 Kite에서 확인하거나 복구할 수 없습니다.</p>
         </section>
       ) },

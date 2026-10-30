@@ -22,9 +22,9 @@ export function VmRowActions({ vm, canMutate, onConnect, onOpenConsole, onStart,
   const { modal } = App.useApp();
   const [localOpen, setOpen] = useState(false);
   const open = previewOpen ?? localOpen;
-  const { running, canConnect, canMutate: lifecycleCanMutate } = vmLifecycle(vm);
+  const { running, canConnect, canViewSSH, canMutate: lifecycleCanMutate } = vmLifecycle(vm);
   const items: MenuProps['items'] = [
-    { key: 'ssh', label: 'SSH 연결', disabled: !canConnect, onClick: () => onConnect(vm) },
+    { key: 'ssh', label: 'SSH 연결', disabled: !canViewSSH, onClick: () => onConnect(vm) },
     { key: 'console', label: '콘솔', disabled: !canConnect, onClick: () => onOpenConsole(vm.name) },
     { type: 'divider' },
     { key: 'power', label: running ? '중지하기' : '시작하기', disabled: !canMutate || !lifecycleCanMutate, onClick: () => { void (running ? onStop(vm.name) : onStart(vm.name)); } },

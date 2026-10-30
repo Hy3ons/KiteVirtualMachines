@@ -71,7 +71,7 @@ export function useVmDetail(initialData: VmData | null) {
   // copySSHCommand copies the validated gateway command and reports clipboard failures.
   // Password material is never read or copied by this screen.
   const copySSHCommand = async () => {
-    if (!vm || !vmLifecycle(vm).canConnect) return;
+    if (!vm) return;
     const state = buildSSHCommandState(vm.sshId, baseDomain.trim(), sshGateway);
     if (!state.ready) { message.warning(state.message); return; }
     try { await navigator.clipboard.writeText(state.command); message.success('SSH 명령어를 복사했습니다.'); }

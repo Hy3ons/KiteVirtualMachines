@@ -41,7 +41,7 @@ use.
 | --- | --- |
 | `npm run typecheck` | Passed with all added strict flags. |
 | `npm run lint` | Passed, including the assertion/type-import rules. |
-| `npm test` | 210 tests across 11 files passed. |
+| `npm test` | 217 tests across 12 files passed. |
 | `npm run build:prod` | Passed; all application pages build for dynamic SSR. |
 | `npm run audit:session` | Production HTTP checks: anonymous/public routes, verified/expired login, concurrent identity isolation, private caching, Levels 0–3, dashboard/detail/console/admin rendering, required admin settings, console avoiding config, malformed success and API outage failures. GET requests only. |
 | `npm run audit:metadata` | Public/private titles, canonical/indexing behavior, OG/Twitter images, crawler responses and authenticated login redirect passed. |
@@ -53,6 +53,11 @@ CPU/expiry values, role values, private-field stripping, required configuration,
 omitted observation fields, errors, timeout, cancellation and encoded paths.
 Other suites check policy boundaries, deep debug persistence, source import
 direction, authentication isolation, account popup behavior and GSAP repetition.
+Final review found and corrected an over-restrictive SSH action rule: a stopped VM
+still exposes its SSH guide and ready command copy action. Actual serial-console
+connections continue to require Running. Seven component regression cases
+distinguish these actions without browser automation; the suite failed before the
+correction.
 
 The local HTTP listener required sandbox escalation after an initial `EPERM`;
 the successful suite ran all tests without skips. Evidence logs and the QA matrix

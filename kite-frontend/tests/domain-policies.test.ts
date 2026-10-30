@@ -59,14 +59,14 @@ it.each(phases)('derives connection and power actions for %s', (phase) => {
   // When lifecycle policy is calculated.
   const policy = vmLifecycle({ phase, delete: false });
   // Then only Running connects and every other phase requests power On.
-  expect(policy).toEqual({ running: phase === 'Running', canConnect: phase === 'Running', canMutate: true, nextPower: phase === 'Running' ? 'Off' : 'On' });
+  expect(policy).toEqual({ running: phase === 'Running', canViewSSH: true, canConnect: phase === 'Running', canMutate: true, nextPower: phase === 'Running' ? 'Off' : 'On' });
 });
 it.each(phases)('blocks connection and mutation during deletion for %s', (phase) => {
   // Given deletion pending in any observed phase.
   // When lifecycle policy is calculated.
   const policy = vmLifecycle({ phase, delete: true });
   // Then no connection or mutation is offered.
-  expect([policy.canConnect, policy.canMutate]).toEqual([false, false]);
+  expect([policy.canViewSSH, policy.canConnect, policy.canMutate]).toEqual([false, false, false]);
 });
 it.each(['1', '22', '65535', ' 2222 '])('accepts decimal TCP port %s', (port) => {
   // Given a supported decimal input. When it is validated. Then it is accepted.

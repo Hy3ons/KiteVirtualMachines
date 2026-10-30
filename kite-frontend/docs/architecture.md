@@ -65,7 +65,9 @@ fixture data. It never supplies production authorization.
   inventory quota. Deleting VMs still consume that quota until removed. Account
   usage deliberately excludes deleting VMs.
 - Shared VM lifecycle policy governs row actions, details and console access.
-  Deletion blocks mutation and connection; a running VM can connect.
+  Deletion blocks mutation and connection; a running VM can connect. SSH guidance
+  stays available before startup, and copying a ready command does not depend on
+  the VM power state because it only prepares instructions.
 - Shared TCP-port validation and SSH formatting serve settings and connection help.
   A ready command and an unavailable command are different typed outcomes.
 - Detail refresh may retain VM data if the optional configuration read fails.
