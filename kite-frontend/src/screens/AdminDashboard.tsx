@@ -33,8 +33,8 @@ export function AdminDashboard({ initialData = null }: { readonly initialData?: 
     { title: '상태', dataIndex: 'status', key: 'status', render: (status: string) => (
       <StatusBadge phase={status} />
     )},
-    { 
-      title: '권한', 
+    {
+      title: '권한',
       key: 'accessLevel',
       width: 250,
       render: (_, record) => (

@@ -30,4 +30,3 @@ export function VmConsolePage({ initialVm = null }: { readonly initialVm?: UserV
     </ConsoleShell>
   );
 }
-

@@ -64,7 +64,7 @@ export function SecuritySettings({ settings }: { readonly settings: SecuritySett
           <Paragraph className="admin-section-description">
             등록된 도메인의 서브도메인을 모두 커버하는 TLS 인증서를 갱신합니다. 저장 시 즉시 K8s의 <Text strong>kite/global-tls-secret</Text>이 교체됩니다.
           </Paragraph>
-          
+
           <Form form={certForm} layout="vertical" onFinish={handleSaveCert}>
             <Form.Item name="tlsCert" label="TLS Fullchain Certificate (.crt / .pem)" rules={[{ required: true, message: '인증서 내용을 입력해주세요.' }]}>
               <TextArea rows={6} placeholder="-----BEGIN CERTIFICATE-----..." className="admin-pem-input" />

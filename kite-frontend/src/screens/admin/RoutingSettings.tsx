@@ -18,7 +18,7 @@ export function RoutingSettings({ settings, initialData }: { readonly settings: 
             Kite 플랫폼 Ingress의 host와 가상머신별 Ingress 도메인에 사용할 기본 도메인을 설정합니다.
             <br />도메인 변경 시 컨트롤러가 platform Ingress를 갱신하고 VM Ingress는 다음 reconcile에서 새 도메인으로 맞춰집니다.
           </Paragraph>
-          
+
           <Form form={domainForm} initialValues={{ baseDomain: initialData?.config.baseDomain }} layout="vertical" onFinish={handleSaveDomain}>
             <Form.Item name="baseDomain" label="베이스 도메인" rules={[{ required: true, message: '도메인을 입력하세요.' }]}>
               <Input placeholder={UI_EXAMPLE_BASE_DOMAIN} size="large" />

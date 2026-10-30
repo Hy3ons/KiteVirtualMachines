@@ -11,7 +11,7 @@ export function useAdminDashboard(initialData: AdminDashboardData | null = null)
   const { message } = AntdApp.useApp();
   const { accessLevel } = useAuthStore();
   const canManageAll = canManageSystem(accessLevel);
-  
+
   const [users, setUsers] = useState<readonly AdminUser[]>(initialData?.users ?? []);
   const [vms, setVms] = useState<readonly GlobalVm[]>(initialData?.vms ?? []);
   const [loadingUsers, setLoadingUsers] = useState(!initialData);
