@@ -92,7 +92,9 @@ require_command() {
 }
 
 script_dir() {
-  cd "$(dirname "${BASH_SOURCE[0]}")" && pwd
+  if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+    cd "$(dirname "${BASH_SOURCE[0]}")" && pwd
+  fi
 }
 
 archive_url() {
@@ -139,7 +141,7 @@ main() {
   local root_dir
 
   root_dir="$(script_dir)"
-  if [[ -x "${root_dir}/build/deploy/scripts/clean.sh" ]]; then
+  if [[ -n "${root_dir}" && -x "${root_dir}/build/deploy/scripts/clean.sh" ]]; then
     uninstall_from_checkout "${root_dir}" "$@"
     return
   fi

@@ -2,13 +2,13 @@
 set -euo pipefail
 
 # ==============================================================================
-# Script: build-install.sh
+# Script: build/dev/build-install.sh
 # Purpose:
 #   개발자가 현재 checkout의 소스로 API/controller/gateway/frontend 이미지를 빌드하고
 #   선택한 클러스터에 설치하는 공개 진입점이다.
 #
 # Usage:
-#   ./build-install.sh
+#   ./build/dev/build-install.sh
 #
 # Required Commands:
 #   kubectl, docker. 대상 cluster에 따라 k3s, minikube, k3d, kind, registry push 권한이 필요할 수 있다.
@@ -43,5 +43,5 @@ set -euo pipefail
 #   Kubernetes 리소스 적용, 컨테이너 이미지 빌드/주입, rollout 대기를 수행할 수 있다.
 # ==============================================================================
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 exec "${ROOT_DIR}/build/dev/all-in-one.sh" "$@"

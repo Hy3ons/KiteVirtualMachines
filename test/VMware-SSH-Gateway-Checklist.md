@@ -6,7 +6,7 @@
 
 | 항목 | 확인 기준 |
 | --- | --- |
-| Host SSH 유지 | `ghcr-install.sh` 또는 `build-install.sh` 직후 host sshd 22번 접속이 그대로 유지된다. |
+| Host SSH 유지 | `install.sh` 또는 `build/dev/build-install.sh` 직후 host sshd 22번 접속이 그대로 유지된다. |
 | Internal gateway only | `svc/kite-gateway`는 `ClusterIP`이고 `svc/kite-gateway-external`은 존재하지 않는다. |
 | Runtime defaults | `kite-runtime-config`의 SSH gateway desired 값이 external disabled와 빈 포트로 남아 있고 legacy host proxy 키를 사용하지 않는다. |
 | Status default | `kite-gateway-status`는 `Disabled` 또는 아직 미생성 상태이며, UI가 이를 안전하게 표시한다. |

@@ -336,7 +336,7 @@ Tests in this repository must be boring, explicit, and hard to fake.
 - Do not require a human to copy/paste intermediate values.
 - Do not depend on frontend mock data for E2E.
 - Do not mutate production `main` images during test runs.
-- Stage QA may pull `stage` images through `./ghcr-stage-install.sh`; E2E
+- Stage QA may pull `stage` images through `./build/dev/stage-install.sh`; E2E
   scripts must still avoid pushing `latest`, `main`, or `production` tags.
 - GHCR cleanup must protect moving tags and unknown tags. Only `sha-*` images
   from `main` older than 30 days and `stage-sha-*` images from `stage` older

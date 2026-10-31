@@ -122,18 +122,18 @@ cluster.
 
 For a full development install that also prepares Longhorn, KubeVirt, CDI, and
 the Ubuntu golden image before building and deploying Kite from local source, use
-the root wrapper:
+the development wrapper:
 
 ```sh
-KITE_CLUSTER=k3s ./build-install.sh
+KITE_CLUSTER=k3s ./build/dev/build-install.sh
 ```
 
-`./build-install.sh` calls `build/dev/all-in-one.sh`, and that script calls
+`./build/dev/build-install.sh` calls `build/dev/all-in-one.sh`, and that script calls
 `build/dev/dev.sh` after the infrastructure is ready. The Kite API, controller,
 gateway, and frontend are built from local source and deployed as Kubernetes
 workloads.
 
-`./build-install.sh` asks all install choices near the start of the run. If a
+`./build/dev/build-install.sh` asks all install choices near the start of the run. If a
 variable is already set in the environment, that value is used without asking.
 Set `KITE_ASSUME_DEFAULTS=true` for automation that should use documented
 defaults.
@@ -146,7 +146,7 @@ INSTALL_KUBEVIRT=false \
 INSTALL_CDI=false \
 APPLY_GOLDEN_IMAGE=false \
 KITE_CLUSTER=k3s \
-./build-install.sh
+./build/dev/build-install.sh
 ```
 
 ```sh
@@ -254,13 +254,13 @@ build/dev/clear-frontend.sh
 Set `CLEAR_IMAGES=false` to keep local Docker and k3s images while deleting only
 the Kubernetes resources.
 
-`./build-clear.sh` is the root development cleanup wrapper. It always targets the
+`./build/dev/build-clear.sh` is the development cleanup wrapper. It always targets the
 local checkout flow under `build/dev`, while `./uninstall.sh` is reserved for
-pull-based deployment uninstall. When `./build-clear.sh` runs in a terminal, it asks
+pull-based deployment uninstall. When `./build/dev/build-clear.sh` runs in a terminal, it asks
 which cleanup scope to use with numbered choices.
 
 ```sh
-./build-clear.sh
+./build/dev/build-clear.sh
 ```
 
 The default cleanup removes Kite-owned application resources, Kite CRDs,
@@ -280,7 +280,7 @@ folder-level map and naming rules are documented in `build/README.md`.
 
 ## Gateway
 
-`build/dev/dev.sh` also builds and deploys `kite-gateway`. `build-install.sh`
+`build/dev/dev.sh` also builds and deploys `kite-gateway`. `build/dev/build-install.sh`
 keeps it internal by default and never moves host sshd. External VM SSH access
 is enabled later from Admin Settings, which drives `kite-runtime-config` and the
 controller-owned `kite-gateway-external` Service. Admin Settings separates the
@@ -312,3 +312,30 @@ KITE_GATEWAY_HOST_KEY_REFRESH=true KITE_GATEWAY_HOST_KEY_SOURCE=host KITE_CLUSTE
 
 When no Kite VM uses the SSH login username, authentication fails. Kite does
 not proxy host Linux accounts and never manages the host sshd port.
+
+## Maintainer Entrypoints
+
+All developer-facing wrappers live in this directory. Run them from a checkout;
+the wrappers resolve implementation paths relative to their own location:
+
+```sh
+./build/dev/build-install.sh       # Build this checkout and install dependencies
+./build/dev/build-clear.sh         # Remove the development deployment
+./build/dev/stage-install.sh       # Validate published stage images via install.sh
+sudo env KITE_ASSUME_DEFAULTS=true ./build/dev/build-update.sh
+```
+
+`build-update.sh` fetches a disposable source checkout (`KITE_UPDATE_REF=main`
+by default), then runs `build/dev/update-local.sh` from that revision. For older
+revisions without the helper it uses the helper beside the local wrapper.
+It builds all selected images before importing them into this host's single-node
+K3s containerd. The shared runtime updater patches existing Deployment images;
+it does not reinstall dependencies, reset runtime settings, or recreate VM disks.
+Use the root `update.sh` for normal updates using published GHCR images.
+
+Bootstrap routing and update safety checks run without a cluster:
+
+```sh
+bash build/test/entrypoints.test.sh
+bash build/test/update-ghcr.test.sh
+```

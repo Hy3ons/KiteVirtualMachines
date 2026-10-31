@@ -44,8 +44,8 @@
 
 `stage`에 올릴 수 있는 조건:
 
-- 현재 checkout 기준으로 `build-install.sh`가 동작하고, stage GHCR image가
-  publish된 뒤 `ghcr-stage-install.sh`로 production과 같은 설치 흐름을
+- 현재 checkout 기준으로 `build/dev/build-install.sh`가 동작하고, stage GHCR image가
+  publish된 뒤 `build/dev/stage-install.sh`로 production과 같은 설치 흐름을
   검증할 수 있어야 한다.
 - `stage` push가 GHCR에 publish하는 image는 `stage`와 `stage-sha-<commit>`
   tag를 사용한다. `stage-sha-*` tag는 cleanup 정책상 10일만 보관한다.
