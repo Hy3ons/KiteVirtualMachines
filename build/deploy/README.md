@@ -19,17 +19,17 @@ kubectl get nodes
 Install without git or a repository clone:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/ghcr-install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/install.sh | bash
 ```
 
 Maintainer stage QA uses the same install flow with the stage wrapper:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/stage/ghcr-stage-install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/stage/build/dev/stage-install.sh | bash
 ```
 
-`ghcr-stage-install.sh` sets the repository ref and image tag to `stage` before
-calling `ghcr-install.sh`. This keeps the installation process identical to
+`build/dev/stage-install.sh` sets the repository ref and image tag to `stage` before
+calling `install.sh`. This keeps the installation process identical to
 production while avoiding maintainer mistakes from memorized environment
 variables.
 
@@ -46,10 +46,10 @@ missing Longhorn host packages such as `open-iscsi` and `nfs-common`.
 If Longhorn is managed outside Kite and should not be applied by this installer:
 
 ```sh
-INSTALL_LONGHORN=false ./ghcr-install.sh
+INSTALL_LONGHORN=false ./install.sh
 ```
 
-`./ghcr-install.sh` asks all install choices near the start of the run. If a
+`./install.sh` asks all install choices near the start of the run. If a
 variable is already set in the environment, that value is used without asking.
 Set `KITE_ASSUME_DEFAULTS=true` for non-interactive automation that should use
 the documented defaults.
@@ -145,7 +145,7 @@ The host OS does not need Kite-managed Linux users for this path. The gateway
 authenticates from Kite VM state, reads the VM SSH key Secret, and proxies the
 SSH session to the VM access Service inside the cluster.
 
-`./ghcr-install.sh` creates `kite-gateway-host-key` automatically when it does not
+`./install.sh` creates `kite-gateway-host-key` automatically when it does not
 exist. On Linux hosts it first tries to copy the existing OpenSSH host key from
 `/etc/ssh/ssh_host_ed25519_key`, `ssh_host_ecdsa_key`, or `ssh_host_rsa_key`.
 That can keep the gateway fingerprint familiar if the operator later exposes the
@@ -157,7 +157,7 @@ every deploy. To intentionally replace an already-created gateway key from the
 host key, run:
 
 ```sh
-KITE_GATEWAY_HOST_KEY_REFRESH=true KITE_GATEWAY_HOST_KEY_SOURCE=host ./ghcr-install.sh
+KITE_GATEWAY_HOST_KEY_REFRESH=true KITE_GATEWAY_HOST_KEY_SOURCE=host ./install.sh
 ```
 
 When no Kite VM uses the SSH login username, authentication fails. Kite does

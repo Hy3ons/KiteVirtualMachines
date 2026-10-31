@@ -2,13 +2,13 @@
 set -euo pipefail
 
 # ==============================================================================
-# Script: build-clear.sh
+# Script: build/dev/build-clear.sh
 # Purpose:
-#   개발자가 build-install.sh 또는 component build로 만든 개발 배포 산출물과
+#   개발자가 build/dev/build-install.sh 또는 component build로 만든 개발 배포 산출물과
 #   선택적 image/storage 상태를 정리하는 공개 진입점이다.
 #
 # Usage:
-#   ./build-clear.sh
+#   ./build/dev/build-clear.sh
 #
 # Required Commands:
 #   kubectl. 대상 cluster와 image cleanup에 따라 docker, k3s, minikube, k3d, kind가 필요할 수 있다.
@@ -38,6 +38,6 @@ set -euo pipefail
 #   Kubernetes 리소스, 이미지 캐시, 선택적 Longhorn 상태를 변경하거나 삭제할 수 있다.
 # ==============================================================================
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 exec "${ROOT_DIR}/build/dev/clear.sh" "$@"

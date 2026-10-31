@@ -2,14 +2,14 @@
 set -euo pipefail
 
 # ==============================================================================
-# Script: ghcr-install.sh
+# Script: install.sh
 # Purpose:
 #   일반 사용자/운영자가 GHCR에 published 된 Kite 이미지를 pull해서 클러스터에
 #   설치하는 공개 진입점이다.
 #
 # Usage:
-#   ./ghcr-install.sh
-#   curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/ghcr-install.sh | bash
+#   ./install.sh
+#   curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/install.sh | bash
 #
 # Required Commands:
 #   checkout 실행: kubectl
@@ -101,7 +101,9 @@ require_command() {
 # @description 현재 스크립트가 checkout 안에서 실행 중인지 판단하기 위해 자신의 위치를 구한다.
 # @stdout 절대 경로 형태의 스크립트 디렉터리를 출력한다.
 script_dir() {
-  cd "$(dirname "${BASH_SOURCE[0]}")" && pwd
+  if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+    cd "$(dirname "${BASH_SOURCE[0]}")" && pwd
+  fi
 }
 
 # @description 이미 checkout 안이면 임시 다운로드 없이 repo 안의 실제 설치 스크립트로 교체 실행한다.
@@ -159,7 +161,7 @@ main() {
   local root_dir
 
   root_dir="$(script_dir)"
-  if [[ -x "${root_dir}/build/deploy/scripts/install-all.sh" ]]; then
+  if [[ -n "${root_dir}" && -x "${root_dir}/build/deploy/scripts/install-all.sh" ]]; then
     install_from_checkout "${root_dir}" "$@"
     return
   fi

@@ -23,15 +23,17 @@
 
 목적: 사용자가 저장소 루트에서 기억하기 쉬운 명령만 실행해 설치, 개발 배포, 삭제를 수행한다.
 
-최종 기준: `./ghcr-install.sh`, `./ghcr-stage-install.sh`, `./build-install.sh`, `./uninstall.sh`, `./build-clear.sh`가 각각 올바른 하위 스크립트로 위임되고, 사용자의 선택 없이 위험 작업을 수행하지 않는다.
+최종 기준: `./install.sh`, `./update.sh`, `./build/dev/build-update.sh`, `./build/dev/stage-install.sh`, `./build/dev/build-install.sh`, `./uninstall.sh`, `./build/dev/build-clear.sh`가 각각 올바른 하위 스크립트로 위임되고, 사용자의 선택 없이 위험 작업을 수행하지 않는다.
 
 | 소분류 | 테스트해야 하는 것 |
 | --- | --- |
-| `./ghcr-install.sh` pull 기반 설치 | git checkout이 있는 경우와 curl pipe 실행 모두에서 deploy install 흐름으로 진입하는지 확인한다. |
-| `./ghcr-stage-install.sh` stage 설치 | 메인테이너가 env를 외우지 않아도 `KITE_GHCR_INSTALL_REF=stage`, `KITE_INSTALL_IMAGE_TAG=stage`에 해당하는 동일 설치 흐름으로 진입하는지 확인한다. |
-| `./build-install.sh` 개발 설치 | 로컬 checkout 이미지를 빌드하고 현재 클러스터에 배포하는 dev all-in-one 흐름으로 진입하는지 확인한다. |
+| `./update.sh` 일반 업데이트 | published GHCR 이미지만 받아 기존 Deployment를 갱신하고 빌드 도구를 요구하지 않는지 확인한다. |
+| `./build/dev/build-update.sh` 소스 업데이트 | 새 source checkout의 실행기 또는 로컬 fallback을 사용하고 빌드 실패 전에 Deployment를 변경하지 않는지 확인한다. |
+| `./install.sh` pull 기반 설치 | git checkout이 있는 경우와 curl pipe 실행 모두에서 deploy install 흐름으로 진입하는지 확인한다. |
+| `./build/dev/stage-install.sh` stage 설치 | 메인테이너가 env를 외우지 않아도 `KITE_GHCR_INSTALL_REF=stage`, `KITE_INSTALL_IMAGE_TAG=stage`에 해당하는 동일 설치 흐름으로 진입하는지 확인한다. |
+| `./build/dev/build-install.sh` 개발 설치 | 로컬 checkout 이미지를 빌드하고 현재 클러스터에 배포하는 dev all-in-one 흐름으로 진입하는지 확인한다. |
 | `./uninstall.sh` 배포 제거 | pull 기반 배포 제거 경로로 진입하고, git checkout이 없어도 archive download cleanup이 가능한지 확인한다. |
-| `./build-clear.sh` 개발 제거 | 개발 배포 제거 경로로 진입하고, local image 삭제와 클러스터 리소스 삭제 선택이 분리되는지 확인한다. |
+| `./build/dev/build-clear.sh` 개발 제거 | 개발 배포 제거 경로로 진입하고, local image 삭제와 클러스터 리소스 삭제 선택이 분리되는지 확인한다. |
 | 환경변수 전달 | 루트 wrapper가 하위 스크립트에 사용자가 지정한 환경변수를 손실 없이 전달하는지 확인한다. |
 | prompt-first 정책 | 터미널 실행 시 필요한 질문이 실행 초반에 모두 끝나고, 하위 스크립트 실행 중 같은 질문이 다시 나오지 않는지 확인한다. |
 | interactive prompt | 터미널 실행 시 위험 옵션을 설명하고 묻는지, noninteractive 실행 시 기본값 또는 명시 환경변수만 쓰는지 확인한다. |
@@ -257,8 +259,8 @@
 | KubeVirt install | KubeVirt operator/CR 설치와 Ready 대기가 idempotent하게 동작하는지 확인한다. |
 | CDI install | CDI operator/CR 설치와 Ready 대기가 idempotent하게 동작하는지 확인한다. |
 | all-in-one 순서 | storage, KubeVirt, CDI, golden image, app deploy, verify 순서가 지켜지고 host sshd 변경 경로가 없는지 확인한다. |
-| `ghcr-install.sh` install | GHCR 이미지를 pull하는 설치 흐름에서 이미지 태그와 manifest가 production default와 맞는지 확인한다. |
-| `build-install.sh` install | 로컬 build/import 후 같은 manifest가 새 image tag로 배포되는지 확인한다. |
+| `install.sh` install | GHCR 이미지를 pull하는 설치 흐름에서 이미지 태그와 manifest가 production default와 맞는지 확인한다. |
+| `build/dev/build-install.sh` install | 로컬 build/import 후 같은 manifest가 새 image tag로 배포되는지 확인한다. |
 | component deploy | api/controller/gateway/frontend 단일 rebuild가 해당 Deployment만 갱신하고 다른 workload를 깨지 않는지 확인한다. |
 | verify script | storage, dependencies, CRD, workload, golden image 검사가 실제 실패를 성공으로 숨기지 않는지 확인한다. |
 | prompt helper | bool prompt가 기본값, 명시 env, interactive/noninteractive 모드를 일관되게 처리하는지 확인한다. |
@@ -273,7 +275,7 @@
 | 소분류 | 테스트해야 하는 것 |
 | --- | --- |
 | 기본 `uninstall.sh` | Kite namespace, CRD, RBAC, Service, Deployment, StorageClass가 제거되는지 확인한다. |
-| 기본 `build-clear.sh` | 개발 배포 리소스와 local image cleanup 선택이 분리되어 동작하는지 확인한다. |
+| 기본 `build/dev/build-clear.sh` | 개발 배포 리소스와 local image cleanup 선택이 분리되어 동작하는지 확인한다. |
 | Golden image 삭제 | `DELETE_GOLDEN_IMAGE=true`일 때 DataVolume/PVC가 namespace 삭제 전에 제거되는지 확인한다. |
 | User namespace cleanup | 테스트/사용자 namespace와 VM 관련 리소스가 고아로 남지 않는지 확인한다. |
 | Longhorn data skip | Longhorn PV가 남아 있으면 host data cleanup을 건너뛰고 이유를 출력하는지 확인한다. |
@@ -282,8 +284,8 @@
 | Longhorn ownership marker | Kite installer가 새로 설치한 Longhorn에만 ownership marker를 붙이고, 기존 Longhorn에는 marker를 만들지 않는지 확인한다. |
 | Longhorn uninstall | `DELETE_LONGHORN=true`와 force 조합별로 Longhorn namespace/CR finalizer 처리가 기대대로 동작하는지 확인한다. |
 | 공유 Longhorn 보존 | 외부 Longhorn PVC/PV가 있으면 `DELETE_LONGHORN_FORCE=true`여도 Longhorn namespace, CRD, webhook, PV/PVC가 보존되는지 확인한다. |
-| 공유 KubeVirt 보존 | 외부 KubeVirt VM이 있으면 `uninstall.sh`/`build-clear.sh` 후에도 KubeVirt namespace, CRD, VM이 보존되는지 확인한다. |
-| Idempotent rerun | 이미 삭제된 상태에서 `uninstall.sh`/`build-clear.sh`를 다시 실행해도 성공하거나 안전하게 skip하는지 확인한다. |
+| 공유 KubeVirt 보존 | 외부 KubeVirt VM이 있으면 `uninstall.sh`/`build/dev/build-clear.sh` 후에도 KubeVirt namespace, CRD, VM이 보존되는지 확인한다. |
+| Idempotent rerun | 이미 삭제된 상태에서 `uninstall.sh`/`build/dev/build-clear.sh`를 다시 실행해도 성공하거나 안전하게 skip하는지 확인한다. |
 | Remote cleanup | curl pipe `uninstall.sh`가 git checkout 없이 같은 cleanup 정책을 수행하는지 확인한다. |
 
 ## Cluster E2E Release Gates
@@ -332,7 +334,7 @@
 | 소분류 | 테스트해야 하는 것 |
 | --- | --- |
 | Root README | 아키텍처, install, SSH gateway, cleanup 설명이 실제 스크립트 동작과 일치하는지 확인한다. |
-| build README | `ghcr-install.sh`, `build-install.sh`, `uninstall.sh`, `build-clear.sh` 경계와 wrapper 위임 설명이 실제 경로와 일치하는지 확인한다. |
+| build README | `install.sh`, `build/dev/build-install.sh`, `uninstall.sh`, `build/dev/build-clear.sh` 경계와 wrapper 위임 설명이 실제 경로와 일치하는지 확인한다. |
 | deploy docs | production install, Longhorn/KubeVirt/CDI, gateway exposure 설명이 최신 환경변수와 일치하는지 확인한다. |
 | dev docs | component rebuild, local image loading, frontend build arg 설명이 실제 script option과 일치하는지 확인한다. |
 | frontend docs | API spec, design convention, mock 설명이 현재 UI/API 타입과 어긋나지 않는지 확인한다. |
@@ -384,3 +386,15 @@
 | Dockerfile/build 변경 | GHCR build workflow, buildx build, local load/push, deployed image tag 확인 |
 | install/uninstall 변경 | interactive/noninteractive, idempotency, failure propagation, 실제 install-uninstall roundtrip |
 | docs/example 변경 | 명령 실행 가능성, CRD apply 가능성, 최신 환경변수 일치 확인 |
+
+## Bootstrap Routing Regression Checks
+
+`bash build/test/entrypoints.test.sh` checks the public root entrypoints and
+moved developer wrappers from an unrelated working directory, including paths
+with spaces, streamed archive downloads, stage defaults, source executor lookup,
+and cleanup after failure. Its child executors are isolated fixtures; it never
+runs a real installer or uninstaller.
+
+`bash build/test/update-ghcr.test.sh` checks runtime preservation, rollback,
+explicit migration flags, and source build/import failure boundaries with mocked
+cluster commands.

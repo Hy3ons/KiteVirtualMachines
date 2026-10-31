@@ -2,15 +2,15 @@
 set -euo pipefail
 
 # ==============================================================================
-# Script: ghcr-update.sh
+# Script: update.sh
 # Purpose:
 #   일반 사용자/운영자가 이미 설치된 Kite를 GHCR image 기준으로 업데이트하는
 #   공개 진입점이다. KiteUser, KiteVirtualMachine, VM disk, Longhorn/KubeVirt/CDI
 #   공유 인프라는 삭제하지 않는다.
 #
 # Usage:
-#   ./ghcr-update.sh
-#   curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/ghcr-update.sh | bash
+#   ./update.sh
+#   curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/main/update.sh | bash
 #
 # Required Commands:
 #   checkout 실행: kubectl, curl
@@ -23,8 +23,8 @@ set -euo pipefail
 #   KITE_UPDATE_REGISTRY: default ghcr.io/hy3ons; component image registry다.
 #   KITE_UPDATE_TAG: default latest; 적용할 GHCR image tag다. interactive에서 초반에 묻는다.
 #   KITE_UPDATE_COMPONENTS: default api,controller,gateway,frontend; 업데이트할 component 목록이다.
-#   KITE_UPDATE_APPLY_CRDS: default true; CRD manifest 갱신 여부다.
-#   KITE_UPDATE_APPLY_RBAC: default true; ServiceAccount/RBAC manifest 갱신 여부다.
+#   KITE_UPDATE_APPLY_CRDS: default false; 명시적인 CRD 마이그레이션 여부다.
+#   KITE_UPDATE_APPLY_RBAC: default false; 명시적인 ServiceAccount/RBAC 마이그레이션 여부다.
 #   KITE_UPDATE_WAIT: default true; rollout 대기 여부다.
 #   KITE_UPDATE_HEALTH_CHECK: default true; API/frontend smoke check 여부다.
 #   KITE_UPDATE_RUN_VERIFY: default false; 기존 deploy verify.sh 실행 여부다.
@@ -42,11 +42,11 @@ set -euo pipefail
 #   진행한다. 위험한 삭제 동작은 없다.
 #
 # Dangerous Options:
-#   없음. 이 스크립트는 Kite runtime image와 manifest를 갱신하며 사용자 VM/PVC,
-#   Longhorn/KubeVirt/CDI 설치 자체, host sshd 설정을 삭제하거나 이동하지 않는다.
+#   기본 동작은 설치된 Deployment의 이미지만 갱신한다. CRD/RBAC manifest는
+#   해당 옵션을 명시한 경우에만 적용한다. VM/PVC, Service, 운영 설정은 보존한다.
 #
 # Side Effects:
-#   Kubernetes manifest apply, Deployment image 교체, rollout 대기, 실패 시 image rollback을 수행할 수 있다.
+#   Deployment image 교체, rollout 대기, 실패 시 image rollback을 수행할 수 있다.
 # ==============================================================================
 
 KITE_GHCR_UPDATE_REPOSITORY="${KITE_GHCR_UPDATE_REPOSITORY:-Hy3ons/KiteVirtualMachines}"
@@ -93,7 +93,9 @@ require_command() {
 }
 
 script_dir() {
-  cd "$(dirname "${BASH_SOURCE[0]}")" && pwd
+  if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+    cd "$(dirname "${BASH_SOURCE[0]}")" && pwd
+  fi
 }
 
 update_from_checkout() {
@@ -140,7 +142,7 @@ main() {
   local root_dir
 
   root_dir="$(script_dir)"
-  if [[ -x "${root_dir}/build/deploy/scripts/update-ghcr.sh" ]]; then
+  if [[ -n "${root_dir}" && -x "${root_dir}/build/deploy/scripts/update-ghcr.sh" ]]; then
     update_from_checkout "${root_dir}" "$@"
     return
   fi

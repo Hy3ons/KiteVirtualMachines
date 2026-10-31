@@ -84,7 +84,7 @@ such as `12311`.
 
 ## Host Key
 
-`./build-install.sh` and `./ghcr-install.sh` create `kite-gateway-host-key` automatically when it
+`./build/dev/build-install.sh` and `./install.sh` create `kite-gateway-host-key` automatically when it
 does not exist:
 
 ```sh

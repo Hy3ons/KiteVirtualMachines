@@ -2,14 +2,14 @@
 set -euo pipefail
 
 # ==============================================================================
-# Script: ghcr-stage-install.sh
+# Script: build/dev/stage-install.sh
 # Purpose:
-#   Maintainer QA용 stage GHCR 설치 진입점이다. 일반 사용자용 ghcr-install.sh와
+#   Maintainer QA용 stage GHCR 설치 진입점이다. 일반 사용자용 install.sh와
 #   같은 설치 흐름을 사용하되, GitHub archive ref와 image tag를 stage로 고정한다.
 #
 # Usage:
-#   ./ghcr-stage-install.sh
-#   curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/stage/ghcr-stage-install.sh | bash
+#   ./build/dev/stage-install.sh
+#   curl -fsSL https://raw.githubusercontent.com/Hy3ons/KiteVirtualMachines/stage/build/dev/stage-install.sh | bash
 #
 # Environment Variables:
 #   KITE_GHCR_INSTALL_REPOSITORY: default Hy3ons/KiteVirtualMachines
@@ -18,10 +18,10 @@ set -euo pipefail
 #   KITE_INSTALL_IMAGE_TAG: default stage
 #   KITE_INSTALL_IMAGE_PULL_POLICY: default Always
 #   KITE_INSTALL_FORCE_ROLLOUT: default true
-#   KITE_ASSUME_DEFAULTS: default false; true면 ghcr-install.sh 하위 질문도 기본값/env로 진행한다.
+#   KITE_ASSUME_DEFAULTS: default false; true면 install.sh 하위 질문도 기본값/env로 진행한다.
 #
 # Side Effects:
-#   ghcr-install.sh와 동일하게 Kubernetes dependency와 Kite runtime 리소스를 적용할 수 있다.
+#   install.sh와 동일하게 Kubernetes dependency와 Kite runtime 리소스를 적용할 수 있다.
 # ==============================================================================
 
 KITE_GHCR_INSTALL_REPOSITORY="${KITE_GHCR_INSTALL_REPOSITORY:-Hy3ons/KiteVirtualMachines}"
@@ -77,16 +77,18 @@ require_command() {
 }
 
 script_dir() {
-  cd "$(dirname "${BASH_SOURCE[0]}")" && pwd
+  if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+    cd "$(dirname "${BASH_SOURCE[0]}")" && pwd
+  fi
 }
 
 run_from_checkout_if_possible() {
   local root_dir
 
   root_dir="$(script_dir)"
-  if [[ -x "${root_dir}/ghcr-install.sh" ]]; then
-    log "running stage install through local ghcr-install.sh"
-    exec "${root_dir}/ghcr-install.sh" "$@"
+  if [[ -n "${root_dir}" && -x "${root_dir}/../../install.sh" ]]; then
+    log "running stage install through local install.sh"
+    exec "${root_dir}/../../install.sh" "$@"
   fi
 }
 
@@ -94,8 +96,8 @@ run_from_remote_raw() {
   local url
 
   require_command curl
-  url="https://raw.githubusercontent.com/${KITE_GHCR_INSTALL_REPOSITORY}/${KITE_GHCR_INSTALL_REF}/ghcr-install.sh"
-  log "downloading stage ghcr-install.sh from ${url}"
+  url="https://raw.githubusercontent.com/${KITE_GHCR_INSTALL_REPOSITORY}/${KITE_GHCR_INSTALL_REF}/install.sh"
+  log "downloading stage install.sh from ${url}"
   curl -fsSL "${url}" | bash -s -- "$@"
 }
 
